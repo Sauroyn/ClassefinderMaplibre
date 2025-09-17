@@ -1,0 +1,77 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "id": 1,
+            "properties": {
+                "height": 120,
+                "color": "#0066cc",
+                "name": "Bâtiment A"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3490,
+                            48.8575
+                        ],
+                        [
+                            2.3515,
+                            48.8575
+                        ],
+                        [
+                            2.3515,
+                            48.8555
+                        ],
+                        [
+                            2.3490,
+                            48.8555
+                        ],
+                        [
+                            2.3490,
+                            48.8575
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "id": 2,
+            "properties": {
+                "height": 60,
+                "color": "#00cc66",
+                "name": "Bâtiment B"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3555,
+                            48.8570
+                        ],
+                        [
+                            2.3575,
+                            48.8570
+                        ],
+                        [
+                            2.3575,
+                            48.8550
+                        ],
+                        [
+                            2.3555,
+                            48.8550
+                        ],
+                        [
+                            2.3555,
+                            48.8570
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}
