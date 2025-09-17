@@ -2,7 +2,8 @@ import { polygonCentroid } from './centroids'
 
 export function generateCentroids(data: any) {
     const centroids: any = { type: 'FeatureCollection', features: [] }
-    for (const f of (data.features || [])) {
+    if (!data || !data.features) return centroids
+    for (const f of data.features) {
         if (!f.geometry) continue
         let centroid: [number, number] | null = null
         if (f.geometry.type === 'Polygon') centroid = polygonCentroid(f.geometry.coordinates[0])

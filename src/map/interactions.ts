@@ -27,17 +27,24 @@ export function addInteractions(map: maplibre.Map, refs: any) {
         setSelected(id)
         setHover(null)
         const geom = feat.geometry
-        if (geom && geom.type === 'Polygon') {
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-            const coords = geom.coordinates[0]
-            for (const c of coords) {
-                const x = c[0], y = c[1]
-                if (x < minX) minX = x
-                if (y < minY) minY = y
-                if (x > maxX) maxX = x
-                if (y > maxY) maxY = y
+        if (geom) {
+            if (geom.type === 'Polygon') {
+                const ring = geom.coordinates[0]
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                for (const c of ring) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
+                if (isFinite(minX)) { map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 60, duration: 800 }); return }
+            } else if (geom.type === 'MultiPolygon') {
+                // choose largest polygon by area
+                let best: { area: number, bounds: [number, number, number, number] } | null = null
+                for (const poly of geom.coordinates) {
+                    const ring = poly[0]
+                    let a = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                    for (let i = 0; i < ring.length - 1; i++) { const x0 = ring[i][0], y0 = ring[i][1], x1 = ring[i + 1][0], y1 = ring[i + 1][1]; a += (x0 * y1 - x1 * y0); if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0 }
+                    a = Math.abs(a) / 2
+                    if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
+                }
+                if (best) { map.fitBounds([[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]], { padding: 60, duration: 800 }); return }
             }
-            if (isFinite(minX)) { map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 60, duration: 800 }); return }
         }
         const center = (e.lngLat && [e.lngLat.lng, e.lngLat.lat]) as [number, number] | undefined
         if (center) map.flyTo({ center, zoom: 16 })
