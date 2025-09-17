@@ -7,7 +7,8 @@
             "properties": {
                 "height": 120,
                 "color": "#0066cc",
-                "name": "Bâtiment A"
+                "name": "Bâtiment A",
+                "level": 3
             },
             "geometry": {
                 "type": "Polygon",
@@ -43,7 +44,8 @@
             "properties": {
                 "height": 60,
                 "color": "#00cc66",
-                "name": "Bâtiment B"
+                "name": "Bâtiment B",
+                "level": 1
             },
             "geometry": {
                 "type": "Polygon",

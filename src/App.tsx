@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import maplibre from 'maplibre-gl'
 import './App.css'
 
@@ -6,6 +6,27 @@ function App() {
   const mapContainer = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibre.Map | null>(null)
   const selectedId = useRef<number | null>(null)
+  const [level, setLevel] = useState<number>(0)
+  const [levels, setLevels] = useState<number[]>([])
+  const [loadingLevels, setLoadingLevels] = useState<boolean>(true)
+  const [mapLoaded, setMapLoaded] = useState<boolean>(false)
+
+  useEffect(() => {
+    // Lecture dynamique des levels du GeoJSON
+    fetch('/buildings.geojson')
+      .then(res => res.json())
+      .then(data => {
+        const foundLevels = Array.from(new Set(
+          (data.features || [])
+            .map((f: any) => f.properties?.level)
+            .filter((l: any): l is number => typeof l === 'number' && !isNaN(l))
+        )) as number[]
+        foundLevels.sort((a, b) => a - b)
+        setLevels(foundLevels)
+        setLoadingLevels(false)
+        if (foundLevels.length > 0) setLevel(foundLevels[0])
+      })
+  }, [])
 
   useEffect(() => {
     if (!mapContainer.current) return
@@ -16,23 +37,33 @@ function App() {
       center: [2.3522, 48.8566],
       zoom: 12,
       maxZoom: 22,
-      minZoom: 17, // tu bloques pour rester proche
-      maxBounds: [
-        [2.3500, 48.8550], // SW
-        [2.3550, 48.8580]  // NE
-      ]
+      minZoom: 5,
     })
 
     mapRef.current = map
 
+    function updateLevelFilter(lvl: number) {
+      const filter = ['==', ['get', 'level'], lvl]
+      try {
+        map.setFilter('buildings-extrusion', filter as any)
+        map.setFilter('buildings-fill', filter as any)
+        map.setFilter('buildings-label', filter as any)
+        map.setFilter('buildings-hover', filter as any)
+        if (selectedId.current != null) {
+          map.setFilter('buildings-highlight', ['all', ['==', ['get', 'level'], lvl], ['==', ['id'], selectedId.current]] as any)
+        } else {
+          map.setFilter('buildings-highlight', ['==', ['id'], -1] as any)
+        }
+      } catch (e) { }
+    }
+
     map.on('load', () => {
-      // load GeoJSON from public folder
+      setMapLoaded(true)
       map.addSource('buildings', {
         type: 'geojson',
         data: '/buildings.geojson'
       })
 
-      // base extrusion layer
       map.addLayer({
         id: 'buildings-extrusion',
         type: 'fill-extrusion',
@@ -48,10 +79,10 @@ function App() {
           ],
           'fill-extrusion-base': 0,
           'fill-extrusion-opacity': 0.9
-        }
+        },
+        filter: ['==', ['get', 'level'], level]
       })
 
-      // flat fill layer (2D) for high zoom levels (better perf)
       map.addLayer({
         id: 'buildings-fill',
         type: 'fill',
@@ -60,10 +91,10 @@ function App() {
           'fill-color': ['get', 'color'],
           'fill-opacity': 0.9
         },
-        layout: { visibility: 'none' }
+        layout: { visibility: 'none' },
+        filter: ['==', ['get', 'level'], level]
       })
 
-      // add a highlighted layer for selection (same geometry, color driven by state)
       map.addLayer({
         id: 'buildings-highlight',
         type: 'fill-extrusion',
@@ -82,7 +113,6 @@ function App() {
         filter: ['==', ['id'], -1]
       })
 
-      // hover highlight (2D fill overlay to make hover fast and distinct)
       map.addLayer({
         id: 'buildings-hover',
         type: 'fill',
@@ -94,7 +124,6 @@ function App() {
         filter: ['==', ['id'], -1]
       })
 
-      // label layer to show name
       map.addLayer({
         id: 'buildings-label',
         type: 'symbol',
@@ -107,25 +136,18 @@ function App() {
         },
         paint: {
           'text-color': '#ffffff'
-        }
+        },
+        filter: ['==', ['get', 'level'], level]
       })
 
-      // click handling sur une forme
       map.on('click', 'buildings-extrusion', (e) => {
         const feat = e.features && e.features[0]
         if (!feat) return
         const id = feat.id as number | string
-
-        // convert string ids to number if possible
         const numericId = typeof id === 'number' ? id : parseInt(String(id), 10)
-
-        // update selectedId and filter highlight layer
         selectedId.current = numericId
-        map.setFilter('buildings-highlight', ['==', ['id'], numericId])
-        // clear hover highlight when selected
-        map.setFilter('buildings-hover', ['==', ['id'], -1])
-
-        // compute bbox from geometry (simple polygon bbox)
+        map.setFilter('buildings-highlight', ['all', ['==', ['get', 'level'], level], ['==', ['id'], numericId]] as any)
+        map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
         const geom = (feat as any).geometry
         if (geom && geom.type === 'Polygon') {
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -142,49 +164,39 @@ function App() {
             return
           }
         }
-
-        // fallback: fly to clicked point
         const center = (e.lngLat && [e.lngLat.lng, e.lngLat.lat]) as [number, number] | undefined
         if (center) map.flyTo({ center, zoom: 16 })
       })
 
-      // click global : reset sélection/hover si clic hors forme
       map.on('click', (e) => {
-        // ignore si le click cible une feature
         const features = map.queryRenderedFeatures(e.point, { layers: ['buildings-extrusion'] })
         if (features.length === 0) {
           selectedId.current = null
-          map.setFilter('buildings-highlight', ['==', ['id'], -1])
-          map.setFilter('buildings-hover', ['==', ['id'], -1])
+          map.setFilter('buildings-highlight', ['==', ['id'], -1] as any)
+          map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
         }
       })
 
-      // hover handling: update hover filter and show label on hover
       map.on('mousemove', 'buildings-extrusion', (e) => {
         const feat = e.features && e.features[0]
         if (!feat) return
         const id = feat.id as number | string
         const numericId = typeof id === 'number' ? id : parseInt(String(id), 10)
-
-        // don't override selected highlight
         if (selectedId.current === numericId) return
-
-        map.setFilter('buildings-hover', ['==', ['id'], numericId])
+        map.setFilter('buildings-hover', ['all', ['==', ['get', 'level'], level], ['==', ['id'], numericId]] as any)
       })
 
       map.on('mouseleave', 'buildings-extrusion', () => {
         map.getCanvas().style.cursor = ''
-        // clear hover unless selected exists
         if (selectedId.current == null) {
-          map.setFilter('buildings-hover', ['==', ['id'], -1])
+          map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
         } else {
-          map.setFilter('buildings-hover', ['==', ['id'], -1])
+          map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
         }
       })
 
       map.on('mouseenter', 'buildings-extrusion', () => map.getCanvas().style.cursor = 'pointer')
-
-      // plus besoin de masquer la couche extrusion : la hauteur diminue avec le zoom
+      updateLevelFilter(level)
     })
 
     return () => {
@@ -193,7 +205,43 @@ function App() {
     }
   }, [])
 
-  return <div id="map" ref={mapContainer} />
+  // Met à jour le filtre sur changement de niveau ou quand le niveau initial est défini et la map chargée
+  useEffect(() => {
+    if (!mapRef.current || !mapLoaded) return
+    const map = mapRef.current
+    const filter = ['==', ['get', 'level'], level]
+    try {
+      map.setFilter('buildings-extrusion', filter as any)
+      map.setFilter('buildings-fill', filter as any)
+      map.setFilter('buildings-label', filter as any)
+      map.setFilter('buildings-hover', filter as any)
+      if (selectedId.current != null) {
+        map.setFilter('buildings-highlight', ['all', ['==', ['get', 'level'], level], ['==', ['id'], selectedId.current]] as any)
+      } else {
+        map.setFilter('buildings-highlight', ['==', ['id'], -1] as any)
+      }
+    } catch (e) { }
+  }, [level, mapLoaded])
+
+  return (
+    <>
+      <div style={{ position: 'absolute', zIndex: 10, left: 10, top: 10, background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '8px', color: 'white' }}>
+        <label htmlFor="level-select">Niveau : </label>
+        <select id="level-select" value={level} onChange={e => setLevel(Number(e.target.value))} disabled={loadingLevels || levels.length === 0}>
+          {loadingLevels ? (
+            <option>Chargement...</option>
+          ) : levels.length === 0 ? (
+            <option>Aucun niveau</option>
+          ) : (
+            levels.map(lvl => (
+              <option key={lvl} value={lvl}>{lvl}</option>
+            ))
+          )}
+        </select>
+      </div>
+      <div id="map" ref={mapContainer} />
+    </>
+  )
 }
 
 export default App
