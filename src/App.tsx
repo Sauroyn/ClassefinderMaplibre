@@ -8,16 +8,18 @@ function App() {
   const selectedId = useRef<number | null>(null)
   const hoveredId = useRef<number | null>(null)
   const previousSelectedId = useRef<number | null>(null)
+  const buildingsData = useRef<any | null>(null)
   const [level, setLevel] = useState<number>(0)
   const [levels, setLevels] = useState<number[]>([])
   const [loadingLevels, setLoadingLevels] = useState<boolean>(true)
   const [mapLoaded, setMapLoaded] = useState<boolean>(false)
 
   useEffect(() => {
-    // Lecture dynamique des levels du GeoJSON
+    // Lecture dynamique des levels du GeoJSON (précharge et sauvegarde)
     fetch('/buildings.geojson')
       .then(res => res.json())
       .then(data => {
+        buildingsData.current = data
         const foundLevels = Array.from(new Set(
           (data.features || [])
             .map((f: any) => f.properties?.level)
@@ -49,7 +51,7 @@ function App() {
       try {
         map.setFilter('buildings-extrusion', filter as any)
         map.setFilter('buildings-fill', filter as any)
-        map.setFilter('buildings-label', filter as any)
+        map.setFilter('buildings-name', filter as any)
         if (selectedId.current != null) {
           // keep selection state applied via feature-state, nothing to set on filters
         }
@@ -60,7 +62,7 @@ function App() {
       setMapLoaded(true)
       map.addSource('buildings', {
         type: 'geojson',
-        data: '/buildings.geojson'
+        data: buildingsData.current || '/buildings.geojson'
       })
 
       // Layer: extrusion (3D)
@@ -102,27 +104,89 @@ function App() {
         filter: ['==', ['get', 'level'], level]
       })
 
-      // Labels
-      map.addLayer({
-        id: 'buildings-label',
-        type: 'symbol',
-        source: 'buildings',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-size': 14,
-          'text-offset': [0, 0.6],
-          'text-anchor': 'center',
-          'symbol-placement': 'point',
-          'text-allow-overlap': false,
-          'text-ignore-placement': false
-        },
-        paint: {
-          'text-color': '#ffffff'
-        },
-        filter: ['==', ['get', 'level'], level],
-        minzoom: 12,
-        maxzoom: 18
-      })
+      // Create centroid points for labels so each feature has exactly one centered label
+      async function addCentroidLabels() {
+        try {
+          const data = buildingsData.current ?? await (await fetch('/buildings.geojson')).json()
+          const centroids: any = { type: 'FeatureCollection', features: [] }
+
+          function polygonCentroid(coords: number[][]): [number, number] {
+            // Compute area-weighted centroid (shoelace). coords is an array of [x,y]
+            let a = 0, cx = 0, cy = 0
+            for (let i = 0, len = coords.length - 1; i < len; i++) {
+              const x0 = coords[i][0], y0 = coords[i][1]
+              const x1 = coords[i + 1][0], y1 = coords[i + 1][1]
+              const cross = x0 * y1 - x1 * y0
+              a += cross
+              cx += (x0 + x1) * cross
+              cy += (y0 + y1) * cross
+            }
+            if (a === 0) {
+              // fallback to average
+              let sx = 0, sy = 0
+              for (const c of coords) { sx += c[0]; sy += c[1] }
+              return [sx / coords.length, sy / coords.length]
+            }
+            a = a / 2
+            cx = cx / (6 * a)
+            cy = cy / (6 * a)
+            return [cx, cy]
+          }
+
+          for (const f of (data.features || [])) {
+            if (!f.geometry) continue
+            let centroid: [number, number] | null = null
+            if (f.geometry.type === 'Polygon') {
+              const ring = f.geometry.coordinates[0]
+              centroid = polygonCentroid(ring)
+            } else if (f.geometry.type === 'MultiPolygon') {
+              // choose largest polygon by area
+              let best: { area: number, centroid: [number, number] } | null = null
+              for (const poly of f.geometry.coordinates) {
+                const ring = poly[0]
+                // compute simple area (abs of shoelace)
+                let a = 0
+                for (let i = 0, len = ring.length - 1; i < len; i++) {
+                  const x0 = ring[i][0], y0 = ring[i][1]
+                  const x1 = ring[i + 1][0], y1 = ring[i + 1][1]
+                  a += (x0 * y1 - x1 * y0)
+                }
+                a = Math.abs(a) / 2
+                const c = polygonCentroid(ring)
+                if (!best || a > best.area) best = { area: a, centroid: c }
+              }
+              if (best) centroid = best.centroid
+            }
+            if (!centroid) continue
+            centroids.features.push({
+              type: 'Feature',
+              id: f.id,
+              properties: f.properties,
+              geometry: { type: 'Point', coordinates: centroid }
+            })
+          }
+
+          map.addSource('buildings-centroids', { type: 'geojson', data: centroids })
+          map.addLayer({
+            id: 'buildings-name',
+            type: 'symbol',
+            source: 'buildings-centroids',
+            layout: {
+              'text-field': ['get', 'name'],
+              'text-size': 14,
+              'text-anchor': 'center',
+              'symbol-placement': 'point'
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': 'rgba(0,0,0,0.8)',
+              'text-halo-width': 1
+            },
+            filter: ['==', ['get', 'level'], level]
+          })
+        } catch (err) { }
+      }
+      addCentroidLabels()
 
       function setHoverFeature(numericId: number | null) {
         if (hoveredId.current === numericId) return
@@ -232,7 +296,7 @@ function App() {
     try {
       map.setFilter('buildings-extrusion', filter as any)
       map.setFilter('buildings-fill', filter as any)
-      map.setFilter('buildings-label', filter as any)
+      map.setFilter('buildings-name', filter as any)
       // selection/highlight handled via feature-state; nothing else to set here
     } catch (e) { }
     // clear previous selection/hover states when changing level
