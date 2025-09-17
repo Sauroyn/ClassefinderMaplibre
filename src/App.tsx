@@ -6,6 +6,8 @@ function App() {
   const mapContainer = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<maplibre.Map | null>(null)
   const selectedId = useRef<number | null>(null)
+  const hoveredId = useRef<number | null>(null)
+  const previousSelectedId = useRef<number | null>(null)
   const [level, setLevel] = useState<number>(0)
   const [levels, setLevels] = useState<number[]>([])
   const [loadingLevels, setLoadingLevels] = useState<boolean>(true)
@@ -33,7 +35,7 @@ function App() {
 
     const map = new maplibre.Map({
       container: mapContainer.current,
-      style: 'https://api.maptiler.com/maps/3b544fc3-420c-4a93-a594-a99b71d941bb/style.json?key=BiyHHi8FTQZ233ADqskZ',
+      style: 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ',
       center: [2.3522, 48.8566],
       zoom: 12,
       maxZoom: 22,
@@ -48,11 +50,8 @@ function App() {
         map.setFilter('buildings-extrusion', filter as any)
         map.setFilter('buildings-fill', filter as any)
         map.setFilter('buildings-label', filter as any)
-        map.setFilter('buildings-hover', filter as any)
         if (selectedId.current != null) {
-          map.setFilter('buildings-highlight', ['all', ['==', ['get', 'level'], lvl], ['==', ['id'], selectedId.current]] as any)
-        } else {
-          map.setFilter('buildings-highlight', ['==', ['id'], -1] as any)
+          // keep selection state applied via feature-state, nothing to set on filters
         }
       } catch (e) { }
     }
@@ -64,66 +63,46 @@ function App() {
         data: '/buildings.geojson'
       })
 
+      // Layer: extrusion (3D)
       map.addLayer({
         id: 'buildings-extrusion',
         type: 'fill-extrusion',
         source: 'buildings',
         paint: {
-          'fill-extrusion-color': ['get', 'color'],
+          'fill-extrusion-color': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false], '#ffcc00',
+            ['boolean', ['feature-state', 'selected'], false], '#ffcc00',
+            ['get', 'color']
+          ],
           'fill-extrusion-height': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            15.9, ['get', 'height'],
-            16, 0
+            'interpolate', ['linear'], ['zoom'], 15.9, ['get', 'height'], 16, 0
           ],
           'fill-extrusion-base': 0,
-          'fill-extrusion-opacity': 0.9
+          'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], 15.9, 0.9, 16, 0]
         },
         filter: ['==', ['get', 'level'], level]
       })
 
+      // Layer: 2D fill
       map.addLayer({
         id: 'buildings-fill',
         type: 'fill',
         source: 'buildings',
         paint: {
-          'fill-color': ['get', 'color'],
-          'fill-opacity': 0.9
+          'fill-color': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false], '#ffcc00',
+            ['boolean', ['feature-state', 'selected'], false], '#ffcc00',
+            ['get', 'color']
+          ],
+          'fill-opacity': ['interpolate', ['linear'], ['zoom'], 15.9, 0, 16, 0.9]
         },
-        layout: { visibility: 'none' },
+        layout: { visibility: 'visible' },
         filter: ['==', ['get', 'level'], level]
       })
 
-      map.addLayer({
-        id: 'buildings-highlight',
-        type: 'fill-extrusion',
-        source: 'buildings',
-        paint: {
-          'fill-extrusion-color': '#ffcc00',
-          'fill-extrusion-height': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            15.9, ['get', 'height'],
-            16, 0
-          ],
-          'fill-extrusion-opacity': 0.95
-        },
-        filter: ['==', ['id'], -1]
-      })
-
-      map.addLayer({
-        id: 'buildings-hover',
-        type: 'fill',
-        source: 'buildings',
-        paint: {
-          'fill-color': '#ffffff',
-          'fill-opacity': 0.25
-        },
-        filter: ['==', ['id'], -1]
-      })
-
+      // Labels
       map.addLayer({
         id: 'buildings-label',
         type: 'symbol',
@@ -132,22 +111,64 @@ function App() {
           'text-field': ['get', 'name'],
           'text-size': 14,
           'text-offset': [0, 0.6],
-          'text-anchor': 'top'
+          'text-anchor': 'center',
+          'symbol-placement': 'point',
+          'text-allow-overlap': false,
+          'text-ignore-placement': false
         },
         paint: {
           'text-color': '#ffffff'
         },
-        filter: ['==', ['get', 'level'], level]
+        filter: ['==', ['get', 'level'], level],
+        minzoom: 12,
+        maxzoom: 18
       })
 
-      map.on('click', 'buildings-extrusion', (e) => {
+      function setHoverFeature(numericId: number | null) {
+        if (hoveredId.current === numericId) return
+        try {
+          if (hoveredId.current != null) {
+            map.setFeatureState({ source: 'buildings', id: hoveredId.current }, { hover: false })
+          }
+        } catch (e) { }
+        if (numericId != null) {
+          try {
+            map.setFeatureState({ source: 'buildings', id: numericId }, { hover: true })
+          } catch (e) { }
+        }
+        hoveredId.current = numericId
+      }
+
+      function setSelectedFeature(numericId: number | null) {
+        try {
+          if (previousSelectedId.current != null) {
+            map.setFeatureState({ source: 'buildings', id: previousSelectedId.current }, { selected: false })
+          }
+        } catch (e) { }
+        if (numericId != null) {
+          try {
+            map.setFeatureState({ source: 'buildings', id: numericId }, { selected: true })
+          } catch (e) { }
+        }
+        previousSelectedId.current = numericId
+      }
+
+      function handleHover(e: any) {
+        const feat = e.features && e.features[0]
+        if (!feat) return
+        const id = feat.id as number | string
+        const numericId = typeof id === 'number' ? id : parseInt(String(id), 10)
+        setHoverFeature(numericId)
+      }
+
+      function handleClick(e: any) {
         const feat = e.features && e.features[0]
         if (!feat) return
         const id = feat.id as number | string
         const numericId = typeof id === 'number' ? id : parseInt(String(id), 10)
         selectedId.current = numericId
-        map.setFilter('buildings-highlight', ['all', ['==', ['get', 'level'], level], ['==', ['id'], numericId]] as any)
-        map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
+        setSelectedFeature(numericId)
+        setHoverFeature(null)
         const geom = (feat as any).geometry
         if (geom && geom.type === 'Polygon') {
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
@@ -166,36 +187,35 @@ function App() {
         }
         const center = (e.lngLat && [e.lngLat.lng, e.lngLat.lat]) as [number, number] | undefined
         if (center) map.flyTo({ center, zoom: 16 })
-      })
+      }
 
-      map.on('click', (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['buildings-extrusion'] })
-        if (features.length === 0) {
+      map.on('mousemove', 'buildings-extrusion', handleHover)
+      map.on('mousemove', 'buildings-fill', handleHover)
+      map.on('click', 'buildings-extrusion', handleClick)
+      map.on('click', 'buildings-fill', handleClick)
+
+      // Clear selection when clicking outside any building feature
+      map.on('click', (e: any) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['buildings-fill', 'buildings-extrusion'] })
+        if (!features || features.length === 0) {
+          // clicked outside: clear selection
+          setSelectedFeature(null)
           selectedId.current = null
-          map.setFilter('buildings-highlight', ['==', ['id'], -1] as any)
-          map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
         }
-      })
-
-      map.on('mousemove', 'buildings-extrusion', (e) => {
-        const feat = e.features && e.features[0]
-        if (!feat) return
-        const id = feat.id as number | string
-        const numericId = typeof id === 'number' ? id : parseInt(String(id), 10)
-        if (selectedId.current === numericId) return
-        map.setFilter('buildings-hover', ['all', ['==', ['get', 'level'], level], ['==', ['id'], numericId]] as any)
       })
 
       map.on('mouseleave', 'buildings-extrusion', () => {
         map.getCanvas().style.cursor = ''
-        if (selectedId.current == null) {
-          map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
-        } else {
-          map.setFilter('buildings-hover', ['==', ['id'], -1] as any)
-        }
+        setHoverFeature(null)
       })
-
+      map.on('mouseleave', 'buildings-fill', () => {
+        map.getCanvas().style.cursor = ''
+        setHoverFeature(null)
+      })
       map.on('mouseenter', 'buildings-extrusion', () => map.getCanvas().style.cursor = 'pointer')
+      map.on('mouseenter', 'buildings-fill', () => map.getCanvas().style.cursor = 'pointer')
+
+      // We use zoom-based opacity interpolation on the layers to avoid flicker when switching 3D/2D
       updateLevelFilter(level)
     })
 
@@ -205,7 +225,6 @@ function App() {
     }
   }, [])
 
-  // Met à jour le filtre sur changement de niveau ou quand le niveau initial est défini et la map chargée
   useEffect(() => {
     if (!mapRef.current || !mapLoaded) return
     const map = mapRef.current
@@ -214,12 +233,19 @@ function App() {
       map.setFilter('buildings-extrusion', filter as any)
       map.setFilter('buildings-fill', filter as any)
       map.setFilter('buildings-label', filter as any)
-      map.setFilter('buildings-hover', filter as any)
-      if (selectedId.current != null) {
-        map.setFilter('buildings-highlight', ['all', ['==', ['get', 'level'], level], ['==', ['id'], selectedId.current]] as any)
-      } else {
-        map.setFilter('buildings-highlight', ['==', ['id'], -1] as any)
+      // selection/highlight handled via feature-state; nothing else to set here
+    } catch (e) { }
+    // clear previous selection/hover states when changing level
+    try {
+      if (previousSelectedId.current != null) {
+        map.setFeatureState({ source: 'buildings', id: previousSelectedId.current }, { selected: false })
+        previousSelectedId.current = null
       }
+      if (hoveredId.current != null) {
+        map.setFeatureState({ source: 'buildings', id: hoveredId.current }, { hover: false })
+        hoveredId.current = null
+      }
+      selectedId.current = null
     } catch (e) { }
   }, [level, mapLoaded])
 
