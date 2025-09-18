@@ -17,21 +17,18 @@ export function parseGeoJSON(geo: any): Graph {
         const type = f.geometry.type
         const props = f.properties || {}
         if (type === 'Point') {
+            // keep only minimal properties for nodes: id (name) and level
             const id = String(props.id ?? props.name ?? `node-${genNodeIdx++}`)
-            nodes.push({ id, coord: f.geometry.coordinates, name: props.name ?? id, raw: f })
+            const node: any = { id, coord: f.geometry.coordinates, name: props.name ?? id, raw: f }
+            if (props.level != null) {
+                const n = Number(props.level)
+                node.level = Number.isFinite(n) ? n : props.level
+            }
+            nodes.push(node)
         }
     }
 
-    function findNearestNode(coord: number[]) {
-        if (nodes.length === 0) return null
-        let best = nodes[0]
-        let bestd = distance2(coord, best.coord)
-        for (let i = 1; i < nodes.length; i++) {
-            const d = distance2(coord, nodes[i].coord)
-            if (d < bestd) { bestd = d; best = nodes[i] }
-        }
-        return best
-    }
+    // note: we match LineString endpoints to Point nodes by exact coordinate equality
 
     let genEdgeIdx = 0
     for (const f of geo.features) {
@@ -41,45 +38,52 @@ export function parseGeoJSON(geo: any): Graph {
         if (type === 'LineString') {
             const coords = f.geometry.coordinates
             const id = String(props.id ?? props.name ?? `edge-${genEdgeIdx++}`)
-            const weight = props.weight ?? 0
-            let from = props.from != null ? String(props.from) : null
-            let to = props.to != null ? String(props.to) : null
+            // For connectivity, consider every vertex along the LineString.
+            // Ensure there's a node for each coordinate (reuse existing nodes when coords match exactly),
+            // then create edges between consecutive node IDs (per-segment). Each segment edge has its own small raw.geometry
+            function coordEq(a: number[], b: number[]) { return a[0] === b[0] && a[1] === b[1] }
 
-            if (!from || !to) {
-                const startCoord = coords[0]
-                const endCoord = coords[coords.length - 1]
-                const n1 = findNearestNode(startCoord)
-                const n2 = findNearestNode(endCoord)
-                if (n1) from = from ?? n1.id
-                if (n2) to = to ?? n2.id
-            }
-
-            if (!from) {
-                const nid = `node-gen-${genNodeIdx++}`
-                const coord = coords[0]
-                nodes.push({ id: nid, coord, name: nid, raw: null })
-                from = nid
-            }
-            if (!to) {
-                const nid = `node-gen-${genNodeIdx++}`
-                const coord = coords[coords.length - 1]
-                nodes.push({ id: nid, coord, name: nid, raw: null })
-                to = nid
-            }
-
-            let w = weight
-            if (!w || w === 0) {
-                let total = 0
-                for (let i = 1; i < coords.length; i++) {
-                    const a = coords[i - 1]
-                    const b = coords[i]
-                    total += Math.sqrt(distance2(a, b))
+            // remove consecutive duplicate coordinates (zero-length segments)
+            const cleanedCoords: number[][] = []
+            for (let vi = 0; vi < coords.length; vi++) {
+                const coord = coords[vi]
+                if (vi === 0) cleanedCoords.push(coord)
+                else {
+                    const prev = coords[vi - 1]
+                    if (!(coord[0] === prev[0] && coord[1] === prev[1])) cleanedCoords.push(coord)
                 }
-                w = total
             }
 
+            const vertexNodeIds: string[] = []
+            for (let vi = 0; vi < cleanedCoords.length; vi++) {
+                const coord = cleanedCoords[vi]
+                let found: any = null
+                for (const n of nodes) {
+                    if (coordEq(n.coord, coord)) { found = n; break }
+                }
+                if (found) {
+                    vertexNodeIds.push(found.id)
+                } else {
+                    const nid = `node-gen-${genNodeIdx++}`
+                    nodes.push({ id: nid, coord, name: nid, raw: null })
+                    vertexNodeIds.push(nid)
+                }
+            }
+
+            // compute per-segment weights (and create an edge per consecutive pair)
             const tags = Array.isArray(props.tags) ? props.tags : (props.tags ? [props.tags] : [])
-            edges.push({ id, from, to, weight: w, tags, raw: f })
+            for (let i = 1; i < vertexNodeIds.length; i++) {
+                const from = vertexNodeIds[i - 1]
+                const to = vertexNodeIds[i]
+                if (from === to) continue
+                const a = cleanedCoords[i - 1]
+                const b = cleanedCoords[i]
+                const segWeight = Math.sqrt(distance2(a, b))
+                if (!isFinite(segWeight) || segWeight === 0) continue
+                const segId = `${id}-${i - 1}`
+                const rawSeg = { type: 'Feature', geometry: { type: 'LineString', coordinates: [a, b] }, properties: props }
+                edges.push({ id: segId, from, to, weight: segWeight, tags, raw: rawSeg })
+            }
         }
     }
 

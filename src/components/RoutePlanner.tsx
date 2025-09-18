@@ -17,7 +17,7 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
     useEffect(() => {
         // Try to load default file name (geojson or json)
         async function loadDefault() {
-            const candidates = ['/src/map/testGraph.geojson', '/src/map/testGraph.json', '/src/map/testGraph.json']
+            const candidates = ['/testGraph.geojson']
             for (const url of candidates) {
                 try {
                     console.log('[RoutePlanner] trying to load', url)

@@ -18,7 +18,7 @@
         {
             "type": "Feature",
             "properties": {
-                "level": "0"
+                "level": "3"
             },
             "geometry": {
                 "type": "LineString",
@@ -105,7 +105,7 @@
         {
             "type": "Feature",
             "properties": {
-                "level": "0"
+                "level": "3"
             },
             "geometry": {
                 "type": "LineString",

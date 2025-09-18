@@ -41,8 +41,8 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 }
                 // if edge has no level info, try to infer from node-levels
                 if (props.level == null && props.levels == null) {
-                    const la = aNode?.raw?.properties?.level
-                    const lb = bNode?.raw?.properties?.level
+                    const la = aNode?.raw?.properties?.level ?? aNode?.level
+                    const lb = bNode?.raw?.properties?.level ?? bNode?.level
                     if (la != null && la === lb) props.level = la
                     else if (la != null || lb != null) props.levels = Array.from(new Set([la, lb].filter(x => x != null)))
                 }
