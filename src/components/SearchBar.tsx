@@ -3,12 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 type Props = {
     data: GeoJSON.FeatureCollection | null
     onSelect: (id: number | string, level?: number | string) => void
+    onRouteRequest?: (feature: any) => void
     onClear?: () => void
 }
 
 const STORAGE_KEY = 'cf:recent_searches'
 
-export default function SearchBar({ data, onSelect, onClear }: Props) {
+export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: Props) {
     const [q, setQ] = useState('')
     const [focused, setFocused] = useState(false)
     const [showBack, setShowBack] = useState(false)
@@ -85,7 +86,12 @@ export default function SearchBar({ data, onSelect, onClear }: Props) {
                     <div style={{ fontWeight: 700 }}>{selected.name}</div>
                     <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
                         <div style={{ padding: '6px 10px', background: '#f1f3f5', borderRadius: 12 }}>{selected.level ?? '—'}</div>
-                        <button style={{ padding: '6px 10px' }}>Itinéraire</button>
+                        <button style={{ padding: '6px 10px' }} onClick={() => {
+                            if (!onRouteRequest) return
+                            // find feature in data
+                            const feat = (data && data.features) ? data.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === selected.id || f.properties?.name === selected.name) : null
+                            onRouteRequest(feat || { id: selected.id, name: selected.name })
+                        }}>Itinéraire</button>
                         <button style={{ padding: '6px 10px' }}>Alias</button>
                     </div>
                 </div>

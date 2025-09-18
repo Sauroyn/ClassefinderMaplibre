@@ -7,7 +7,7 @@
             "properties": {
                 "height": 120,
                 "color": "#0066cc",
-                "name": "Bâtiment A",
+                "name": "A",
                 "level": 3
             },
             "geometry": {
@@ -44,7 +44,7 @@
             "properties": {
                 "height": 60,
                 "color": "#00cc66",
-                "name": "Bâtiment B",
+                "name": "D",
                 "level": 1
             },
             "geometry": {
