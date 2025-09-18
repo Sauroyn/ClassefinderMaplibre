@@ -86,10 +86,47 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [start, end, graph])
 
+    // listen for map feature clicks to allow quick fill of focused field or set destination
+    useEffect(() => {
+        function onMapFeatureClick(e: any) {
+            const feat = e.detail as any
+            if (!feat) return
+            const name = feat.properties?.name ?? feat.properties?.title ?? feat.id
+            const fid = feat.id ?? feat.properties?.id ?? name
+
+            // try to find a matching node in the parsed graph by name or id (case-insensitive)
+            const match = nodeOptions.find(n => String(n.id) === String(fid) || String((n.name || '')).toLowerCase() === String(name).toLowerCase())
+
+            if (focusedField === 'start') {
+                // if we matched a graph node, set its id; otherwise set raw feature id
+                const setId = match ? String(match.id) : String(fid)
+                setStart(setId); setStartQuery(String(match?.name ?? name)); setFocusedField(null); return
+            }
+            if (focusedField === 'end') {
+                const setId = match ? String(match.id) : String(fid)
+                setEnd(setId); setEndQuery(String(match?.name ?? name)); setFocusedField(null);
+                // trigger compute immediately if possible
+                if (graph && start) {
+                    try { computeAndDrawRoute({ graph, start, end: setId, excludeStairs: false, mapRef }) } catch (err) { console.error('[RoutePlanner] compute failed', err) }
+                }
+                return
+            }
+            // if planner is open but no focused field and no start/end selected, set end to matched node if possible
+            if (!focusedField && !start && !end) {
+                const setId = match ? String(match.id) : String(fid)
+                setEnd(setId); setEndQuery(String(match?.name ?? name));
+                return
+            }
+            // otherwise ignore here (SearchBar handles non-planner clicks)
+        }
+        window.addEventListener('map:feature-click', onMapFeatureClick as any)
+        return () => { window.removeEventListener('map:feature-click', onMapFeatureClick as any) }
+    }, [focusedField, start, end, nodeOptions, mapRef])
+
     return (
         <div style={{ position: 'absolute', top: 10, left: 10, background: 'white', padding: 8, borderRadius: 4, zIndex: 20, width: 360, boxSizing: 'border-box' }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
-                {onClose && <button onClick={() => { if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
+                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
@@ -110,7 +147,6 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                         }} style={{ flex: 1, padding: 6 }} placeholder="Rechercher un départ..." />
                         {startQuery ? <button onClick={() => { setStart(''); setStartQuery('') }} title="Clear start" style={{ padding: '6px' }}>✕</button> : null}
                     </div>
-
                     <div style={{ fontSize: 12, marginTop: 8 }}>Arrivée</div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
                         <input value={endQuery} onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }} onFocus={() => { setFocusedField('end') }} onBlur={() => setTimeout(() => { setFocusedField(null) }, 150)} onKeyDown={(e) => {

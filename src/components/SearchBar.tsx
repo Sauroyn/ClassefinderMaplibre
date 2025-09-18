@@ -34,6 +34,21 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
 
     useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])
 
+    // respond to map clicks when they dispatch a feature click event
+    useEffect(() => {
+        function onMapFeatureClick(e: any) {
+            const feat = e.detail as any
+            if (!feat) return
+            const name = feat.properties?.name ?? feat.properties?.title ?? feat.id
+            const id = feat.id ?? feat.properties?.id ?? name
+            // mimic a user pick
+            pick(id, name)
+            // do not auto-open route planner here; RoutePlanner listens separately when open
+        }
+        window.addEventListener('map:feature-click', onMapFeatureClick as any)
+        return () => { window.removeEventListener('map:feature-click', onMapFeatureClick as any) }
+    }, [data])
+
     const pick = (id: string | number, name: string) => {
         let resolved: string | number = id
         if (data) {

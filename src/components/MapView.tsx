@@ -140,6 +140,19 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
                 for (const f of features) try { map.setFeatureState({ source: 'buildings', id: f.id }, { selected: false, hover: false }) } catch (e) { }
             } catch (e) { }
         }
+        ,
+        clearRoute: () => {
+            const map = mapRef.current
+            if (!map) return
+            try {
+                if (map.getLayer && map.getLayer('route-planner-line')) {
+                    try { map.removeLayer('route-planner-line') } catch (e) { }
+                }
+                if (map.getSource && map.getSource('route-planner')) {
+                    try { map.removeSource('route-planner') } catch (e) { }
+                }
+            } catch (e) { }
+        }
     }))
 
     return <div id="map" ref={container} style={{ height: '100vh' }} />
