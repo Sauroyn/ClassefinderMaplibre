@@ -48,6 +48,36 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
             if (map.getLayer('buildings-extrusion')) map.setFilter('buildings-extrusion', filter as any)
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
             if (map.getLayer('buildings-name')) map.setFilter('buildings-name', filter as any)
+            // also apply filter to route planner line if present
+            if (map.getLayer('route-planner-line')) {
+                // accept features where properties.level == level OR properties.levels contains level
+                // show segments that explicitly match the level OR that list the level in levels
+                // also show segments that have neither level nor levels properties (fallback segments)
+                const routeFilter = [
+                    'any',
+                    ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                    ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
+                    ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+                ]
+                try { map.setFilter('route-planner-line', routeFilter as any) } catch (e) { }
+            }
+            // ensure that if the route layer/source is added later (by compute), we re-apply the filter
+            const onData = () => {
+                try {
+                    if (map.getLayer('route-planner-line')) {
+                        const routeFilter = [
+                            'any',
+                            ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                            ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
+                            ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+                        ]
+                        map.setFilter('route-planner-line', routeFilter as any)
+                    }
+                } catch (err) { }
+            }
+            map.on('sourcedata', onData)
+            // remove listener on cleanup
+            return () => { try { map.off('sourcedata', onData) } catch (e) { } }
         } catch (e) { }
     }, [level])
     useImperativeHandle(ref, () => ({

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { shortestPath } from '../map/shortestPath'
+import { computeAndDrawRoute } from '../map/computeRoute'
 
 type Graph = { nodes: any[], edges: any[] }
 
@@ -157,70 +157,11 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
 
     // no file input handling: graph loaded from defaults only
 
-    function getRawMap() {
-        if (!mapRef) return null
-        const cur = mapRef.current
-        if (!cur) return null
-        if ((cur as any).getMap) return (cur as any).getMap()
-        if ((cur as any).map) return (cur as any).map
-        return cur
-    }
-
-    function compute() {
-        console.log('[RoutePlanner] compute', { start, end, excludeStairs })
+    async function compute() {
         if (!graph) { console.warn('[RoutePlanner] no graph loaded'); return }
-        const exclude = excludeStairs ? ['stairs'] : []
         try {
-            const p = shortestPath({ nodes: graph.nodes, edges: graph.edges }, String(start), String(end), exclude)
-            console.log('[RoutePlanner] shortestPath result', p)
-            setPath(p as string[] | null)
-            if (p) {
-                const coords = (p as string[]).map((id) => {
-                    const n = graph.nodes.find(x => x.id === String(id))
-                    return n ? n.coord : null
-                }).filter(Boolean)
-                // collect levels from nodes if available
-                const levels = (p as string[]).map((id) => {
-                    const n = graph.nodes.find(x => x.id === String(id))
-                    return n && n.raw && n.raw.properties ? n.raw.properties.level : null
-                }).filter((l: any) => l != null)
-                const props: any = {}
-                if (levels.length === 1) props.level = levels[0]
-                else if (levels.length > 1) props.levels = Array.from(new Set(levels))
-                const geo = { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: props }] }
-                const map = getRawMap()
-                if (!map) { console.warn('[RoutePlanner] map instance not found'); return }
-                try {
-                    console.log('[RoutePlanner] map object', map)
-                    if (map.getSource && map.getSource('route-planner')) {
-                        console.log('[RoutePlanner] updating existing source')
-                        map.getSource('route-planner').setData(geo)
-                        try {
-                            if (map.setPaintProperty) {
-                                map.setPaintProperty('route-planner-line', 'line-color', '#ff0000')
-                                map.setPaintProperty('route-planner-line', 'line-width', 18)
-                            }
-                            if (map.setLayoutProperty) {
-                                map.setLayoutProperty('route-planner-line', 'line-cap', 'round')
-                                map.setLayoutProperty('route-planner-line', 'line-join', 'round')
-                            }
-                        } catch (e) { /* non-fatal */ }
-                    } else {
-                        console.log('[RoutePlanner] adding source and layer')
-                        if (map.addSource) map.addSource('route-planner', { type: 'geojson', data: geo })
-                        if (map.addLayer) map.addLayer({ id: 'route-planner-line', type: 'line', source: 'route-planner', paint: { 'line-color': '#ff0000', 'line-width': 18 }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
-                    }
-                    // fit to route bounds
-                    try {
-                        const coordsArr = coords as any[]
-                        if (coordsArr.length) {
-                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                            for (const c of coordsArr) { if (c[0] < minX) minX = c[0]; if (c[1] < minY) minY = c[1]; if (c[0] > maxX) maxX = c[0]; if (c[1] > maxY) maxY = c[1] }
-                            if (isFinite(minX)) map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 40, duration: 400 })
-                        }
-                    } catch (e) { console.warn('[RoutePlanner] fitBounds failed', e) }
-                } catch (err) { console.error('[RoutePlanner] error drawing route', err) }
-            }
+            const res = await computeAndDrawRoute({ graph, start, end, excludeStairs, mapRef })
+            if (res && (res as any).path) setPath((res as any).path as string[])
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
     }
 

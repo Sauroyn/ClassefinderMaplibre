@@ -12,7 +12,8 @@
             },
             "properties": {
                 "type": "node",
-                "id": "A"
+                "id": "A",
+                "level": 1
             }
         },
         {
@@ -26,7 +27,8 @@
             },
             "properties": {
                 "type": "node",
-                "id": "B"
+                "id": "B",
+                "level": 1
             }
         },
         {
@@ -40,7 +42,8 @@
             },
             "properties": {
                 "type": "node",
-                "id": "C"
+                "id": "C",
+                "level": 3
             }
         },
         {
@@ -54,7 +57,8 @@
             },
             "properties": {
                 "type": "node",
-                "id": "D"
+                "id": "D",
+                "level": 3
             }
         },
         {
@@ -78,6 +82,7 @@
                 "from": "A",
                 "to": "B",
                 "weight": 1,
+                "level": 3,
                 "tags": [
                     "stairs"
                 ]
@@ -103,6 +108,7 @@
                 "id": "e2",
                 "from": "B",
                 "to": "C",
+                "level": 3,
                 "weight": 1
             }
         },
@@ -126,6 +132,7 @@
                 "id": "e3",
                 "from": "C",
                 "to": "D",
+                "level": 1,
                 "weight": 1
             }
         },
@@ -149,6 +156,7 @@
                 "id": "e4",
                 "from": "A",
                 "to": "C",
+                "level": 3,
                 "weight": 2
             }
         }
