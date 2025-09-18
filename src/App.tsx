@@ -3,6 +3,7 @@ import './App.css'
 import MapView from './components/MapView'
 import LevelSelector from './components/LevelSelector'
 import SearchBar from './components/SearchBar'
+import RoutePlanner from './components/RoutePlanner'
 
 export default function App() {
   const [levels, setLevels] = useState<number[]>([])
@@ -11,6 +12,7 @@ export default function App() {
   const dataRef = useRef<any | null>(null)
   const mapRef = useRef<any>(null)
   const prevCameraRef = useRef<any>(null)
+  const [showPlanner, setShowPlanner] = useState(false)
 
   useEffect(() => {
     fetch('/buildings.geojson').then(r => r.json()).then(d => { dataRef.current = d; const found = Array.from(new Set((d.features || []).map((f: any) => f.properties?.level))).filter(Boolean) as number[]; found.sort((a, b) => a - b); setLevels(found); setLoading(false); if (found.length) setLevel(found[0]) })
@@ -34,6 +36,8 @@ export default function App() {
         if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
       }} />
       <MapView ref={mapRef} data={dataRef.current} level={level} />
+      {showPlanner && <RoutePlanner mapRef={mapRef} />}
+      <button style={{ position: 'absolute', top: 10, right: 10, zIndex: 20 }} onClick={() => setShowPlanner(s => !s)}>{showPlanner ? 'Close Planner' : 'Open Planner'}</button>
     </>
   )
 }

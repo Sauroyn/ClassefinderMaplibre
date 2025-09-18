@@ -51,6 +51,7 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
         } catch (e) { }
     }, [level])
     useImperativeHandle(ref, () => ({
+        getMap: () => mapRef.current,
         selectFeatureById: (id: number | string) => {
             const map = mapRef.current
             if (!map) return
