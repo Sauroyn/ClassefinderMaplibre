@@ -145,12 +145,25 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
             const map = mapRef.current
             if (!map) return
             try {
-                if (map.getLayer && map.getLayer('route-planner-line')) {
-                    try { map.removeLayer('route-planner-line') } catch (e) { }
-                }
-                if (map.getSource && map.getSource('route-planner')) {
-                    try { map.removeSource('route-planner') } catch (e) { }
-                }
+                // remove any layer/source created for route-planner (route-planner-0, -1, ...)
+                try {
+                    const style = map.getStyle && map.getStyle()
+                    const layers = (style && style.layers) || []
+                    for (const l of layers) {
+                        if (typeof l.id === 'string' && l.id.startsWith('route-planner-')) {
+                            try { if (map.getLayer && map.getLayer(l.id)) map.removeLayer(l.id) } catch (e) { }
+                        }
+                    }
+                } catch (e) { }
+                try {
+                    const style = map.getStyle && map.getStyle()
+                    const sources = (style && style.sources) || {}
+                    for (const s of Object.keys(sources)) {
+                        if (s.startsWith('route-planner-')) {
+                            try { if (map.getSource && map.getSource(s)) map.removeSource(s) } catch (e) { }
+                        }
+                    }
+                } catch (e) { }
             } catch (e) { }
         }
     }))

@@ -3,6 +3,7 @@ import { computeAndDrawRoute } from '../map/computeRoute'
 import { parseGeoJSON } from './route-planner/utils'
 import type { Graph } from './route-planner/utils'
 import Suggestions from './route-planner/Suggestions'
+import RouteOption from './route-planner/RouteOption'
 
 export default function RoutePlanner({ mapRef, initialDestination, onClose }: { mapRef: any, initialDestination?: any, onClose?: () => void }) {
     const [graph, setGraph] = useState<Graph | null>(null)
@@ -69,10 +70,15 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
 
     // no file input handling: graph loaded from defaults only
 
+    const [routes, setRoutes] = useState<Array<any>>([])
+    const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null)
     async function compute() {
         if (!graph) { console.warn('[RoutePlanner] no graph loaded'); return }
+        // clear previous routes while computing
+        setRoutes([])
         try {
-            await computeAndDrawRoute({ graph, start, end, excludeStairs: false, mapRef })
+            const res = await computeAndDrawRoute({ graph, start, end, excludeStairs: false, mapRef, k: 3 })
+            if (res && res.routes) setRoutes(res.routes)
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
     }
 
@@ -88,7 +94,7 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
 
     // listen for map feature clicks to allow quick fill of focused field or set destination
     useEffect(() => {
-        function onMapFeatureClick(e: any) {
+        async function onMapFeatureClick(e: any) {
             const feat = e.detail as any
             if (!feat) return
             const name = feat.properties?.name ?? feat.properties?.title ?? feat.id
@@ -107,7 +113,10 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                 setEnd(setId); setEndQuery(String(match?.name ?? name)); setFocusedField(null);
                 // trigger compute immediately if possible
                 if (graph && start) {
-                    try { computeAndDrawRoute({ graph, start, end: setId, excludeStairs: false, mapRef }) } catch (err) { console.error('[RoutePlanner] compute failed', err) }
+                    try {
+                        const res = await computeAndDrawRoute({ graph, start, end: setId, excludeStairs: false, mapRef, k: 3 })
+                        if (res && res.routes) setRoutes(res.routes)
+                    } catch (err) { console.error('[RoutePlanner] compute failed', err) }
                 }
                 return
             }
@@ -122,6 +131,17 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
         window.addEventListener('map:feature-click', onMapFeatureClick as any)
         return () => { window.removeEventListener('map:feature-click', onMapFeatureClick as any) }
     }, [focusedField, start, end, nodeOptions, mapRef])
+
+    // route selector UI helpers: highlight route on map when hovering an item
+    function highlightRouteLayer(layerId: string | null) {
+        const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
+        if (!map) return
+        // reset all route layers to default opacity and width
+        routes.forEach((r) => {
+            try { map.setPaintProperty(r.layerId, 'line-width', r.layerId === layerId ? 22 : (r.layerId === 'route-planner-0-line' ? 18 : 12)) } catch (e) { }
+            try { map.setPaintProperty(r.layerId, 'line-opacity', r.layerId === layerId ? 1 : 0.6) } catch (e) { }
+        })
+    }
 
     return (
         <div style={{ position: 'absolute', top: 10, left: 10, background: 'white', padding: 8, borderRadius: 4, zIndex: 20, width: 360, boxSizing: 'border-box' }}>
@@ -145,7 +165,7 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                                 setFocusedField(null)
                             }
                         }} style={{ flex: 1, padding: 6 }} placeholder="Rechercher un départ..." />
-                        {startQuery ? <button onClick={() => { setStart(''); setStartQuery('') }} title="Clear start" style={{ padding: '6px' }}>✕</button> : null}
+                        {startQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear start" style={{ padding: '6px' }}>✕</button> : null}
                     </div>
                     <div style={{ fontSize: 12, marginTop: 8 }}>Arrivée</div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
@@ -159,18 +179,28 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                                 setFocusedField(null)
                             }
                         }} style={{ flex: 1, padding: 6 }} placeholder="Rechercher une arrivée..." />
-                        {endQuery ? <button onClick={() => { setEnd(''); setEndQuery('') }} title="Clear end" style={{ padding: '6px' }}>✕</button> : null}
+                        {endQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear end" style={{ padding: '6px' }}>✕</button> : null}
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <button onClick={() => { const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px' }}>⇄</button>
+                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px' }}>⇄</button>
                 </div>
             </div>
 
             {/* Bottom suggestion panel inside planner container (full width under inputs) */}
             <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid #eee', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
-                <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
+                <div style={{ marginBottom: 8 }}>
+                    {/* Always show existing routes first (if any), then suggestions beneath when a field is focused */}
+                    {routes && routes.length > 0 && (
+                        <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+                            {routes.map((r: any, i: number) => (
+                                <RouteOption key={r.id} route={{ ...r, index: i }} primary={i === 0} highlighted={highlightedRoute === r.layerId} onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }} onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }} onGo={(rt: any) => { /* when Go pressed, mark route as selected and ensure it's highlighted */ setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }} />
+                            ))}
+                        </div>
+                    )}
+                    <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
+                </div>
             </div>
         </div>
     )

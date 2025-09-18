@@ -29,7 +29,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
         if (!data) return []
         const list: Array<{ id: string | number; name: string; level?: string }> = []
         for (const f of data.features as any) list.push({ id: f.id ?? f.properties?.id ?? f.properties?.name, name: f.properties?.name || '', level: f.properties?.level })
-        return list.filter(i => i.name.toLowerCase().startsWith(q.toLowerCase()))
+        return list.filter(i => i.name.toLowerCase().includes(q.toLowerCase()))
     }, [data, q])
 
     useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])

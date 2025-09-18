@@ -23,7 +23,7 @@ class MinHeap<T> {
     _siftDown() { let i = 0; const n = this.heap.length; while (true) { let l = 2 * i + 1, r = 2 * i + 2, smallest = i; if (l < n && this.heap[l].key < this.heap[smallest].key) smallest = l; if (r < n && this.heap[r].key < this.heap[smallest].key) smallest = r; if (smallest === i) break;[this.heap[i], this.heap[smallest]] = [this.heap[smallest], this.heap[i]]; i = smallest } }
 }
 
-export function shortestPath(graph: Graph, startId: string | number, endId: string | number, excludeTags: string[] = []) {
+export function shortestPath(graph: Graph, startId: string | number, endId: string | number, excludeTags: string[] = [], excludedEdgeIds: Set<string | number> | null = null) {
     console.log('[shortestPath] start', { startId, endId, excludeTags })
     const nodesById = new Map<string | number, Node>()
     for (const n of graph.nodes) nodesById.set(n.id, n)
@@ -32,6 +32,7 @@ export function shortestPath(graph: Graph, startId: string | number, endId: stri
     const edgesOut = new Map<string | number, Edge[]>()
     for (const e of graph.edges) {
         if (excludeTags && excludeTags.length && e.tags && e.tags.some(t => excludeTags.includes(t))) continue
+        if (excludedEdgeIds && excludedEdgeIds.has(e.id)) continue
         if (!edgesOut.has(e.from)) edgesOut.set(e.from, [])
         edgesOut.get(e.from)!.push(e)
         // assume undirected
@@ -87,5 +88,46 @@ export function shortestPath(graph: Graph, startId: string | number, endId: stri
     while (cur !== undefined && cur !== startId) { path.push(cur); cur = came.get(cur) }
     path.push(startId)
     path.reverse()
-    return path
+    // compute total cost (sum of edge weights along path)
+    let cost = 0
+    for (let i = 1; i < path.length; i++) {
+        const a = path[i - 1]
+        const b = path[i]
+        // find edge
+        const edge = graph.edges.find((ee: any) => ((String(ee.from) === String(a) && String(ee.to) === String(b)) || (String(ee.from) === String(b) && String(ee.to) === String(a))))
+        if (edge) cost += edge.weight ?? 0
+    }
+    return { path, cost }
+}
+
+// Simple k-shortest using edge-removal heuristic: compute shortest path, then for each edge in it try removing that edge and compute alternative paths.
+export function kShortestPaths(graph: Graph, startId: string | number, endId: string | number, k: number = 3, excludeTags: string[] = []) {
+    const results: Array<{ path: Array<string | number>, cost: number }> = []
+    const primary = shortestPath(graph, startId, endId, excludeTags, null)
+    if (!primary) return results
+    results.push(primary)
+    const seen = new Set<string>()
+    function pathKey(p: any) { return (p.path || p).join('->') }
+    seen.add(pathKey(primary))
+    // try removing one edge at a time from primary path
+    const edgesToTry: Array<{ a: string | number, b: string | number, id?: string | number }> = []
+    for (let i = 1; i < primary.path.length; i++) {
+        const a = primary.path[i - 1]
+        const b = primary.path[i]
+        // find the original edge id if possible
+        const edge = graph.edges.find((ee: any) => ((String(ee.from) === String(a) && String(ee.to) === String(b)) || (String(ee.from) === String(b) && String(ee.to) === String(a))))
+        edgesToTry.push({ a, b, id: edge ? edge.id : undefined })
+    }
+    for (const toRemove of edgesToTry) {
+        if (results.length >= k) break
+        const excluded = new Set<string | number>()
+        if (toRemove.id != null) excluded.add(toRemove.id)
+        // also exclude any edge that matches that pair (in case id missing)
+        const alt = shortestPath(graph, startId, endId, excludeTags, excluded)
+        if (alt) {
+            const key = pathKey(alt)
+            if (!seen.has(key)) { results.push(alt); seen.add(key) }
+        }
+    }
+    return results
 }

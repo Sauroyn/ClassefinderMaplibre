@@ -41,7 +41,7 @@ export default function App() {
         if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
       }} />}
       <MapView ref={mapRef} data={dataRef.current} level={level} />
-      {showPlanner && <RoutePlanner mapRef={mapRef} initialDestination={plannerDest} onClose={() => { setShowPlanner(false); setPlannerDest(null) }} />}
+      {showPlanner && <RoutePlanner mapRef={mapRef} initialDestination={plannerDest} onClose={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setShowPlanner(false); setPlannerDest(null) }} />}
     </>
   )
 }
