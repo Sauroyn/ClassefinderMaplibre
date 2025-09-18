@@ -1,111 +1,18 @@
 import { useState, useEffect } from 'react'
 import { computeAndDrawRoute } from '../map/computeRoute'
-
-type Graph = { nodes: any[], edges: any[] }
-
-function distance2(a: number[], b: number[]) {
-    const dx = a[0] - b[0]
-    const dy = a[1] - b[1]
-    return dx * dx + dy * dy
-}
-
-function parseGeoJSON(geo: any): Graph {
-    const nodes: any[] = []
-    const edges: any[] = []
-    if (!geo || !geo.features) return { nodes, edges }
-
-    // First pass: collect Point features as nodes
-    let genNodeIdx = 0
-    for (const f of geo.features) {
-        if (!f.geometry) continue
-        const type = f.geometry.type
-        const props = f.properties || {}
-        if (type === 'Point') {
-            const id = String(props.id ?? props.name ?? `node-${genNodeIdx++}`)
-            nodes.push({ id, coord: f.geometry.coordinates, name: props.name ?? id, raw: f })
-        }
-    }
-
-    // helper to find nearest node (or exact match)
-    function findNearestNode(coord: number[]) {
-        if (nodes.length === 0) return null
-        let best = nodes[0]
-        let bestd = distance2(coord, best.coord)
-        for (let i = 1; i < nodes.length; i++) {
-            const d = distance2(coord, nodes[i].coord)
-            if (d < bestd) { bestd = d; best = nodes[i] }
-        }
-        return best
-    }
-
-    // Second pass: interpret LineString features as edges
-    let genEdgeIdx = 0
-    for (const f of geo.features) {
-        if (!f.geometry) continue
-        const type = f.geometry.type
-        const props = f.properties || {}
-        if (type === 'LineString') {
-            const coords = f.geometry.coordinates
-            const id = String(props.id ?? props.name ?? `edge-${genEdgeIdx++}`)
-            const weight = props.weight ?? 0
-            let from = props.from != null ? String(props.from) : null
-            let to = props.to != null ? String(props.to) : null
-
-            // If from/to missing, try to snap to nearest nodes using endpoints
-            if (!from || !to) {
-                const startCoord = coords[0]
-                const endCoord = coords[coords.length - 1]
-                const n1 = findNearestNode(startCoord)
-                const n2 = findNearestNode(endCoord)
-                if (n1) from = from ?? n1.id
-                if (n2) to = to ?? n2.id
-            }
-
-            // If still missing nodes, create them (as anonymous nodes)
-            if (!from) {
-                const nid = `node-gen-${genNodeIdx++}`
-                const coord = coords[0]
-                nodes.push({ id: nid, coord, name: nid, raw: null })
-                from = nid
-            }
-            if (!to) {
-                const nid = `node-gen-${genNodeIdx++}`
-                const coord = coords[coords.length - 1]
-                nodes.push({ id: nid, coord, name: nid, raw: null })
-                to = nid
-            }
-
-            // Compute weight if not provided (euclidean length)
-            let w = weight
-            if (!w || w === 0) {
-                let total = 0
-                for (let i = 1; i < coords.length; i++) {
-                    const a = coords[i - 1]
-                    const b = coords[i]
-                    total += Math.sqrt(distance2(a, b))
-                }
-                w = total
-            }
-
-            const tags = Array.isArray(props.tags) ? props.tags : (props.tags ? [props.tags] : [])
-            edges.push({ id, from, to, weight: w, tags, raw: f })
-        }
-    }
-
-    return { nodes, edges }
-}
+import { parseGeoJSON } from './route-planner/utils'
+import type { Graph } from './route-planner/utils'
+import Suggestions from './route-planner/Suggestions'
 
 export default function RoutePlanner({ mapRef, initialDestination, onClose }: { mapRef: any, initialDestination?: any, onClose?: () => void }) {
     const [graph, setGraph] = useState<Graph | null>(null)
     const [start, setStart] = useState<string>('')
     const [end, setEnd] = useState<string>('')
-    const [excludeStairs, setExcludeStairs] = useState(false)
-    const [path, setPath] = useState<string[] | null>(null)
-    const [nodeOptions, setNodeOptions] = useState<{ id: string, name: string }[]>([])
+
+    const [nodeOptions, setNodeOptions] = useState<Array<{ id: string, name: string, level?: string }>>([])
     const [startQuery, setStartQuery] = useState<string>('')
-    const [showStartList, setShowStartList] = useState(false)
     const [endQuery, setEndQuery] = useState<string>('')
-    const [showEndList, setShowEndList] = useState(false)
+    const [focusedField, setFocusedField] = useState<'start' | 'end' | null>(null)
 
     useEffect(() => {
         // Try to load default file name (geojson or json)
@@ -120,7 +27,12 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                     const g = parseGeoJSON(j)
                     console.log('[RoutePlanner] parsed graph', g)
                     setGraph(g)
-                    setNodeOptions(g.nodes.map(n => ({ id: n.id, name: n.name ?? n.id })))
+                    setNodeOptions(g.nodes.map(n => {
+                        const raw = n.raw || {}
+                        const props = raw.properties || {}
+                        const level = props.level ?? props.floor ?? (Array.isArray(props.levels) ? props.levels[0] : undefined)
+                        return { id: n.id, name: n.name ?? n.id, level: level != null ? String(level) : '' }
+                    }))
                     // do not auto-set start/end; let the user choose. We keep nodeOptions for suggestions.
                     return
                 } catch (e) { /* try next */ }
@@ -160,8 +72,7 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
     async function compute() {
         if (!graph) { console.warn('[RoutePlanner] no graph loaded'); return }
         try {
-            const res = await computeAndDrawRoute({ graph, start, end, excludeStairs, mapRef })
-            if (res && (res as any).path) setPath((res as any).path as string[])
+            await computeAndDrawRoute({ graph, start, end, excludeStairs: false, mapRef })
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
     }
 
@@ -173,53 +84,57 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
             compute()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [start, end, excludeStairs, graph])
+    }, [start, end, graph])
 
     return (
-        <div style={{ position: 'absolute', top: 80, left: 10, background: 'white', padding: 8, borderRadius: 4, zIndex: 20, width: 360 }}>
+        <div style={{ position: 'absolute', top: 10, left: 10, background: 'white', padding: 8, borderRadius: 4, zIndex: 20, width: 360, boxSizing: 'border-box' }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
                 {onClose && <button onClick={() => { if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'end' }}>
-                <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button onClick={() => { const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '4px 6px' }}>⇄</button>
                         <div>Départ</div>
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        <input value={startQuery} onChange={(e) => { setStartQuery(e.target.value); setShowStartList(true) }} onFocus={() => setShowStartList(true)} onBlur={() => setTimeout(() => setShowStartList(false), 150)} style={{ width: 140, padding: 6 }} placeholder="Rechercher un départ..." />
-                        <button onClick={() => { setStart(''); setStartQuery('') }} title="Clear start" style={{ padding: '4px' }}>✕</button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                        <input value={startQuery} onChange={(e) => { setStartQuery(e.target.value); setFocusedField('start') }} onFocus={() => { setFocusedField('start') }} onBlur={() => setTimeout(() => { setFocusedField(null) }, 150)} onKeyDown={(e) => {
+                            const list = nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((startQuery || '').toLowerCase()))
+                            if ((e.key === 'Enter' || e.key === 'Tab') && list.length === 1) {
+                                e.preventDefault()
+                                const n = list[0]
+                                setStart(n.id)
+                                setStartQuery(n.name || String(n.id))
+                                setFocusedField(null)
+                            }
+                        }} style={{ flex: 1, padding: 6 }} placeholder="Rechercher un départ..." />
+                        {startQuery ? <button onClick={() => { setStart(''); setStartQuery('') }} title="Clear start" style={{ padding: '6px' }}>✕</button> : null}
                     </div>
-                    {showStartList && (
-                        <div style={{ position: 'absolute', top: 40, left: 0, width: 320, maxHeight: 200, overflow: 'auto', background: 'white', border: '1px solid #eee', zIndex: 30 }}>
-                            {nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((startQuery || '').toLowerCase())).map(n => (
-                                <div key={n.id} onMouseDown={() => { setStart(n.id); setStartQuery(n.name || String(n.id)); setShowStartList(false) }} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer' }}>{n.name}</div>
-                            ))}
-                        </div>
-                    )}
+
+                    <div style={{ fontSize: 12, marginTop: 8 }}>Arrivée</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                        <input value={endQuery} onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }} onFocus={() => { setFocusedField('end') }} onBlur={() => setTimeout(() => { setFocusedField(null) }, 150)} onKeyDown={(e) => {
+                            const list = nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((endQuery || '').toLowerCase()))
+                            if ((e.key === 'Enter' || e.key === 'Tab') && list.length === 1) {
+                                e.preventDefault()
+                                const n = list[0]
+                                setEnd(n.id)
+                                setEndQuery(n.name || String(n.id))
+                                setFocusedField(null)
+                            }
+                        }} style={{ flex: 1, padding: 6 }} placeholder="Rechercher une arrivée..." />
+                        {endQuery ? <button onClick={() => { setEnd(''); setEndQuery('') }} title="Clear end" style={{ padding: '6px' }}>✕</button> : null}
+                    </div>
                 </div>
-                <div style={{ position: 'relative' }}>
-                    <div style={{ fontSize: 12 }}>Arrivée</div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                        <input value={endQuery} onChange={(e) => { setEndQuery(e.target.value); setShowEndList(true) }} onFocus={() => setShowEndList(true)} onBlur={() => setTimeout(() => setShowEndList(false), 150)} style={{ width: 140, padding: 6 }} placeholder="Rechercher une arrivée..." />
-                        <button onClick={() => { setEnd(''); setEndQuery('') }} title="Clear end" style={{ padding: '4px' }}>✕</button>
-                    </div>
-                    {showEndList && (
-                        <div style={{ position: 'absolute', top: 28, left: 0, width: 320, maxHeight: 200, overflow: 'auto', background: 'white', border: '1px solid #eee', zIndex: 30 }}>
-                            {nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((endQuery || '').toLowerCase())).map(n => (
-                                <div key={n.id} onMouseDown={() => { setEnd(n.id); setEndQuery(n.name || String(n.id)); setShowEndList(false) }} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer' }}>{n.name}</div>
-                            ))}
-                        </div>
-                    )}
+
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <button onClick={() => { const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px' }}>⇄</button>
                 </div>
             </div>
-            <label style={{ display: 'block', marginBottom: 6 }}>
-                <input type="checkbox" checked={excludeStairs} onChange={e => setExcludeStairs(e.target.checked)} /> Exclure les escaliers
-            </label>
-            <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12 }}>Result</div>
-                <div style={{ fontSize: 13 }}>{path ? path.join(' → ') : '—'}</div>
+
+            {/* Bottom suggestion panel inside planner container (full width under inputs) */}
+            <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid #eee', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
+                <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
             </div>
         </div>
     )
