@@ -45,7 +45,23 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 const props: any = {}
                 if (edge && edge.raw && edge.raw.geometry && edge.raw.geometry.type === 'LineString') {
                     segCoords = edge.raw.geometry.coordinates.slice()
-                    if (edge.raw.properties) Object.assign(props, edge.raw.properties)
+                    if (edge.raw.properties) {
+                        Object.assign(props, edge.raw.properties)
+                        // normalize level properties: convert numeric strings to numbers so filters match
+                        if (props.level != null && typeof props.level === 'string') {
+                            const n = Number(props.level)
+                            if (!Number.isNaN(n)) props.level = n
+                        }
+                        if (props.levels && Array.isArray(props.levels)) {
+                            props.levels = props.levels.map((v: any) => {
+                                if (typeof v === 'string') {
+                                    const n = Number(v)
+                                    return Number.isNaN(n) ? v : n
+                                }
+                                return v
+                            })
+                        }
+                    }
                 } else if (aNode && bNode) {
                     segCoords = [aNode.coord, bNode.coord]
                 }

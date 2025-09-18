@@ -48,33 +48,27 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
             if (map.getLayer('buildings-extrusion')) map.setFilter('buildings-extrusion', filter as any)
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
             if (map.getLayer('buildings-name')) map.setFilter('buildings-name', filter as any)
-            // also apply filter to route planner line if present
-            if (map.getLayer('route-planner-line')) {
-                // accept features where properties.level == level OR properties.levels contains level
-                // show segments that explicitly match the level OR that list the level in levels
-                // also show segments that have neither level nor levels properties (fallback segments)
-                const routeFilter = [
-                    'any',
-                    ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
-                    ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
-                    ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
-                ]
-                try { map.setFilter('route-planner-line', routeFilter as any) } catch (e) { }
-            }
-            // ensure that if the route layer/source is added later (by compute), we re-apply the filter
-            const onData = () => {
+            // apply filter to any route-planner layers (IDs like "route-planner-0-line")
+            const applyRouteFilterToAll = () => {
                 try {
-                    if (map.getLayer('route-planner-line')) {
-                        const routeFilter = [
-                            'any',
-                            ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
-                            ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
-                            ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
-                        ]
-                        map.setFilter('route-planner-line', routeFilter as any)
+                    const style = map.getStyle && map.getStyle()
+                    const layers = (style && style.layers) || []
+                    const routeFilter = [
+                        'any',
+                        ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                        ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
+                        ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+                    ]
+                    for (const lyr of layers) {
+                        if (lyr && typeof lyr.id === 'string' && lyr.id.startsWith('route-planner-')) {
+                            try { map.setFilter(lyr.id, routeFilter as any) } catch (e) { }
+                        }
                     }
-                } catch (err) { }
+                } catch (e) { }
             }
+            applyRouteFilterToAll()
+            // ensure that if the route layer/source is added later (by compute), we re-apply the filter
+            const onData = () => { applyRouteFilterToAll() }
             map.on('sourcedata', onData)
             // remove listener on cleanup
             return () => { try { map.off('sourcedata', onData) } catch (e) { } }
