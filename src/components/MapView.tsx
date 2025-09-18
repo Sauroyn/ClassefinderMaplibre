@@ -11,10 +11,14 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<maplibre.Map | null>(null)
     const initialized = useRef(false)
+    const initialCamera = useRef<any>(null)
     useEffect(() => {
         if (!container.current) return
         const map = new maplibre.Map({ container: container.current, style: 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ', center: [2.3522, 48.8566], zoom: 12 })
         mapRef.current = map
+        // store initial camera when map is ready
+        const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
+        if (map.loaded()) saveInit(); else map.on('load', saveInit)
         return () => { map.remove(); mapRef.current = null }
     }, [])
 
@@ -90,6 +94,11 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
             const map = mapRef.current
             if (!map || !cam) return
             if (Array.isArray(cam.center) && cam.center.length === 2) map.flyTo({ center: cam.center as [number, number], zoom: cam.zoom })
+        },
+        restoreInitialCamera: () => {
+            const map = mapRef.current
+            if (!map || !initialCamera.current) return
+            map.flyTo({ center: initialCamera.current.center as [number, number], zoom: initialCamera.current.zoom })
         },
         clearSelection: () => {
             const map = mapRef.current

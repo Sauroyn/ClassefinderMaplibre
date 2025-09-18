@@ -30,7 +30,7 @@ export default function App() {
         if (mapRef.current && mapRef.current.selectFeatureById) mapRef.current.selectFeatureById(id)
       }} onClear={() => {
         if (!mapRef.current) return
-        if (prevCameraRef.current && mapRef.current.restoreCamera) mapRef.current.restoreCamera(prevCameraRef.current)
+        if (mapRef.current && mapRef.current.restoreInitialCamera) mapRef.current.restoreInitialCamera()
         if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
       }} />
       <MapView ref={mapRef} data={dataRef.current} level={level} />
