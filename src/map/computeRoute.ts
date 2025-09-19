@@ -13,11 +13,32 @@ function haversine(a: [number, number], b: [number, number]) {
     return R * c
 }
 
-export async function computeAndDrawRoute(params: { graph: any, start: string, end: string, excludeStairs: boolean, mapRef: any, k?: number }) {
-    const { graph, start, end, excludeStairs, mapRef, k = 3 } = params
+export async function computeAndDrawRoute(params: { graph: any, start: string, end: string, excludeStairs: boolean, coveredOnly?: boolean, mapRef: any, k?: number }) {
+    const { graph, start, end, excludeStairs, coveredOnly = false, mapRef, k = 3 } = params
     if (!graph) return null
     const exclude = excludeStairs ? ['stairs'] : []
-    const ks = kShortestPaths({ nodes: graph.nodes, edges: graph.edges }, String(start), String(end), k, exclude)
+    // optionally filter edges before pathfinding
+    const filteredEdges = graph.edges.filter((e: any) => {
+        // consider tags array first
+        const tags: string[] = Array.isArray(e.tags) ? e.tags : (e.tags ? [e.tags] : [])
+        // detect steps via tags or raw properties
+        let isSteps = false
+        if (tags.some(t => String(t).toLowerCase() === 'steps')) isSteps = true
+        if (e.raw && e.raw.properties) {
+            const hp = e.raw.properties['highway'] ?? e.raw.properties['type']
+            if (hp && String(hp).toLowerCase() === 'steps') isSteps = true
+        }
+        if (excludeStairs && isSteps) return false
+        // detect covered property
+        let isCovered = false
+        if (e.raw && e.raw.properties) {
+            const cov = e.raw.properties['covered'] ?? e.raw.properties['isCovered']
+            if (cov === true || String(cov).toLowerCase() === 'yes' || String(cov).toLowerCase() === 'true') isCovered = true
+        }
+        if (coveredOnly && !isCovered) return false
+        return true
+    })
+    const ks = kShortestPaths({ nodes: graph.nodes, edges: filteredEdges }, String(start), String(end), k, exclude)
     if (!ks || ks.length === 0) return null
     // Build per-segment features: for each consecutive node pair, try to find an original edge (graph.edges)
     const nodeById = new Map<string, any>()
@@ -62,6 +83,15 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                             })
                         }
                     }
+                    // if caller asked for covered-only, skip this segment unless properties.covered === 'yes' or boolean true
+                    if (coveredOnly) {
+                        const cov = props.covered ?? (edge.raw.properties && edge.raw.properties.covered)
+                        const covTrue = cov === true || String(cov).toLowerCase() === 'yes' || String(cov).toLowerCase() === 'true'
+                        if (!covTrue) {
+                            // skip segment (don't push features)
+                            segCoords = []
+                        }
+                    }
                 } else if (aNode && bNode) {
                     segCoords = [aNode.coord, bNode.coord]
                 }
@@ -104,6 +134,34 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         }
         // ensure primary is on top
         try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch (e) { }
+        // also add/update start/end marker sources and layers
+        try {
+            // build start/end features if nodes exist
+            const startNode = nodeById.get(String(start))
+            const endNode = nodeById.get(String(end))
+            const mkStart = startNode ? { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startNode.coord }, properties: { role: 'start', level: startNode.level ?? null } }] } : null
+            const mkEnd = endNode ? { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: endNode.coord }, properties: { role: 'end', level: endNode.level ?? null } }] } : null
+            if (mkStart) {
+                if (map.getSource && map.getSource('route-planner-start')) map.getSource('route-planner-start').setData(mkStart)
+                else if (map.addSource) map.addSource('route-planner-start', { type: 'geojson', data: mkStart })
+                if (!map.getLayer || !map.getLayer('route-planner-start-symbol')) {
+                    map.addLayer({ id: 'route-planner-start-symbol', type: 'symbol', source: 'route-planner-start', layout: { 'icon-image': 'marker-15', 'icon-size': 1.5, 'icon-allow-overlap': true }, paint: {} })
+                }
+            } else {
+                try { if (map.getLayer && map.getLayer('route-planner-start-symbol')) map.removeLayer('route-planner-start-symbol') } catch (e) { }
+                try { if (map.getSource && map.getSource('route-planner-start')) map.removeSource('route-planner-start') } catch (e) { }
+            }
+            if (mkEnd) {
+                if (map.getSource && map.getSource('route-planner-end')) map.getSource('route-planner-end').setData(mkEnd)
+                else if (map.addSource) map.addSource('route-planner-end', { type: 'geojson', data: mkEnd })
+                if (!map.getLayer || !map.getLayer('route-planner-end-symbol')) {
+                    map.addLayer({ id: 'route-planner-end-symbol', type: 'symbol', source: 'route-planner-end', layout: { 'icon-image': 'marker-15', 'icon-size': 1.2, 'icon-allow-overlap': true }, paint: {} })
+                }
+            } else {
+                try { if (map.getLayer && map.getLayer('route-planner-end-symbol')) map.removeLayer('route-planner-end-symbol') } catch (e) { }
+                try { if (map.getSource && map.getSource('route-planner-end')) map.removeSource('route-planner-end') } catch (e) { }
+            }
+        } catch (e) { }
     } catch (e) { }
     // ensure the map view shows the whole route
     try {

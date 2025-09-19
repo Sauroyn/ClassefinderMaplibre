@@ -71,7 +71,9 @@ export function parseGeoJSON(geo: any): Graph {
             }
 
             // compute per-segment weights (and create an edge per consecutive pair)
-            const tags = Array.isArray(props.tags) ? props.tags : (props.tags ? [props.tags] : [])
+            const tags: string[] = Array.isArray(props.tags) ? (props.tags as string[]).slice() : (props.tags ? [String(props.tags)] : [])
+            // detect 'highway: steps' and add a 'steps' tag for convenience
+            if (props.highway && String(props.highway).toLowerCase() === 'steps' && !tags.some((t: string) => String(t).toLowerCase() === 'steps')) tags.push('steps')
             for (let i = 1; i < vertexNodeIds.length; i++) {
                 const from = vertexNodeIds[i - 1]
                 const to = vertexNodeIds[i]

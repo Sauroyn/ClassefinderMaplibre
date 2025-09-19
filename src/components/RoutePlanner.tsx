@@ -72,12 +72,17 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
 
     const [routes, setRoutes] = useState<Array<any>>([])
     const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null)
+    const [excludeStairs, setExcludeStairs] = useState<boolean>(false)
+    const [coveredOnly, setCoveredOnly] = useState<boolean>(false)
+    const [showSecondary, setShowSecondary] = useState<boolean>(true)
+    const [showSettings, setShowSettings] = useState<boolean>(false)
     async function compute() {
         if (!graph) { console.warn('[RoutePlanner] no graph loaded'); return }
         // clear previous routes while computing
         setRoutes([])
         try {
-            const res = await computeAndDrawRoute({ graph, start, end, excludeStairs: false, mapRef, k: 3 })
+            const k = showSecondary ? 3 : 1
+            const res = await computeAndDrawRoute({ graph, start, end, excludeStairs, coveredOnly, mapRef, k })
             if (res && res.routes) setRoutes(res.routes)
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
     }
@@ -114,7 +119,7 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                 // trigger compute immediately if possible
                 if (graph && start) {
                     try {
-                        const res = await computeAndDrawRoute({ graph, start, end: setId, excludeStairs: false, mapRef, k: 3 })
+                        const res = await computeAndDrawRoute({ graph, start, end: setId, excludeStairs, coveredOnly, mapRef, k: 3 })
                         if (res && res.routes) setRoutes(res.routes)
                     } catch (err) { console.error('[RoutePlanner] compute failed', err) }
                 }
@@ -148,6 +153,7 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
             <div style={{ position: 'relative', marginBottom: 6 }}>
                 {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
+                <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
@@ -186,6 +192,19 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px' }}>⇄</button>
                 </div>
+                {showSettings && (
+                    <div style={{ position: 'absolute', right: 12, top: 40, background: 'white', border: '1px solid #ddd', padding: 8, borderRadius: 6, zIndex: 30, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <label style={{ fontSize: 13 }}><input type="checkbox" checked={excludeStairs} onChange={(e) => setExcludeStairs(e.target.checked)} />{' '}Mode fauteuil roulant (sans escaliers)</label>
+                            <label style={{ fontSize: 13 }}><input type="checkbox" checked={coveredOnly} onChange={(e) => setCoveredOnly(e.target.checked)} />{' '}Couvert uniquement</label>
+                            <label style={{ fontSize: 13 }}><input type="checkbox" checked={showSecondary} onChange={(e) => setShowSecondary(e.target.checked)} />{' '}Afficher itinéraires secondaires</label>
+                            <div style={{ fontSize: 12, color: '#333' }}><strong>Filtres actifs :</strong> {excludeStairs ? 'Sans escaliers' : '—'}{', '}{coveredOnly ? 'Couvert' : '—'}</div>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                <button onClick={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (graph && start && end) compute() }} style={{ padding: '6px 8px' }}>Appliquer</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Bottom suggestion panel inside planner container (full width under inputs) */}
