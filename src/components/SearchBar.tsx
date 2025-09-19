@@ -3,12 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 type Props = {
     data: GeoJSON.FeatureCollection | null
     onSelect: (id: number | string, level?: number | string) => void
+    onRouteRequest?: (feature: any) => void
     onClear?: () => void
 }
 
 const STORAGE_KEY = 'cf:recent_searches'
 
-export default function SearchBar({ data, onSelect, onClear }: Props) {
+export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: Props) {
     const [q, setQ] = useState('')
     const [focused, setFocused] = useState(false)
     const [showBack, setShowBack] = useState(false)
@@ -28,10 +29,25 @@ export default function SearchBar({ data, onSelect, onClear }: Props) {
         if (!data) return []
         const list: Array<{ id: string | number; name: string; level?: string }> = []
         for (const f of data.features as any) list.push({ id: f.id ?? f.properties?.id ?? f.properties?.name, name: f.properties?.name || '', level: f.properties?.level })
-        return list.filter(i => i.name.toLowerCase().startsWith(q.toLowerCase()))
+        return list.filter(i => i.name.toLowerCase().includes(q.toLowerCase()))
     }, [data, q])
 
     useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])
+
+    // respond to map clicks when they dispatch a feature click event
+    useEffect(() => {
+        function onMapFeatureClick(e: any) {
+            const feat = e.detail as any
+            if (!feat) return
+            const name = feat.properties?.name ?? feat.properties?.title ?? feat.id
+            const id = feat.id ?? feat.properties?.id ?? name
+            // mimic a user pick
+            pick(id, name)
+            // do not auto-open route planner here; RoutePlanner listens separately when open
+        }
+        window.addEventListener('map:feature-click', onMapFeatureClick as any)
+        return () => { window.removeEventListener('map:feature-click', onMapFeatureClick as any) }
+    }, [data])
 
     const pick = (id: string | number, name: string) => {
         let resolved: string | number = id
@@ -85,7 +101,12 @@ export default function SearchBar({ data, onSelect, onClear }: Props) {
                     <div style={{ fontWeight: 700 }}>{selected.name}</div>
                     <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
                         <div style={{ padding: '6px 10px', background: '#f1f3f5', borderRadius: 12 }}>{selected.level ?? '—'}</div>
-                        <button style={{ padding: '6px 10px' }}>Itinéraire</button>
+                        <button style={{ padding: '6px 10px' }} onClick={() => {
+                            if (!onRouteRequest) return
+                            // find feature in data
+                            const feat = (data && data.features) ? data.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === selected.id || f.properties?.name === selected.name) : null
+                            onRouteRequest(feat || { id: selected.id, name: selected.name })
+                        }}>Itinéraire</button>
                         <button style={{ padding: '6px 10px' }}>Alias</button>
                     </div>
                 </div>

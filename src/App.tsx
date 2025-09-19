@@ -3,6 +3,7 @@ import './App.css'
 import MapView from './components/MapView'
 import LevelSelector from './components/LevelSelector'
 import SearchBar from './components/SearchBar'
+import RoutePlanner from './components/RoutePlanner'
 
 export default function App() {
   const [levels, setLevels] = useState<number[]>([])
@@ -11,6 +12,8 @@ export default function App() {
   const dataRef = useRef<any | null>(null)
   const mapRef = useRef<any>(null)
   const prevCameraRef = useRef<any>(null)
+  const [showPlanner, setShowPlanner] = useState(false)
+  const [plannerDest, setPlannerDest] = useState<any | null>(null)
 
   useEffect(() => {
     fetch('/buildings.geojson').then(r => r.json()).then(d => { dataRef.current = d; const found = Array.from(new Set((d.features || []).map((f: any) => f.properties?.level))).filter(Boolean) as number[]; found.sort((a, b) => a - b); setLevels(found); setLoading(false); if (found.length) setLevel(found[0]) })
@@ -19,7 +22,7 @@ export default function App() {
   return (
     <>
       <LevelSelector levels={levels} level={level} loading={loading} onChange={setLevel} />
-      <SearchBar data={dataRef.current} onSelect={(id, lvl) => {
+      {!showPlanner && <SearchBar data={dataRef.current} onSelect={(id, lvl) => {
         if (!mapRef.current) return
         // save camera before changing
         try { prevCameraRef.current = mapRef.current.getCamera() } catch { }
@@ -28,12 +31,17 @@ export default function App() {
           if (!Number.isNaN(n) && n !== level) setLevel(n)
         }
         if (mapRef.current && mapRef.current.selectFeatureById) mapRef.current.selectFeatureById(id)
+      }} onRouteRequest={(feat) => {
+        // open planner with destination prefilled
+        setPlannerDest(feat)
+        setShowPlanner(true)
       }} onClear={() => {
         if (!mapRef.current) return
         if (mapRef.current && mapRef.current.restoreInitialCamera) mapRef.current.restoreInitialCamera()
         if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
-      }} />
+      }} />}
       <MapView ref={mapRef} data={dataRef.current} level={level} />
+      {showPlanner && <RoutePlanner mapRef={mapRef} initialDestination={plannerDest} onClose={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setShowPlanner(false); setPlannerDest(null) }} />}
     </>
   )
 }

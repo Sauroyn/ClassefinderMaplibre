@@ -1,0 +1,195 @@
+{
+    "type": "FeatureCollection",
+    "generator": "JOSM",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "1"
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        2.35655259233,
+                        48.85809181842
+                    ],
+                    [
+                        2.35576282095,
+                        48.85824389956
+                    ],
+                    [
+                        2.35178506995,
+                        48.85806647152
+                    ],
+                    [
+                        2.35065820103,
+                        48.85602600394
+                    ],
+                    [
+                        2.34846702928,
+                        48.85744593172
+                    ],
+                    [
+                        2.34989732372,
+                        48.85741378442
+                    ],
+                    [
+                        2.35299862110,
+                        48.85741378442
+                    ],
+                    [
+                        2.35333571865,
+                        48.85680544702
+                    ],
+                    [
+                        2.35655259233,
+                        48.85809181842
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "3"
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        2.35065820103,
+                        48.85602600394
+                    ],
+                    [
+                        2.35272894307,
+                        48.85525288579
+                    ],
+                    [
+                        2.35587839725,
+                        48.85586757906
+                    ],
+                    [
+                        2.35333571865,
+                        48.85680544702
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "A"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.35655259233,
+                    48.85809181842
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "3"
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        2.35587839725,
+                        48.85586757906
+                    ],
+                    [
+                        2.35178506995,
+                        48.85806647152
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "C"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.34846702928,
+                    48.85744593172
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "1",
+                "covered": "yes"
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        2.34846702928,
+                        48.85744593172
+                    ],
+                    [
+                        2.35082002561,
+                        48.85250390886
+                    ],
+                    [
+                        2.35587839725,
+                        48.85586757906
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "B"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.35178506995,
+                    48.85806647152
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "D"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.35587839725,
+                    48.85586757906
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "highway": "steps",
+                "level": "3"
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        2.35178506995,
+                        48.85806647152
+                    ],
+                    [
+                        2.34846702928,
+                        48.85744593172
+                    ]
+                ]
+            }
+        }
+    ]
+}
