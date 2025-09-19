@@ -1,4 +1,5 @@
 import { kShortestPaths } from './shortestPath'
+import maplibre from 'maplibre-gl'
 
 function haversine(a: [number, number], b: [number, number]) {
     const toRad = (v: number) => v * Math.PI / 180
@@ -134,33 +135,124 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         }
         // ensure primary is on top
         try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch (e) { }
-        // also add/update start/end marker sources and layers
+        // helper: find levels for a coord by inspecting route features (prefer primary route)
+        const findLevelsForCoord = (coord: number[] | null) => {
+            if (!coord) return [] as any[]
+            const eq = (a: number[], b: number[]) => a[0] === b[0] && a[1] === b[1]
+            const levelsSet = new Set<any>()
+            try {
+                // prefer route-planner-0 if present
+                const routesToCheck = allRoutes.slice()
+                if (routesToCheck.length === 0) return []
+                // put primary first
+                routesToCheck.sort((a, b) => {
+                    if (a.id === 'route-planner-0') return -1
+                    if (b.id === 'route-planner-0') return 1
+                    return 0
+                })
+                for (const rt of routesToCheck) {
+                    try {
+                        const feats = rt.geo && rt.geo.features ? rt.geo.features : []
+                        for (const f of feats) {
+                            if (!f || !f.geometry || f.geometry.type !== 'LineString') continue
+                            const cs = f.geometry.coordinates
+                            if (!cs || cs.length === 0) continue
+                            const first = cs[0]
+                            const last = cs[cs.length - 1]
+                            if (eq(first as number[], coord as number[]) || eq(last as number[], coord as number[])) {
+                                const p = f.properties || {}
+                                if (p.level != null) levelsSet.add(p.level)
+                                if (p.levels && Array.isArray(p.levels)) for (const lv of p.levels) levelsSet.add(lv)
+                            }
+                        }
+                    } catch (e) { }
+                    if (levelsSet.size) break
+                }
+            } catch (e) { }
+            return Array.from(levelsSet)
+        }
+        // also add DOM markers (MapLibre `Marker`) for start/end using user's SVGs when available
         try {
-            // build start/end features if nodes exist
+            // remove previous markers if present
+            try {
+                const prev = (map as any).__routePlannerMarkers
+                if (prev) {
+                    if (prev.start && prev.start.remove) try { prev.start.remove() } catch (e) { }
+                    if (prev.end && prev.end.remove) try { prev.end.remove() } catch (e) { }
+                }
+            } catch (e) { }
+
             const startNode = nodeById.get(String(start))
             const endNode = nodeById.get(String(end))
-            const mkStart = startNode ? { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: startNode.coord }, properties: { role: 'start', level: startNode.level ?? null } }] } : null
-            const mkEnd = endNode ? { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: endNode.coord }, properties: { role: 'end', level: endNode.level ?? null } }] } : null
-            if (mkStart) {
-                if (map.getSource && map.getSource('route-planner-start')) map.getSource('route-planner-start').setData(mkStart)
-                else if (map.addSource) map.addSource('route-planner-start', { type: 'geojson', data: mkStart })
-                if (!map.getLayer || !map.getLayer('route-planner-start-symbol')) {
-                    map.addLayer({ id: 'route-planner-start-symbol', type: 'symbol', source: 'route-planner-start', layout: { 'icon-image': 'marker-15', 'icon-size': 1.5, 'icon-allow-overlap': true }, paint: {} })
-                }
-            } else {
-                try { if (map.getLayer && map.getLayer('route-planner-start-symbol')) map.removeLayer('route-planner-start-symbol') } catch (e) { }
-                try { if (map.getSource && map.getSource('route-planner-start')) map.removeSource('route-planner-start') } catch (e) { }
+
+            const makeDomMarker = (node: any, role: 'start' | 'end') => {
+                if (!node) return null
+                try {
+                    const coord = node.coord as [number, number]
+                    // create element similar to MapLibre default marker
+                    const el = document.createElement('div')
+                    el.className = 'maplibregl-marker route-planner-marker route-planner-' + role
+                    el.style.display = 'block'
+                    el.style.width = '32px'
+                    el.style.height = '32px'
+                    el.style.boxSizing = 'border-box'
+                    // attach level metadata as dataset so MapView can read it
+                    // prefer levels taken from route segments that end at this coord
+                    const routeLevels = findLevelsForCoord(coord)
+                    if (routeLevels && routeLevels.length === 1) {
+                        el.dataset.level = String(routeLevels[0])
+                    } else if (routeLevels && routeLevels.length > 1) {
+                        el.dataset.levels = routeLevels.join(',')
+                    } else {
+                        if (node.level !== undefined && node.level !== null) el.dataset.level = String(node.level)
+                        if (node.levels && Array.isArray(node.levels)) el.dataset.levels = node.levels.join(',')
+                    }
+                    // title for accessibility / debug
+                    el.title = role + (node.level !== undefined && node.level !== null ? ` (level ${node.level})` : '')
+                    // use background-image like the MapLibre example so we can control size easily
+                    const iconUrl = role === 'start' ? '/start-icon.svg' : '/end-icon.svg'
+                    const iconSize = role === 'start' ? [36, 36] : [32, 32]
+                    el.style.backgroundImage = `url(${iconUrl})`
+                    el.style.backgroundSize = 'contain'
+                    el.style.backgroundRepeat = 'no-repeat'
+                    el.style.backgroundPosition = 'center'
+                    el.style.width = iconSize[0] + 'px'
+                    el.style.height = iconSize[1] + 'px'
+                    el.style.cursor = 'pointer'
+
+                    // create and add marker
+                    let marker = null
+                    try {
+                        if (typeof maplibre !== 'undefined' && maplibre.Marker) marker = new maplibre.Marker({ element: el }).setLngLat(coord).addTo(map)
+                    } catch (e) { marker = null }
+                    // store meta for visibility per level
+                    // compute meta.level(s) consistent with dataset used above
+                    let metaLevel: any = null
+                    let metaLevels: any = null
+                    if (routeLevels && routeLevels.length === 1) metaLevel = routeLevels[0]
+                    else if (routeLevels && routeLevels.length > 1) metaLevels = routeLevels
+                    else {
+                        if (node.level !== undefined && node.level !== null) metaLevel = node.level
+                        if (node.levels && Array.isArray(node.levels)) metaLevels = node.levels
+                    }
+                    const meta: any = { marker, level: metaLevel, levels: metaLevels }
+                    // set initial visibility based on map.__currentLevel if available
+                    try {
+                        const current = (map as any).__currentLevel
+                        if (marker && marker.getElement) {
+                            const el = marker.getElement()
+                            if (metaLevel !== null && metaLevel !== undefined) el.style.display = (metaLevel === current) ? 'block' : 'none'
+                            else if (metaLevels && Array.isArray(metaLevels)) el.style.display = (metaLevels.indexOf(current) !== -1) ? 'block' : 'none'
+                            else el.style.display = 'block'
+                        }
+                    } catch (e) { }
+                    return meta
+                } catch (e) { return null }
             }
-            if (mkEnd) {
-                if (map.getSource && map.getSource('route-planner-end')) map.getSource('route-planner-end').setData(mkEnd)
-                else if (map.addSource) map.addSource('route-planner-end', { type: 'geojson', data: mkEnd })
-                if (!map.getLayer || !map.getLayer('route-planner-end-symbol')) {
-                    map.addLayer({ id: 'route-planner-end-symbol', type: 'symbol', source: 'route-planner-end', layout: { 'icon-image': 'marker-15', 'icon-size': 1.2, 'icon-allow-overlap': true }, paint: {} })
-                }
-            } else {
-                try { if (map.getLayer && map.getLayer('route-planner-end-symbol')) map.removeLayer('route-planner-end-symbol') } catch (e) { }
-                try { if (map.getSource && map.getSource('route-planner-end')) map.removeSource('route-planner-end') } catch (e) { }
-            }
+
+            const mkStart = makeDomMarker(startNode, 'start')
+            const mkEnd = makeDomMarker(endNode, 'end')
+                ; (map as any).__routePlannerMarkers = { start: mkStart ? mkStart.marker : null, end: mkEnd ? mkEnd.marker : null, startLevel: mkStart ? mkStart.level : null, endLevel: mkEnd ? mkEnd.level : null, startLevels: mkStart ? mkStart.levels : null, endLevels: mkEnd ? mkEnd.levels : null }
         } catch (e) { }
     } catch (e) { }
     // ensure the map view shows the whole route
