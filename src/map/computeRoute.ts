@@ -1,5 +1,6 @@
 import { kShortestPaths } from './shortestPath'
 import maplibre from 'maplibre-gl'
+import { fitBoundsSmart } from './viewport'
 
 function haversine(a: [number, number], b: [number, number]) {
     const toRad = (v: number) => v * Math.PI / 180
@@ -260,7 +261,7 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         if (combinedCoords && combinedCoords.length) {
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
             for (const c of combinedCoords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-            if (isFinite(minX)) map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 60, duration: 800 })
+            if (isFinite(minX)) fitBoundsSmart(map, [[minX, minY], [maxX, maxY]])
         }
     } catch (e) { }
     // build a richer routes result
