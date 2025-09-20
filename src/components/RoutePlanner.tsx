@@ -149,7 +149,7 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
     }
 
     return (
-        <div style={{ position: 'absolute', top: 10, left: 10, background: 'white', padding: 8, borderRadius: 4, zIndex: 20, width: 360, boxSizing: 'border-box' }}>
+        <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'white', padding: 8, borderRadius: 4, zIndex: 20, width: 360, boxSizing: 'border-box' }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
                 {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>

@@ -10,3 +10,37 @@
   position: relative;
   z-index: 1;
 }
+
+/* Mobile responsive layout */
+@media (max-width: 720px) {
+
+  .searchbar,
+  .route-planner {
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: calc(100% - 20px) !important;
+    box-sizing: border-box;
+    margin: 0 !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    z-index: 30 !important;
+  }
+
+  /* stack order: searchbar on top, route-planner under it */
+  .searchbar {
+    top: 0;
+  }
+
+  .route-planner {
+    top: 56px;
+  }
+
+  /* level selector sits under the active top panels */
+  .level-selector {
+    /* position will be managed dynamically via JS when needed */
+    z-index: 29 !important;
+    width: auto !important;
+    border-radius: 8px !important;
+  }
+}
