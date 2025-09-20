@@ -39,8 +39,11 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
                 } catch (e) { resolve(false) }
             })
 
-            const startCandidates = ['/marker-start.svg', '/marker-start.svg', '/start.svg', '/start-icon.svg', '/marker-start-icon.svg', '/icons/marker-start.svg']
-            const endCandidates = ['/marker-end.svg', '/marker-end.svg', '/end.svg', '/end-icon.svg', '/marker-end-icon.svg', '/icons/marker-end.svg']
+            const rawStartCandidates = ['/start-icon.svg', '/marker-start.svg', '/start.svg', '/marker-start-icon.svg', '/icons/marker-start.svg']
+            const rawEndCandidates = ['/end-icon.svg', '/marker-end.svg', '/end.svg', '/marker-end-icon.svg', '/icons/marker-end.svg']
+            const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+            const startCandidates = rawStartCandidates.map(u => u.startsWith('/') ? (prefix + u.slice(1)) : u)
+            const endCandidates = rawEndCandidates.map(u => u.startsWith('/') ? (prefix + u.slice(1)) : u)
 
             let ok = false
             for (const c of startCandidates) {

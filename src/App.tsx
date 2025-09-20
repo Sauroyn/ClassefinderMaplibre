@@ -16,7 +16,8 @@ export default function App() {
   const [plannerDest, setPlannerDest] = useState<any | null>(null)
 
   useEffect(() => {
-    fetch('/buildings.geojson').then(r => r.json()).then(d => { dataRef.current = d; const found = Array.from(new Set((d.features || []).map((f: any) => f.properties?.level))).filter(Boolean) as number[]; found.sort((a, b) => a - b); setLevels(found); setLoading(false); if (found.length) setLevel(found[0]) })
+    const url = (import.meta.env && (import.meta.env.BASE_URL || '/')) + 'buildings.geojson'
+    fetch(url).then(r => r.json()).then(d => { dataRef.current = d; const found = Array.from(new Set((d.features || []).map((f: any) => f.properties?.level))).filter(Boolean) as number[]; found.sort((a, b) => a - b); setLevels(found); setLoading(false); if (found.length) setLevel(found[0]) })
   }, [])
 
   return (

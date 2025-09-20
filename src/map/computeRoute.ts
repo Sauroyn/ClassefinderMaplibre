@@ -211,7 +211,8 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                     // title for accessibility / debug
                     el.title = role + (node.level !== undefined && node.level !== null ? ` (level ${node.level})` : '')
                     // use background-image like the MapLibre example so we can control size easily
-                    const iconUrl = role === 'start' ? '/start-icon.svg' : '/end-icon.svg'
+                    const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+                    const iconUrl = role === 'start' ? (prefix + 'start-icon.svg') : (prefix + 'end-icon.svg')
                     const iconSize = role === 'start' ? [36, 36] : [32, 32]
                     el.style.backgroundImage = `url(${iconUrl})`
                     el.style.backgroundSize = 'contain'
