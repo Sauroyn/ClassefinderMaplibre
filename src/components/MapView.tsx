@@ -4,12 +4,14 @@ import { addBuildingsSource, addCentroidsSource } from '../map/sources'
 import { addFillLayers, addNameLayer } from '../map/layers'
 import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
+import { fitBoundsSmart } from '../map/viewport'
 
 type Props = { data: any | null, level: number }
 
 export default forwardRef(function MapView({ data, level }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<maplibre.Map | null>(null)
+    const latestDataRef = useRef<any | null>(null)
     const initialized = useRef(false)
     const initialCamera = useRef<any>(null)
     useEffect(() => {
@@ -91,6 +93,7 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
     // initialize sources/layers when data becomes available
     useEffect(() => {
         const map = mapRef.current
+        latestDataRef.current = data
         if (!map || !data || initialized.current) return
         const init = () => {
             try {
@@ -185,7 +188,7 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
                     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
                     const coords = feat.geometry.coordinates[0]
                     for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                    if (isFinite(minX)) { map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 60, duration: 800 }); return }
+                    if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
                 } else if (feat.geometry.type === 'MultiPolygon') {
                     let best: { area: number, bounds: [number, number, number, number] } | null = null
                     for (const poly of feat.geometry.coordinates) {
@@ -195,11 +198,36 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
                         a = Math.abs(a) / 2
                         if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
                     }
-                    if (best) { map.fitBounds([[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]], { padding: 60, duration: 800 }); return }
+                    if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
                 }
             }
-            // fallback
-            map.flyTo({ center: map.getCenter(), zoom: 16 })
+            // if feature wasn't found in the source, try to find it in latestDataRef (search results when data not yet added)
+            try {
+                const d = latestDataRef.current
+                if (d && d.features && d.features.length) {
+                    const found = d.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === id || (f.properties && f.properties.name) === id)
+                    if (found && found.geometry) {
+                        const geom = found.geometry
+                        if (geom.type === 'Polygon') {
+                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                            const coords = geom.coordinates[0]
+                            for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
+                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
+                        } else if (geom.type === 'MultiPolygon') {
+                            let best: { area: number, bounds: [number, number, number, number] } | null = null
+                            for (const poly of geom.coordinates) {
+                                const ring = poly[0]
+                                let a = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                                for (let i = 0; i < ring.length - 1; i++) { const x0 = ring[i][0], y0 = ring[i][1], x1 = ring[i + 1][0], y1 = ring[i + 1][1]; a += (x0 * y1 - x1 * y0); if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0 }
+                                a = Math.abs(a) / 2
+                                if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
+                            }
+                            if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
+                        }
+                    }
+                }
+            } catch (e) { }
+            // else: do nothing (avoid unnecessary zooming)
             // ensure feature-state selection is applied
             try {
                 const all = map.querySourceFeatures('buildings') || []
