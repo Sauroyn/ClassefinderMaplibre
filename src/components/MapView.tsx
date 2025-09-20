@@ -1,5 +1,6 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import maplibre from 'maplibre-gl'
+import UserGeolocate from './UserGeolocate'
 import { addBuildingsSource, addCentroidsSource } from '../map/sources'
 import { addFillLayers, addNameLayer } from '../map/layers'
 import { generateCentroids } from '../map/generateCentroids'
@@ -305,5 +306,8 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
         }
     }))
 
-    return <div id="map" ref={container} style={{ height: '100vh' }} />
+    return <>
+        <div id="map" ref={container} style={{ height: '100vh' }} />
+        <UserGeolocate map={mapRef.current} />
+    </>
 })
