@@ -33,7 +33,11 @@ export function addInteractions(map: maplibre.Map, refs: any) {
                 const ring = geom.coordinates[0]
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
                 for (const c of ring) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
+                if (isFinite(minX)) {
+                    fitBoundsSmart(map, [[minX, minY], [maxX, maxY]])
+                    try { window.dispatchEvent(new CustomEvent('map:feature-click', { detail: feat })) } catch (e) { }
+                    return
+                }
             } else if (geom.type === 'MultiPolygon') {
                 // choose largest polygon by area
                 let best: { area: number, bounds: [number, number, number, number] } | null = null
@@ -44,7 +48,11 @@ export function addInteractions(map: maplibre.Map, refs: any) {
                     a = Math.abs(a) / 2
                     if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
                 }
-                if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
+                if (best) {
+                    fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]])
+                    try { window.dispatchEvent(new CustomEvent('map:feature-click', { detail: feat })) } catch (e) { }
+                    return
+                }
             }
         }
         const center = (e.lngLat && [e.lngLat.lng, e.lngLat.lat]) as [number, number] | undefined
