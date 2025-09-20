@@ -10,7 +10,7 @@ const UserGeolocate: React.FC<Props> = ({ map }) => {
         if (!map) return
         if (!controlRef.current) {
             controlRef.current = new maplibre.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true })
-            try { map.addControl(controlRef.current!, 'top-right') } catch (e) { }
+            try { map.addControl(controlRef.current!, 'bottom-right') } catch (e) { }
         }
         return () => {
             if (controlRef.current) {

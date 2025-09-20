@@ -5,8 +5,8 @@
   height: 100%;
 }
 
-/* ensure any children overlays sit above the map */
-#map>* {
+/* ensure any children overlays sit above the map, but exclude MapLibre controls */
+#map>*:not(.maplibregl-ctrl):not(.maplibregl-control-container) {
   position: relative;
   z-index: 1;
 }
