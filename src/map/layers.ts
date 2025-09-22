@@ -1,14 +1,23 @@
 import maplibre from 'maplibre-gl'
 
-export function addFillLayers(map: maplibre.Map, level: number) {
+export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColor?: string, fillHeight?: number, transitionZoom?: number }) {
+    // determine default color expression: either a literal color from cfg or feature property 'color'
+    const defaultColorExpr: any = cfg && cfg.fillColor ? cfg.fillColor : ['get', 'color']
+    // determine base height: either cfg.fillHeight (uniform) or per-feature 'height'
+    const baseHeightExpr: any = (cfg && typeof cfg.fillHeight === 'number') ? cfg.fillHeight : ['get', 'height']
+    // transition zoom at which extrusion collapses to 0 (defaults to 16)
+    const tz = (cfg && typeof cfg.transitionZoom === 'number') ? cfg.transitionZoom : 16
+    // create an interpolated height expression: at zoom (tz - 0.5) use baseHeight, at tz use 0
+    const heightExpr: any = ['interpolate', ['linear'], ['zoom'], tz - 0.5, baseHeightExpr, tz, 0]
+
     if (!map.getLayer('buildings-extrusion')) {
         map.addLayer({
             id: 'buildings-extrusion', type: 'fill-extrusion', source: 'buildings',
             paint: {
-                'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffcc00', ['boolean', ['feature-state', 'selected'], false], '#ffcc00', ['get', 'color']],
-                'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15.9, ['get', 'height'], 16, 0],
+                'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffcc00', ['boolean', ['feature-state', 'selected'], false], '#ffcc00', defaultColorExpr],
+                'fill-extrusion-height': heightExpr,
                 'fill-extrusion-base': 0,
-                'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], 15.9, 0.9, 16, 0]
+                'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], tz - 0.5, 0.9, tz, 0]
             },
             filter: ['==', ['get', 'level'], level]
         })
@@ -16,7 +25,7 @@ export function addFillLayers(map: maplibre.Map, level: number) {
     if (!map.getLayer('buildings-fill')) {
         map.addLayer({
             id: 'buildings-fill', type: 'fill', source: 'buildings',
-            paint: { 'fill-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffcc00', ['boolean', ['feature-state', 'selected'], false], '#ffcc00', ['get', 'color']], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 15.9, 0, 16, 0.9] },
+            paint: { 'fill-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffcc00', ['boolean', ['feature-state', 'selected'], false], '#ffcc00', defaultColorExpr], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], tz - 0.5, 0, tz, 0.9] },
             layout: { visibility: 'visible' },
             filter: ['==', ['get', 'level'], level]
         })

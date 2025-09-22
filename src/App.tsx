@@ -4,6 +4,11 @@ import MapView from './components/MapView'
 import LevelSelector from './components/LevelSelector'
 import SearchBar from './components/SearchBar'
 import RoutePlanner from './components/RoutePlanner'
+import ConfigSelector from './components/ConfigSelector'
+
+// import config modules map to read selected config file at runtime (raw)
+const __configModules = import.meta.glob('/src/configs/*.json', { as: 'raw' }) as Record<string, () => Promise<string>>
+const CONFIG_STORAGE_KEY = 'site_config_file'
 
 export default function App() {
   const [levels, setLevels] = useState<number[]>([])
@@ -16,8 +21,39 @@ export default function App() {
   const [plannerDest, setPlannerDest] = useState<any | null>(null)
 
   useEffect(() => {
-    const url = (import.meta.env && (import.meta.env.BASE_URL || '/')) + 'buildings.geojson'
-    fetch(url).then(r => r.json()).then(d => { dataRef.current = d; const found = Array.from(new Set((d.features || []).map((f: any) => f.properties?.level))).filter(Boolean) as number[]; found.sort((a, b) => a - b); setLevels(found); setLoading(false); if (found.length) setLevel(found[0]) })
+    ; (async () => {
+      // default
+      let geoUrl = (import.meta.env && (import.meta.env.BASE_URL || '/')) + 'buildings.geojson'
+      try {
+        const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
+        if (sel) {
+          const key = Object.keys(__configModules).find(k => k.endsWith('/' + sel) || k.endsWith(sel))
+          if (key) {
+            try {
+              const raw = await __configModules[key]()
+              const parsed = JSON.parse(raw)
+              if (parsed.geojson && typeof parsed.geojson === 'string') {
+                const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+                geoUrl = base + parsed.geojson.replace(/^\//, '')
+              }
+            } catch (e) { }
+          }
+        }
+      } catch (e) { }
+      try {
+        const r = await fetch(geoUrl)
+        const d = await r.json()
+        dataRef.current = d
+        const found = Array.from(new Set((d.features || []).map((f: any) => f.properties?.level))).filter(Boolean) as number[]
+        found.sort((a, b) => a - b)
+        setLevels(found)
+        setLoading(false)
+        if (found.length) setLevel(found[0])
+      } catch (e) {
+        console.warn('failed loading geojson', e)
+        setLoading(false)
+      }
+    })()
   }, [])
 
   return (
@@ -43,6 +79,7 @@ export default function App() {
       }} />}
       <MapView ref={mapRef} data={dataRef.current} level={level} />
       {showPlanner && <RoutePlanner mapRef={mapRef} initialDestination={plannerDest} onClose={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setShowPlanner(false); setPlannerDest(null) }} />}
+      <ConfigSelector />
     </>
   )
 }
