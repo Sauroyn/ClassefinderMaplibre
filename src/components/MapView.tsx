@@ -51,19 +51,27 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
             const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
 
             const loadRouteIcons = async () => {
-                const tryLoad = (url: string, name: string) => new Promise<boolean>(resolve => {
+                const tryLoad = (url: string, name: string) => new Promise<boolean>(async (resolve) => {
                     try {
-                        ; (map as any).loadImage(url, (err: any, img: any) => {
-                            if (!err && img) {
-                                try {
-                                    if (!(map as any).hasImage || !(map as any).hasImage(name)) (map as any).addImage(name, img)
-                                    resolve(true)
-                                    return
-                                } catch (e) { /* ignore */ }
-                            }
+                        const img = new Image()
+                        img.crossOrigin = 'anonymous'
+                        img.src = url
+                        try {
+                            if ((img as any).decode) await (img as any).decode()
+                        } catch (e) {
+                            // decode failed
                             resolve(false)
-                        })
-                    } catch (e) { resolve(false) }
+                            return
+                        }
+                        try {
+                            if (!(map as any).hasImage || !(map as any).hasImage(name)) (map as any).addImage(name, img as any)
+                            resolve(true)
+                        } catch (e) {
+                            resolve(false)
+                        }
+                    } catch (e) {
+                        resolve(false)
+                    }
                 })
 
                 const rawStartCandidates = ['/start-icon.svg', '/marker-start.svg', '/start.svg', '/marker-start-icon.svg', '/icons/marker-start.svg']

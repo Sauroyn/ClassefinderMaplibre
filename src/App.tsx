@@ -5,6 +5,7 @@ import LevelSelector from './components/LevelSelector'
 import SearchBar from './components/SearchBar'
 import RoutePlanner from './components/RoutePlanner'
 import ConfigSelector from './components/ConfigSelector'
+import SettingsButton from './components/SettingsButton'
 const CONFIG_STORAGE_KEY = 'site_config_file'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
   const prevCameraRef = useRef<any>(null)
   const [showPlanner, setShowPlanner] = useState(false)
   const [plannerDest, setPlannerDest] = useState<any | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
     ; (async () => {
@@ -76,7 +78,19 @@ export default function App() {
       }} />}
       <MapView ref={mapRef} data={dataRef.current} level={level} />
       {showPlanner && <RoutePlanner mapRef={mapRef} initialDestination={plannerDest} onClose={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setShowPlanner(false); setPlannerDest(null) }} />}
-      <ConfigSelector />
+      <SettingsButton onClick={() => setShowSettings(true)} />
+
+      {showSettings && (
+        <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
+          <div style={{ position: 'relative', background: 'white', borderRadius: 10, padding: 16, width: 'min(92vw, 520px)', boxShadow: '0 6px 24px rgba(0,0,0,0.2)' }}>
+            <button onClick={() => setShowSettings(false)} aria-label="Fermer" title="Fermer" style={{ position: 'absolute', right: 8, top: 8, background: 'transparent', border: 'none', fontSize: 18 }}>✕</button>
+            <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 16 }}>Paramètres</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <ConfigSelector embedded />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

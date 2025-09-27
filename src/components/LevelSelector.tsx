@@ -32,11 +32,19 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
         touchStartY.current = null
     }
 
-    const onWheel = (e: React.WheelEvent) => {
-        if (!e.deltaY) return
-        e.preventDefault()
-        changeByIndex(e.deltaY > 0 ? 1 : -1)
-    }
+    // Install a non-passive wheel listener on the container to allow preventDefault without warning
+    useEffect(() => {
+        const el = containerRef.current
+        if (!el) return
+        const handler = (ev: WheelEvent) => {
+            if (!ev.deltaY) return
+            ev.preventDefault()
+            changeByIndex(ev.deltaY > 0 ? 1 : -1)
+        }
+        try { el.addEventListener('wheel', handler, { passive: false }) } catch { el.addEventListener('wheel', handler as any) }
+        return () => { try { el.removeEventListener('wheel', handler as any) } catch { } }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [level, levels])
 
     // dynamic mobile positioning: compute top so the selector sits below searchbar or route-planner
     const containerRef = useRef<HTMLDivElement | null>(null)
@@ -54,35 +62,45 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
             let bottom = 10
             const consider = (el: HTMLElement | null) => {
                 if (!el) return
-                // ensure it's visible
-                if (el.offsetParent === null) return
                 try {
                     const r = el.getBoundingClientRect()
-                    if (r.bottom > bottom) bottom = r.bottom
+                    // ignore if the element has no box
+                    if (r.height <= 0 || r.width <= 0) return
+                    const vv = (window as any).visualViewport
+                    const offsetTop = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0
+                    const bottomInLayout = r.bottom + offsetTop
+                    if (bottomInLayout > bottom) bottom = bottomInLayout
                 } catch (e) { }
             }
             consider(search)
             consider(planner)
-            // add 10px margin below the element
-            setMobileTop(Math.ceil(bottom + 10))
+            // add margin below the element
+            setMobileTop(Math.ceil(bottom + 14))
         }
         update()
         const ro = new MutationObserver(update)
         ro.observe(document.body, { childList: true, subtree: true })
         window.addEventListener('resize', update)
         window.addEventListener('orientationchange', update)
+        try {
+            const vv = (window as any).visualViewport
+            if (vv && vv.addEventListener) {
+                vv.addEventListener('resize', update)
+                vv.addEventListener('scroll', update)
+            }
+        } catch (e) { }
         return () => { ro.disconnect(); window.removeEventListener('resize', update); window.removeEventListener('orientationchange', update) }
     }, [levels, loading])
 
     const baseStyle: React.CSSProperties = { position: 'absolute', zIndex: 10, right: 10, top: 10, background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '8px', color: 'white' }
-    const mobileStyle: React.CSSProperties = mobileTop != null ? { position: 'fixed', right: '10', top: mobileTop, zIndex: 29, background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: 8, color: 'white', maxWidth: 420, width: 'calc(100% - 40px)' } : baseStyle
+    const mobileStyle: React.CSSProperties = mobileTop != null ? { position: 'fixed', right: 10, top: mobileTop, zIndex: 29, background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: 8, color: 'white', maxWidth: 420, width: 'calc(100% - 40px)' } : baseStyle
 
     return (
         <div
             ref={containerRef}
             className="level-selector"
             style={mobileTop != null ? mobileStyle : baseStyle}
-            onWheel={onWheel}
+            // wheel handled via non-passive listener above
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
