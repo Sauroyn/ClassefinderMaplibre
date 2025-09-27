@@ -17,7 +17,6 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
 
     useEffect(() => {
         // Load graph using selected config if available, else fall back to defaults
-        const __configModules = import.meta.glob('/src/configs/*.json', { as: 'raw' }) as Record<string, () => Promise<string>>
         const CONFIG_STORAGE_KEY = 'site_config_file'
         async function loadGraph() {
             const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'))
@@ -25,17 +24,16 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
             try {
                 const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
                 if (sel) {
-                    const key = Object.keys(__configModules).find(k => k.endsWith('/' + sel) || k.endsWith(sel))
-                    if (key) {
-                        try {
-                            const raw = await __configModules[key]()
-                            const parsed = JSON.parse(raw)
+                    try {
+                        const r = await fetch(prefix + 'configs/' + sel)
+                        if (r.ok) {
+                            const parsed = await r.json()
                             if (parsed.graphGeojson && typeof parsed.graphGeojson === 'string') {
                                 const url = prefix + String(parsed.graphGeojson).replace(/^\//, '')
                                 candidates.push(url)
                             }
-                        } catch (e) { /* ignore parse errors, will use fallbacks */ }
-                    }
+                        }
+                    } catch (e) { /* ignore parse errors, will use fallbacks */ }
                 }
             } catch (e) { /* ignore storage errors */ }
             // add fallbacks

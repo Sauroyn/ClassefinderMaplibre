@@ -1,20 +1,16 @@
-import React, { useMemo, useState } from 'react';
-
-// Use Vite's import.meta.glob to collect JSON files at build time from src/configs
-const modules = import.meta.glob('/src/configs/*.json', { as: 'raw' }) as Record<string, () => Promise<string>>;
+import React, { useEffect, useState } from 'react';
+import publicConfigs from 'virtual:public-configs'
 
 const STORAGE_KEY = 'site_config_file'
 
 const ConfigSelector: React.FC = () => {
     const [selected, setSelected] = useState<string | null>(typeof window !== 'undefined' ? (localStorage.getItem(STORAGE_KEY) || null) : null);
+    const [files, setFiles] = useState<string[]>([])
 
-    const files = useMemo(() => {
-        // keys are absolute-ish paths like '/src/configs/test.json'
-        return Object.keys(modules).map((k) => {
-            const parts = k.split('/');
-            return parts[parts.length - 1];
-        }).sort();
-    }, []);
+    useEffect(() => {
+        // list is provided at build/dev time by virtual module
+        setFiles((publicConfigs || []).slice().sort())
+    }, [])
 
     return (
         <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 9999 }}>

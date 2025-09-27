@@ -9,8 +9,6 @@ import { fitBoundsSmart } from '../map/viewport'
 
 type Props = { data: any | null, level: number }
 
-// gather available config files (raw) from src/configs
-const __configModules = import.meta.glob('/src/configs/*.json', { as: 'raw' }) as Record<string, () => Promise<string>>
 const CONFIG_STORAGE_KEY = 'site_config_file'
 
 export default forwardRef(function MapView({ data, level }: Props, ref) {
@@ -30,21 +28,20 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
             try {
                 const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
                 if (sel) {
-                    const key = Object.keys(__configModules).find(k => k.endsWith('/' + sel) || k.endsWith(sel))
-                    if (key) {
-                        try {
-                            const raw = await __configModules[key]()
-                            const parsed = JSON.parse(raw)
+                    try {
+                        const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+                        const r = await fetch(base + 'configs/' + sel)
+                        if (r.ok) {
+                            const parsed = await r.json()
                             if (Array.isArray(parsed.initialCenter) && parsed.initialCenter.length === 2) center = [parsed.initialCenter[0], parsed.initialCenter[1]]
                             if (typeof parsed.initialZoom === 'number') zoom = parsed.initialZoom
-                            // optional styling config
                             parsedConfigRef.current = {
                                 fillColor: parsed.fillColor || parsed.color || undefined,
                                 fillHeight: (typeof parsed.fillHeight === 'number') ? parsed.fillHeight : undefined,
                                 transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined
                             }
-                        } catch (e) { /* ignore parse/load errors */ }
-                    }
+                        }
+                    } catch (e) { /* ignore fetch/parse errors */ }
                 }
             } catch (e) { /* ignore localStorage errors */ }
 

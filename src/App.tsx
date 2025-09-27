@@ -5,9 +5,6 @@ import LevelSelector from './components/LevelSelector'
 import SearchBar from './components/SearchBar'
 import RoutePlanner from './components/RoutePlanner'
 import ConfigSelector from './components/ConfigSelector'
-
-// import config modules map to read selected config file at runtime (raw)
-const __configModules = import.meta.glob('/src/configs/*.json', { as: 'raw' }) as Record<string, () => Promise<string>>
 const CONFIG_STORAGE_KEY = 'site_config_file'
 
 export default function App() {
@@ -27,17 +24,17 @@ export default function App() {
       try {
         const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
         if (sel) {
-          const key = Object.keys(__configModules).find(k => k.endsWith('/' + sel) || k.endsWith(sel))
-          if (key) {
-            try {
-              const raw = await __configModules[key]()
-              const parsed = JSON.parse(raw)
+          // fetch config from public/configs
+          try {
+            const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+            const r = await fetch(base + 'configs/' + sel)
+            if (r.ok) {
+              const parsed = await r.json()
               if (parsed.geojson && typeof parsed.geojson === 'string') {
-                const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
-                geoUrl = base + parsed.geojson.replace(/^\//, '')
+                geoUrl = base + String(parsed.geojson).replace(/^\//, '')
               }
-            } catch (e) { }
-          }
+            }
+          } catch (e) { }
         }
       } catch (e) { }
       try {
