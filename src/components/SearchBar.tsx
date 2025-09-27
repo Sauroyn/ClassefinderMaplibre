@@ -7,7 +7,18 @@ type Props = {
     onClear?: () => void
 }
 
-const STORAGE_KEY = 'cf:recent_searches'
+const BASE_STORAGE_KEY = 'cf:recent_searches'
+const CONFIG_STORAGE_KEY = 'site_config_file'
+
+function getScopedStorageKey() {
+    try {
+        const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
+        const suffix = sel && typeof sel === 'string' ? sel : 'default'
+        return `${BASE_STORAGE_KEY}:${suffix}`
+    } catch (e) {
+        return `${BASE_STORAGE_KEY}:default`
+    }
+}
 
 export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: Props) {
     const [q, setQ] = useState('')
@@ -16,7 +27,8 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
     type RecentItem = { id: string | number, name: string, level?: string | number }
     const [recent, setRecent] = useState<RecentItem[]>(() => {
         try {
-            const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
+            const key = getScopedStorageKey()
+            const raw = JSON.parse(localStorage.getItem(key) || '[]')
             if (Array.isArray(raw)) return raw.map((r: any) => typeof r === 'string' ? { id: r, name: r } : { id: r.id ?? r.name, name: r.name, level: r.level })
         } catch (e) { }
         return []
@@ -60,7 +72,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
         // update recent as objects
         setRecent(r => {
             const next = [{ id: resolved, name, level: lvl }, ...r.filter(x => String(x.id) !== String(resolved))].slice(0, 5)
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch { }
+            try { const key = getScopedStorageKey(); localStorage.setItem(key, JSON.stringify(next)) } catch { }
             return next
         })
         // apply selection
