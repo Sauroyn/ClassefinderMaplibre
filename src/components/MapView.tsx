@@ -323,6 +323,9 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
                 try { if (map.getLayer && map.getLayer('route-planner-start-circle')) map.removeLayer('route-planner-start-circle') } catch (e) { }
                 try { if (map.getLayer && map.getLayer('route-planner-end-symbol')) map.removeLayer('route-planner-end-symbol') } catch (e) { }
                 try { if (map.getLayer && map.getLayer('route-planner-end-circle')) map.removeLayer('route-planner-end-circle') } catch (e) { }
+                // remove user connector
+                try { if (map.getLayer && map.getLayer('route-planner-user-connector-line')) map.removeLayer('route-planner-user-connector-line') } catch (e) { }
+                try { if (map.getSource && map.getSource('route-planner-user-connector')) map.removeSource('route-planner-user-connector') } catch (e) { }
                 try { if (map.getSource && map.getSource('route-planner-start')) map.removeSource('route-planner-start') } catch (e) { }
                 try { if (map.getSource && map.getSource('route-planner-end')) map.removeSource('route-planner-end') } catch (e) { }
                 // also remove any DOM markers created by route planner

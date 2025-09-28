@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Select from 'react-select'
 
 export type SimpleEvent = {
     id: string
@@ -18,27 +19,16 @@ export default function EventSelector({
     events,
     selectedId,
     onSelect,
-    onClear
+    onClear: _onClear
 }: {
     events: SimpleEvent[]
     selectedId?: string | null
     onSelect: (ev: SimpleEvent) => void
     onClear?: () => void
 }) {
-    const [open, setOpen] = useState(false)
     const containerRef = useRef<HTMLDivElement | null>(null)
     const [isMobile, setIsMobile] = useState<boolean>(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false))
     const [bottom, setBottom] = useState<number>(12)
-    const [q, setQ] = useState<string>('')
-    // close on outside click
-    useEffect(() => {
-        const onClick = (e: MouseEvent) => {
-            if (!containerRef.current) return
-            if (!containerRef.current.contains(e.target as Node)) setOpen(false)
-        }
-        document.addEventListener('mousedown', onClick)
-        return () => document.removeEventListener('mousedown', onClick)
-    }, [])
 
     useEffect(() => {
         const onResize = () => setIsMobile(window.innerWidth <= 640)
@@ -85,17 +75,7 @@ export default function EventSelector({
         })
     }, [events])
 
-    const filtered = useMemo(() => {
-        const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}+/gu, '').toLowerCase()
-        const qq = norm(q)
-        if (!qq) return sorted
-        return sorted.filter(ev => {
-            const parts = [ev.title || '', ev.location || '']
-            if (ev.start) parts.push(ev.start.toLocaleString())
-            if (ev.end) parts.push(ev.end.toLocaleString())
-            return parts.some(p => norm(String(p)).includes(qq))
-        })
-    }, [sorted, q])
+    const filtered = sorted
 
     const labelFor = (ev: SimpleEvent) => {
         const pad = (n: number) => String(n).padStart(2, '0')
@@ -113,44 +93,58 @@ export default function EventSelector({
     }
 
     const selected = selectedId ? events.find(e => e.id === selectedId) : null
-    const buttonLabel = selected
-        ? (() => { const pad = (n: number) => String(n).padStart(2, '0'); const s = selected.start ? `${pad(selected.start.getHours())}:${pad(selected.start.getMinutes())}` : '—'; const name = selected.title || '(Sans titre)'; return `${s} · ${name}` })()
-        : 'Sélectionner un événement durant la semaine'
+
+    const options = useMemo(() => {
+        const groups: Record<string, { label: string, options: any[] }> = {}
+        for (const ev of filtered) {
+            const label = labelFor(ev)
+            const day = ev.dayKey || 'Autres'
+            if (!groups[day]) groups[day] = { label: day, options: [] }
+            groups[day].options.push({ value: ev.id, label, ev })
+        }
+        return Object.values(groups)
+    }, [filtered])
+
+    const currentValue = selected ? { value: selected.id, label: labelFor(selected), ev: selected } : null
 
     return (
         <div
             ref={containerRef}
             className="event-selector"
             style={isMobile
-                ? { position: 'fixed', right: 64, bottom, zIndex: 10000 }
-                : { position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom, zIndex: 10000 }}
+                ? { position: 'fixed', right: 64, bottom, zIndex: 10000, width: 'min(92vw, 400px)' }
+                : { position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom, zIndex: 10000, width: 'min(92vw, 450px)' }
+            }
         >
-            <button onClick={() => setOpen(o => !o)} style={{ minWidth: 280, maxWidth: '92vw', padding: '10px 12px', borderRadius: 999, border: '1px solid #ddd', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-                {sorted.length ? buttonLabel : 'Aucun événement'}
-            </button>
-            {open && (
-                <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 46, background: 'white', border: '1px solid #ddd', borderRadius: 8, maxHeight: '45vh', overflow: 'auto', width: 'min(92vw, 780px)', boxShadow: '0 6px 24px rgba(0,0,0,0.2)' }}>
-                    <div style={{ padding: 8, borderBottom: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un événement..." style={{ flex: 1, padding: 8 }} />
-                        {onClear && <button onMouseDown={() => { onClear(); setQ(''); setOpen(false) }} title="Effacer la sélection" style={{ padding: '6px 8px' }}>✕</button>}
-                    </div>
-                    <div onMouseDown={() => { if (onClear) onClear(); setOpen(false) }} style={{ padding: '10px 12px', borderBottom: '1px solid #eee', cursor: 'pointer', fontWeight: 600, background: '#fbfbfb' }}>Sélectionner un événement durant la semaine</div>
-                    {filtered.map(ev => (
-                        <div key={ev.id} onMouseDown={() => { onSelect(ev); setOpen(false) }} style={{ padding: '10px 12px', borderBottom: '1px solid #eee', cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'center' }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(ev)}</div>
-                                {ev.issues && ev.issues.length > 0 && (
-                                    <div style={{ marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                        {ev.issues.map((iss, i) => (
-                                            <span key={i} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 12, background: '#fff4e6', color: '#b76e00', border: '1px solid #ffd8a8' }}>{iss}</span>
-                                        ))}
-                                    </div>
-                                )}
+            <Select
+                options={options as any}
+                value={currentValue as any}
+                onChange={(opt: any) => { if (!opt) { _onClear && _onClear(); return } onSelect(opt.ev) }}
+                isClearable
+                menuPlacement="top"
+                placeholder="Sélectionner un événement durant la semaine"
+                noOptionsMessage={() => 'Aucun résultat'}
+                styles={{
+                    container: (base) => ({ ...base, zIndex: 10000 }),
+                    control: (base) => ({ ...base, borderRadius: 999 }),
+                    valueContainer: (base) => ({ ...base, overflow: 'hidden' }),
+                    singleValue: (base) => ({ ...base, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '100%' }),
+                    menu: (base) => ({ ...base, zIndex: 10001 })
+                }}
+                formatOptionLabel={(opt: any) => (
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div>{opt.label}</div>
+                        {opt.ev?.issues?.length ? (
+                            <div style={{ marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                {opt.ev.issues.map((iss: string, i: number) => (
+                                    <span key={i} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 12, background: '#fff4e6', color: '#b76e00', border: '1px solid #ffd8a8' }}>{iss}</span>
+                                ))}
                             </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+                        ) : null}
+                    </div>
+                )}
+                isSearchable
+            />
         </div>
     )
 }

@@ -141,10 +141,11 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     return bestId
                 } catch { return null }
             }
-            if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) s = nid }
-            if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) e = nid }
+            let userCoord: [number, number] | null = null
+            if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { s = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
+            if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
             const k = showSecondary ? 3 : 1
-            const res = await computeAndDrawRoute({ graph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k })
+            const res = await computeAndDrawRoute({ graph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k, userOriginLngLat: userCoord || undefined })
             if (res && res.routes) setRoutes(res.routes)
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
     }
@@ -181,7 +182,33 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 // trigger compute immediately if possible
                 if (graph && start) {
                     try {
-                        const res = await computeAndDrawRoute({ graph, start, end: setId, excludeStairs, coveredOnly, mapRef, k: 3 })
+                        // If start is the special USER_POSITION token, resolve nearest node and capture user coordinate
+                        let s = start
+                        let userCoord: [number, number] | undefined = undefined
+                        if (s === 'USER_POSITION') {
+                            try {
+                                const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 }))
+                                userCoord = [pos.coords.longitude, pos.coords.latitude]
+                                // find nearest node id
+                                let bestId: string | null = null
+                                let bestD = Infinity
+                                const toRad = (v: number) => v * Math.PI / 180
+                                const hav = (a: [number, number], b: [number, number]) => {
+                                    const R = 6371000
+                                    const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
+                                    const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
+                                    const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
+                                    const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
+                                    return R * c
+                                }
+                                for (const n of graph.nodes) {
+                                    const d = hav([pos.coords.longitude, pos.coords.latitude], n.coord as [number, number])
+                                    if (d < bestD) { bestD = d; bestId = String(n.id) }
+                                }
+                                if (bestId) s = bestId
+                            } catch { /* ignore geolocation failures */ }
+                        }
+                        const res = await computeAndDrawRoute({ graph, start: s, end: setId, excludeStairs, coveredOnly, mapRef, k: 3, userOriginLngLat: userCoord })
                         if (res && res.routes) setRoutes(res.routes)
                     } catch (err) { console.error('[RoutePlanner] compute failed', err) }
                 }

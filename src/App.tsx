@@ -34,7 +34,8 @@ export default function App() {
   const [events, setEvents] = useState<SimpleEvent[]>([])
   const graphRef = useRef<any | null>(null)
   const [eventsEnabled, setEventsEnabled] = useState<boolean>(() => {
-    try { const v = localStorage.getItem(EVENTS_ENABLED_KEY); return v == null ? true : v === '1' } catch { return true }
+    // Default to disabled unless explicitly enabled in localStorage
+    try { const v = localStorage.getItem(EVENTS_ENABLED_KEY); return v === '1' } catch { return false }
   })
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [plannerStart, setPlannerStart] = useState<{ id: string, name: string } | null>(null)
@@ -355,7 +356,7 @@ export default function App() {
                 if (d < bestD) { bestD = d; bestId = String(n.id) }
               }
               if (bestId) {
-                await computeAndDrawRoute({ graph: g, start: bestId, end: endId!, excludeStairs: false, coveredOnly: false, mapRef, k: 1, draw: true })
+                await computeAndDrawRoute({ graph: g, start: bestId, end: endId!, excludeStairs: false, coveredOnly: false, mapRef, k: 1, draw: true, userOriginLngLat: [user.lng, user.lat] })
                 setPlannerStart({ id: bestId, name: 'Ma position' })
                 setPlannerEnd({ id: endId!, name: ev.location || 'Arrivée' })
                 setShowPlanner(true)
@@ -379,7 +380,7 @@ export default function App() {
               <ConfigSelector embedded />
               <div>
                 <div style={{ fontSize: 13, marginBottom: 6 }}>Lien iCal</div>
-                <input value={icalUrl} onChange={(e) => setIcalUrl(e.target.value)} placeholder="https://...calType=ical" style={{ width: '100%', padding: 8, opacity: eventsEnabled ? 1 : 0.6 }} disabled={!eventsEnabled} />
+                <input value={icalUrl} onChange={(e) => setIcalUrl(e.target.value)} placeholder="https://...calType=ical" style={{ width: '100%', padding: 8, opacity: eventsEnabled ? 1 : 0.6 }} />
                 <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
                   <button onClick={() => { try { localStorage.setItem(ICAL_URL_KEY, icalUrl || '') } catch { } setShowSettings(false) }} style={{ padding: '6px 10px' }}>Sauvegarder</button>
                 </div>
@@ -397,9 +398,13 @@ export default function App() {
                     const v = e.target.checked
                     setEventsEnabled(v)
                     try { localStorage.setItem(EVENTS_ENABLED_KEY, v ? '1' : '0') } catch { }
-                    if (!v) { setEvents([]); setSelectedEventId(null) }
+                    if (!v) {
+                      setEvents([])
+                      setSelectedEventId(null)
+                      try { mapRef.current?.clearRoute?.() } catch { }
+                    }
                   }} />
-                  Activer les événements iCal (sélecteur + pré‑calculs)
+                  Activer la fonctionnalité événements (sélecteur, iCal, pré‑calculs)
                 </label>
               </div>
             </div>

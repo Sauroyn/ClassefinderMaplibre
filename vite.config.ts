@@ -79,5 +79,5 @@ function icsProxy(): Plugin {
 
 export default defineConfig({
   plugins: [react(), publicConfigsVirtual(), icsProxy()],
-  base: '/preview/', // <== IMPORTANT
+  //base: '/preview/', // <== IMPORTANT
 })

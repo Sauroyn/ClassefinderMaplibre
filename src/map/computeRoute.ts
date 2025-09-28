@@ -2,6 +2,12 @@ import { kShortestPaths } from './shortestPath'
 import maplibre from 'maplibre-gl'
 import { fitBoundsSmart } from './viewport'
 
+// User connector configuration (edit here)
+export const USER_CONNECTOR_LEVEL = 1
+export const USER_CONNECTOR_COLOR = '#ff8888ff'
+export const USER_CONNECTOR_OPACITY = 0.55
+export const USER_CONNECTOR_WIDTH = 8
+
 function haversine(a: [number, number], b: [number, number]) {
     const toRad = (v: number) => v * Math.PI / 180
     const R = 6371000 // meters
@@ -15,8 +21,8 @@ function haversine(a: [number, number], b: [number, number]) {
     return R * c
 }
 
-export async function computeAndDrawRoute(params: { graph: any, start: string, end: string, excludeStairs: boolean, coveredOnly?: boolean, mapRef: any, k?: number, draw?: boolean }) {
-    const { graph, start, end, excludeStairs, coveredOnly = false, mapRef, k = 3, draw = true } = params
+export async function computeAndDrawRoute(params: { graph: any, start: string, end: string, excludeStairs: boolean, coveredOnly?: boolean, mapRef: any, k?: number, draw?: boolean, userOriginLngLat?: [number, number] }) {
+    const { graph, start, end, excludeStairs, coveredOnly = false, mapRef, k = 3, draw = true, userOriginLngLat } = params
     if (!graph) return null
     const exclude = excludeStairs ? ['stairs'] : []
     // optionally filter edges before pathfinding
@@ -72,7 +78,6 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
     try {
         // build feature collections per path and draw each as its own source/layer
         const allRoutes: Array<{ geo: any, cost: number, id: string }> = []
-        const combinedCoords: number[][] = []
         for (let idx = 0; idx < ks.length; idx++) {
             const item = ks[idx]
             const ids = item.path as string[]
@@ -154,6 +159,38 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 }
             } catch (e) { }
         }
+        // If provided, draw a connector line from user position to the start node of the primary route
+        try {
+            if (userOriginLngLat) {
+                const startNodeId = String(ks[0].path[0])
+                const startNode = nodeById.get(startNodeId)
+                if (startNode && Array.isArray(startNode.coord)) {
+                    const connId = 'route-planner-user-connector'
+                    const fc = {
+                        type: 'FeatureCollection',
+                        features: [
+                            {
+                                type: 'Feature',
+                                geometry: { type: 'LineString', coordinates: [userOriginLngLat, startNode.coord] },
+                                properties: { level: USER_CONNECTOR_LEVEL }
+                            }
+                        ]
+                    }
+                    if (map.getSource && map.getSource(connId)) (map.getSource(connId) as any).setData(fc as any)
+                    else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc })
+                    const layerId = connId + '-line'
+                    if (!map.getLayer || !map.getLayer(layerId)) {
+                        map.addLayer({ id: layerId, type: 'line', source: connId, paint: { 'line-color': USER_CONNECTOR_COLOR, 'line-width': USER_CONNECTOR_WIDTH, 'line-opacity': USER_CONNECTOR_OPACITY }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
+                    } else {
+                        try { map.setPaintProperty(layerId, 'line-color', USER_CONNECTOR_COLOR); map.setPaintProperty(layerId, 'line-width', USER_CONNECTOR_WIDTH); map.setPaintProperty(layerId, 'line-opacity', USER_CONNECTOR_OPACITY) } catch (e) { }
+                    }
+                    // ensure it's under the primary route visually
+                    try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch (e) { }
+                    // include user coordinate in bounds computation
+                    try { combinedCoords.push(userOriginLngLat as any) } catch (e) { }
+                }
+            }
+        } catch (e) { }
         // ensure primary is on top
         try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch (e) { }
         // helper: find levels for a coord by inspecting route features (prefer primary route)
@@ -209,7 +246,8 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
             const makeDomMarker = (node: any, role: 'start' | 'end') => {
                 if (!node) return null
                 try {
-                    const coord = node.coord as [number, number]
+                    // If this is the start marker and we have a user origin, place marker at user coordinate
+                    const coord = (role === 'start' && userOriginLngLat) ? (userOriginLngLat as [number, number]) : (node.coord as [number, number])
                     // create element similar to MapLibre default marker
                     const el = document.createElement('div')
                     el.className = 'maplibregl-marker route-planner-marker route-planner-' + role
@@ -219,7 +257,7 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                     el.style.boxSizing = 'border-box'
                     // attach level metadata as dataset so MapView can read it
                     // prefer levels taken from route segments that end at this coord
-                    const routeLevels = findLevelsForCoord(coord)
+                    const routeLevels = (role === 'start' && userOriginLngLat) ? [USER_CONNECTOR_LEVEL] : findLevelsForCoord(coord)
                     if (routeLevels && routeLevels.length === 1) {
                         el.dataset.level = String(routeLevels[0])
                     } else if (routeLevels && routeLevels.length > 1) {
