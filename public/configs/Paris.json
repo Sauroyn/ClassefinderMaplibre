@@ -1,0 +1,14 @@
+{
+    "name": "test",
+    "description": "fichier de config de test",
+    "initialCenter": [
+        2.352118089530204,
+        48.85637865556587
+    ],
+    "initialZoom": 15,
+    "geojson": "Paris.geojson",
+    "graphGeojson": "Paris-graph.geojson",
+    "fillColor": "#ffffff",
+    "fillHeight": 50,
+    "transitionZoom": 19
+}

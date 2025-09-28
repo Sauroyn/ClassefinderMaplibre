@@ -16,13 +16,33 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
     const [focusedField, setFocusedField] = useState<'start' | 'end' | null>(null)
 
     useEffect(() => {
-        // Try to load default file name (geojson or json)
-        async function loadDefault() {
+        // Load graph using selected config if available, else fall back to defaults
+        const CONFIG_STORAGE_KEY = 'site_config_file'
+        async function loadGraph() {
             const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'))
-            const candidates = [prefix + 'testGraph.geojson']
+            let candidates: string[] = []
+            try {
+                const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
+                if (sel) {
+                    try {
+                        const r = await fetch(prefix + 'configs/' + sel)
+                        if (r.ok) {
+                            const parsed = await r.json()
+                            if (parsed.graphGeojson && typeof parsed.graphGeojson === 'string') {
+                                const url = prefix + String(parsed.graphGeojson).replace(/^\//, '')
+                                candidates.push(url)
+                            }
+                        }
+                    } catch (e) { /* ignore parse errors, will use fallbacks */ }
+                }
+            } catch (e) { /* ignore storage errors */ }
+            // add fallbacks
+            candidates.push(prefix + 'testGraph.geojson')
+            candidates.push(prefix + 'Paris-graph.geojson')
+
             for (const url of candidates) {
                 try {
-                    console.log('[RoutePlanner] trying to load', url)
+                    console.log('[RoutePlanner] trying to load graph', url)
                     const r = await fetch(url)
                     if (!r.ok) continue
                     const j = await r.json()
@@ -35,13 +55,13 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
                         const level = props.level ?? props.floor ?? (Array.isArray(props.levels) ? props.levels[0] : undefined)
                         return { id: n.id, name: n.name ?? n.id, level: level != null ? String(level) : '' }
                     }))
-                    // do not auto-set start/end; let the user choose. We keep nodeOptions for suggestions.
+                    // success
                     return
-                } catch (e) { /* try next */ }
+                } catch (e) { /* try next candidate */ }
             }
-            console.warn('[RoutePlanner] no default graph found')
+            console.warn('[RoutePlanner] no graph file found from config nor defaults')
         }
-        loadDefault()
+        loadGraph()
     }, [])
 
     // if an initialDestination was provided (from SearchBar), try to set end field

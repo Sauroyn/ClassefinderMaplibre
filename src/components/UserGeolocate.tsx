@@ -1,16 +1,24 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import maplibre from 'maplibre-gl'
 
 type Props = { map?: maplibre.Map | null }
 
 const UserGeolocate: React.FC<Props> = ({ map }) => {
     const controlRef = useRef<maplibre.GeolocateControl | null>(null)
+    const [top, setTop] = useState<number | null>(null)
 
+    // install control (hidden)
     useEffect(() => {
         if (!map) return
         if (!controlRef.current) {
             controlRef.current = new maplibre.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true })
-            try { map.addControl(controlRef.current!, 'bottom-right') } catch (e) { }
+            try { map.addControl(controlRef.current!, 'top-right') } catch (e) { }
+            // hide the default control UI
+            try {
+                const container = (map as any).getContainer ? (map as any).getContainer() : null
+                const el = container ? container.querySelector('.maplibregl-ctrl-top-right .maplibregl-ctrl-geolocate') as HTMLElement | null : null
+                if (el) el.style.display = 'none'
+            } catch (e) { }
         }
         return () => {
             if (controlRef.current) {
@@ -20,7 +28,75 @@ const UserGeolocate: React.FC<Props> = ({ map }) => {
         }
     }, [map])
 
-    return null
+    // position the custom button below the level selector (consistent gap)
+    useEffect(() => {
+        const compute = () => {
+            try {
+                const sel = document.querySelector('.level-selector') as HTMLElement | null
+                const GAP = 8
+                if (sel) {
+                    const cs = window.getComputedStyle(sel)
+                    const pos = cs.position
+                    const rect = sel.getBoundingClientRect()
+                    const vv = (window as any).visualViewport
+                    const vvOffsetTop = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0
+                    let baseTop: number
+                    if (pos === 'fixed') {
+                        // prefer computed top if available, else rect.top
+                        const topCss = parseFloat(cs.top || '')
+                        baseTop = Number.isFinite(topCss) ? topCss : rect.top
+                        setTop(Math.ceil(baseTop + sel.offsetHeight + GAP))
+                    } else {
+                        // non-fixed: account for visual viewport offset to align with fixed overlays
+                        setTop(Math.ceil(rect.bottom + vvOffsetTop + GAP))
+                    }
+                } else {
+                    setTop(72)
+                }
+            } catch {
+                setTop(72)
+            }
+        }
+        const update = () => { try { requestAnimationFrame(() => compute()) } catch { compute() } }
+        update()
+        const ro = new ResizeObserver(() => update())
+        try { const el = document.querySelector('.level-selector'); if (el) ro.observe(el as Element) } catch { }
+        window.addEventListener('resize', update)
+        window.addEventListener('orientationchange', update)
+        try {
+            const vv = (window as any).visualViewport
+            if (vv && vv.addEventListener) { vv.addEventListener('resize', update); vv.addEventListener('scroll', update) }
+        } catch { }
+        const mo = new MutationObserver(update)
+        mo.observe(document.body, { childList: true, subtree: true })
+        return () => {
+            try { ro.disconnect() } catch { }
+            window.removeEventListener('resize', update)
+            window.removeEventListener('orientationchange', update)
+            try { const vv = (window as any).visualViewport; if (vv && vv.removeEventListener) { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) } } catch { }
+            try { mo.disconnect() } catch { }
+        }
+    }, [])
+
+    const trigger = () => {
+        try { (controlRef.current as any)?.trigger?.() } catch { }
+        // fallback: click hidden control button
+        try {
+            const container = (map as any)?.getContainer?.()
+            const btn = container ? container.querySelector('.maplibregl-ctrl-top-right .maplibregl-ctrl-geolocate button') as HTMLButtonElement | null : null
+            if (btn) btn.click()
+        } catch { }
+    }
+
+    return (
+        <button
+            title="Me localiser"
+            aria-label="Me localiser"
+            onClick={trigger}
+            className="geolocate-button"
+            style={{ position: 'fixed', right: 10, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid #ddd', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+        >📍</button>
+    )
 }
 
 export default UserGeolocate

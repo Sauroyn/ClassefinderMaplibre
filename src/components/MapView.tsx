@@ -9,89 +9,118 @@ import { fitBoundsSmart } from '../map/viewport'
 
 type Props = { data: any | null, level: number }
 
+const CONFIG_STORAGE_KEY = 'site_config_file'
+
 export default forwardRef(function MapView({ data, level }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<maplibre.Map | null>(null)
     const latestDataRef = useRef<any | null>(null)
     const initialized = useRef(false)
     const initialCamera = useRef<any>(null)
+    const parsedConfigRef = useRef<any | null>(null)
     useEffect(() => {
         if (!container.current) return
-        const map = new maplibre.Map({ container: container.current, style: 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ', center: [2.3522, 48.8566], zoom: 12 })
-        mapRef.current = map
-        // store initial camera when map is ready
-        const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
 
-        // try to load start/end marker icons from `public/` and register them as map images
-        const loadRouteIcons = async () => {
-            const tryLoad = (url: string, name: string) => new Promise<boolean>(resolve => {
-                try {
-                    ; (map as any).loadImage(url, (err: any, img: any) => {
-                        if (!err && img) {
-                            try {
-                                if (!(map as any).hasImage || !(map as any).hasImage(name)) (map as any).addImage(name, img)
-                                resolve(true)
-                                return
-                            } catch (e) { /* ignore */ }
+        (async () => {
+            // defaults (Paris)
+            let center: [number, number] = [2.3522, 48.8566]
+            let zoom = 12
+            try {
+                const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
+                if (sel) {
+                    try {
+                        const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+                        const r = await fetch(base + 'configs/' + sel)
+                        if (r.ok) {
+                            const parsed = await r.json()
+                            if (Array.isArray(parsed.initialCenter) && parsed.initialCenter.length === 2) center = [parsed.initialCenter[0], parsed.initialCenter[1]]
+                            if (typeof parsed.initialZoom === 'number') zoom = parsed.initialZoom
+                            parsedConfigRef.current = {
+                                fillColor: parsed.fillColor || parsed.color || undefined,
+                                fillHeight: (typeof parsed.fillHeight === 'number') ? parsed.fillHeight : undefined,
+                                transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined
+                            }
                         }
+                    } catch (e) { /* ignore fetch/parse errors */ }
+                }
+            } catch (e) { /* ignore localStorage errors */ }
+
+            const map = new maplibre.Map({ container: container.current!, style: 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ', center, zoom })
+            mapRef.current = map
+
+            const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
+
+            const loadRouteIcons = async () => {
+                const tryLoad = (url: string, name: string) => new Promise<boolean>(async (resolve) => {
+                    try {
+                        const img = new Image()
+                        img.crossOrigin = 'anonymous'
+                        img.src = url
+                        try {
+                            if ((img as any).decode) await (img as any).decode()
+                        } catch (e) {
+                            // decode failed
+                            resolve(false)
+                            return
+                        }
+                        try {
+                            if (!(map as any).hasImage || !(map as any).hasImage(name)) (map as any).addImage(name, img as any)
+                            resolve(true)
+                        } catch (e) {
+                            resolve(false)
+                        }
+                    } catch (e) {
                         resolve(false)
-                    })
-                } catch (e) { resolve(false) }
-            })
+                    }
+                })
 
-            const rawStartCandidates = ['/start-icon.svg', '/marker-start.svg', '/start.svg', '/marker-start-icon.svg', '/icons/marker-start.svg']
-            const rawEndCandidates = ['/end-icon.svg', '/marker-end.svg', '/end.svg', '/marker-end-icon.svg', '/icons/marker-end.svg']
-            const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'))
-            const startCandidates = rawStartCandidates.map(u => u.startsWith('/') ? (prefix + u.slice(1)) : u)
-            const endCandidates = rawEndCandidates.map(u => u.startsWith('/') ? (prefix + u.slice(1)) : u)
+                const rawStartCandidates = ['/start-icon.svg', '/marker-start.svg', '/start.svg', '/marker-start-icon.svg', '/icons/marker-start.svg']
+                const rawEndCandidates = ['/end-icon.svg', '/marker-end.svg', '/end.svg', '/marker-end-icon.svg', '/icons/marker-end.svg']
+                const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+                const startCandidates = rawStartCandidates.map(u => u.startsWith('/') ? (prefix + u.slice(1)) : u)
+                const endCandidates = rawEndCandidates.map(u => u.startsWith('/') ? (prefix + u.slice(1)) : u)
 
-            let ok = false
-            for (const c of startCandidates) {
-                // eslint-disable-next-line no-await-in-loop
-                if (await tryLoad(c, 'marker-start')) { ok = true; break }
+                let ok = false
+                for (const c of startCandidates) {
+                    if (await tryLoad(c, 'marker-start')) { ok = true; break }
+                }
+                if (!ok) console.warn('[MapView] no start marker icon found in public/ (tried common names)')
+
+                ok = false
+                for (const c of endCandidates) {
+                    if (await tryLoad(c, 'marker-end')) { ok = true; break }
+                }
+                if (!ok) console.warn('[MapView] no end marker icon found in public/ (tried common names)')
+
+                const ensureImage = (name: string, color: string) => {
+                    try {
+                        if ((map as any).hasImage && (map as any).hasImage(name)) return
+                    } catch (e) { }
+                    try {
+                        const size = 48
+                        const canvas = document.createElement('canvas')
+                        canvas.width = size; canvas.height = size
+                        const ctx = canvas.getContext('2d')!
+                        ctx.clearRect(0, 0, size, size)
+                        ctx.beginPath()
+                        ctx.arc(size / 2, size / 2, size * 0.35, 0, Math.PI * 2)
+                        ctx.fillStyle = color
+                        ctx.fill()
+                        ctx.beginPath()
+                        ctx.arc(size / 2, size / 2, size * 0.12, 0, Math.PI * 2)
+                        ctx.fillStyle = '#ffffff'
+                        ctx.fill()
+                        const img = ctx.getImageData(0, 0, size, size)
+                        if ((map as any).addImage) (map as any).addImage(name, img)
+                    } catch (e) { }
+                }
+                ensureImage('marker-start', '#2ecc71')
+                ensureImage('marker-end', '#e74c3c')
             }
-            if (!ok) console.warn('[MapView] no start marker icon found in public/ (tried common names)')
 
-            ok = false
-            for (const c of endCandidates) {
-                // eslint-disable-next-line no-await-in-loop
-                if (await tryLoad(c, 'marker-end')) { ok = true; break }
-            }
-            if (!ok) console.warn('[MapView] no end marker icon found in public/ (tried common names)')
-
-            // if icons weren't found, create simple fallback markers via canvas and register them
-            const ensureImage = (name: string, color: string) => {
-                try {
-                    if ((map as any).hasImage && (map as any).hasImage(name)) return
-                } catch (e) { }
-                try {
-                    const size = 48
-                    const canvas = document.createElement('canvas')
-                    canvas.width = size; canvas.height = size
-                    const ctx = canvas.getContext('2d')!
-                    // transparent background
-                    ctx.clearRect(0, 0, size, size)
-                    // draw outer circle
-                    ctx.beginPath()
-                    ctx.arc(size / 2, size / 2, size * 0.35, 0, Math.PI * 2)
-                    ctx.fillStyle = color
-                    ctx.fill()
-                    // draw inner white dot
-                    ctx.beginPath()
-                    ctx.arc(size / 2, size / 2, size * 0.12, 0, Math.PI * 2)
-                    ctx.fillStyle = '#ffffff'
-                    ctx.fill()
-                    const img = ctx.getImageData(0, 0, size, size)
-                    if ((map as any).addImage) (map as any).addImage(name, img)
-                } catch (e) { }
-            }
-            // create fallbacks for start (green) and end (red)
-            ensureImage('marker-start', '#2ecc71')
-            ensureImage('marker-end', '#e74c3c')
-        }
-
-        if (map.loaded()) { saveInit(); loadRouteIcons() } else map.on('load', () => { saveInit(); loadRouteIcons() })
-        return () => { map.remove(); mapRef.current = null }
+            if (map.loaded()) { saveInit(); loadRouteIcons() } else map.on('load', () => { saveInit(); loadRouteIcons() })
+            return () => { map.remove(); mapRef.current = null }
+        })()
     }, [])
 
     // initialize sources/layers when data becomes available
@@ -102,7 +131,7 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
         const init = () => {
             try {
                 addBuildingsSource(map, data)
-                addFillLayers(map, level)
+                addFillLayers(map, level, parsedConfigRef.current || undefined)
                 const centroids = generateCentroids(data)
                 addCentroidsSource(map, centroids)
                 addNameLayer(map, level)
