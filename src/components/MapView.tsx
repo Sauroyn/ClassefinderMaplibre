@@ -5,6 +5,7 @@ import { addBuildingsSource, addCentroidsSource } from '../map/sources'
 import { addFillLayers, addNameLayer } from '../map/layers'
 import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
+import { USER_CONNECTOR_COLOR, USER_CONNECTOR_OPACITY, USER_CONNECTOR_WIDTH } from '../map/route/markers'
 import { fitBoundsSmart } from '../map/viewport'
 
 type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
@@ -448,7 +449,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         }
     }))
 
-    // Respond to theme changes: swap style and adjust text halo/color; we re-apply style minimally
+    // Respond to theme changes: swap style and restore custom layers/sources (buildings, names, routes)
     useEffect(() => {
         const map = mapRef.current
         if (!map) return
@@ -458,7 +459,21 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const target = theme === 'dark' ? darkStyle : lightStyle
             // Always setStyle; preserve camera
             const cam = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }
-                ; (map as any).setStyle(target, { diff: true })
+            // Snapshot current route sources' data so we can restore them after the style reload
+            const savedRouteSources: Array<{ id: string, data: any }> = []
+            try {
+                const style = map.getStyle && map.getStyle()
+                const sources = (style && style.sources) || {}
+                for (const sid of Object.keys(sources)) {
+                    if (sid.startsWith('route-planner-')) {
+                        try {
+                            const src: any = (map.getSource && map.getSource(sid)) || null
+                            if (src && src._data) savedRouteSources.push({ id: sid, data: src._data })
+                        } catch { }
+                    }
+                }
+            } catch { }
+            ; (map as any).setStyle(target, { diff: true })
             map.once('styledata', () => {
                 try {
                     // re-add our custom sources/layers if needed
@@ -574,6 +589,41 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     if (!map.getSource('buildings-centroids')) addCentroidsSource(map, centroids)
                     addNameLayer(map, (map as any).__currentLevel ?? level, theme)
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
+                    // Restore previously drawn route layers/sources (lost during style swap)
+                    try {
+                        const levelNow = (map as any).__currentLevel ?? level
+                        const routeFilter: any = [
+                            'any',
+                            ['all', ['has', 'level'], ['==', ['get', 'level'], levelNow]],
+                            ['all', ['has', 'levels'], ['in', levelNow, ['get', 'levels']]],
+                            ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+                        ]
+                        for (const saved of savedRouteSources) {
+                            try {
+                                if (!map.getSource(saved.id)) map.addSource(saved.id, { type: 'geojson', data: saved.data })
+                            } catch { }
+                            const layerId = `${saved.id}-line`
+                            // Compute styling: connector vs route indexes (0 primary)
+                            let paint: any = {}
+                            if (saved.id === 'route-planner-user-connector') {
+                                paint = { 'line-color': USER_CONNECTOR_COLOR, 'line-width': USER_CONNECTOR_WIDTH, 'line-opacity': USER_CONNECTOR_OPACITY }
+                            } else {
+                                let idx = -1
+                                try { const m = /route-planner-(\d+)/.exec(saved.id); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
+                                const color = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
+                                const width = idx === 0 ? 18 : 12
+                                const opacity = idx === 0 ? 1 : 0.6
+                                paint = { 'line-color': color, 'line-width': width, 'line-opacity': opacity }
+                            }
+                            try {
+                                if (!map.getLayer(layerId)) {
+                                    map.addLayer({ id: layerId, type: 'line', source: saved.id, paint, layout: { 'line-cap': 'round', 'line-join': 'round' } })
+                                }
+                            } catch { }
+                            try { map.setFilter(layerId, routeFilter) } catch { }
+                        }
+                        try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
+                    } catch { }
                 } catch (e) { }
                 // restore camera
                 try { map.jumpTo(cam as any) } catch { }
