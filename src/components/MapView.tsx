@@ -7,11 +7,11 @@ import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
 import { fitBoundsSmart } from '../map/viewport'
 
-type Props = { data: any | null, level: number }
+type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
 
 const CONFIG_STORAGE_KEY = 'site_config_file'
 
-export default forwardRef(function MapView({ data, level }: Props, ref) {
+export default forwardRef(function MapView({ data, level, theme = 'light', onThemeChange }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<maplibre.Map | null>(null)
     const latestDataRef = useRef<any | null>(null)
@@ -45,7 +45,9 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
                 }
             } catch (e) { /* ignore localStorage errors */ }
 
-            const map = new maplibre.Map({ container: container.current!, style: 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ', center, zoom })
+            const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
+            const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
+            const map = new maplibre.Map({ container: container.current!, style: theme === 'dark' ? darkStyle : lightStyle, center, zoom })
             mapRef.current = map
 
             const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
@@ -130,11 +132,116 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
         if (!map || !data || initialized.current) return
         const init = () => {
             try {
-                addBuildingsSource(map, data)
-                addFillLayers(map, level, parsedConfigRef.current || undefined)
+                // Before adding source, if theme is dark, derive a dark color property from the light one
+                let themedData = data
+                try {
+                    if (data && data.type === 'FeatureCollection') {
+                        const deriveDark = (hex: string): string => {
+                            // convert to HSL and shift towards darker/desaturated tone
+                            const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
+                            if (!m) return hex
+                            const h = hex.replace('#', '')
+                            const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
+                            const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
+                            const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
+                            const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
+                            const rn = r / 255, gn = g / 255, bn = b / 255
+                            const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
+                            let hdeg = 0, s = 0, l = (max + min) / 2
+                            if (max !== min) {
+                                const d = max - min
+                                s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+                                switch (max) {
+                                    case rn: hdeg = (gn - bn) / d + (gn < bn ? 6 : 0); break
+                                    case gn: hdeg = (bn - rn) / d + 2; break
+                                    case bn: hdeg = (rn - gn) / d + 4; break
+                                }
+                                hdeg = hdeg * 60
+                            }
+                            // Dark mode adjustment: reduce lightness, reduce saturation slightly
+                            const l2 = Math.max(0, l * 0.55)
+                            const s2 = Math.max(0, s * 0.85)
+                            // HSL -> RGB
+                            const C = (1 - Math.abs(2 * l2 - 1)) * s2
+                            const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
+                            const m2 = l2 - C / 2
+                            let r1 = 0, g1 = 0, b1 = 0
+                            if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
+                            else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
+                            else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
+                            else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
+                            else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
+                            else { r1 = C; g1 = 0; b1 = X }
+                            const R = Math.round((r1 + m2) * 255)
+                            const G = Math.round((g1 + m2) * 255)
+                            const B = Math.round((b1 + m2) * 255)
+                            const toHex = (n: number) => n.toString(16).padStart(2, '0')
+                            return `#${toHex(R)}${toHex(G)}${toHex(B)}`
+                        }
+                        const next = {
+                            ...data,
+                            features: data.features.map((f: any) => {
+                                try {
+                                    const p = { ...(f.properties || {}) }
+                                    if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
+                                    return { ...f, properties: p }
+                                } catch { return f }
+                            })
+                        }
+                        themedData = next
+                    }
+                } catch { }
+                addBuildingsSource(map, themedData)
+                // derive cfg color for dark if needed
+                const cfg0 = parsedConfigRef.current || undefined
+                const cfg = (() => {
+                    if (!cfg0) return cfg0
+                    if (!cfg0.fillColor || theme !== 'dark') return cfg0
+                    const deriveDark = (hex: string): string => {
+                        const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
+                        if (!m) return hex
+                        const h = hex.replace('#', '')
+                        const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
+                        const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
+                        const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
+                        const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
+                        const rn = r / 255, gn = g / 255, bn = b / 255
+                        const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
+                        let hdeg = 0, s = 0, l = (max + min) / 2
+                        if (max !== min) {
+                            const d = max - min
+                            s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+                            switch (max) {
+                                case rn: hdeg = (gn - bn) / d + (gn < bn ? 6 : 0); break
+                                case gn: hdeg = (bn - rn) / d + 2; break
+                                case bn: hdeg = (rn - gn) / d + 4; break
+                            }
+                            hdeg = hdeg * 60
+                        }
+                        const l2 = Math.max(0, l * 0.55)
+                        const s2 = Math.max(0, s * 0.85)
+                        const C = (1 - Math.abs(2 * l2 - 1)) * s2
+                        const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
+                        const m2 = l2 - C / 2
+                        let r1 = 0, g1 = 0, b1 = 0
+                        if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
+                        else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
+                        else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
+                        else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
+                        else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
+                        else { r1 = C; g1 = 0; b1 = X }
+                        const R = Math.round((r1 + m2) * 255)
+                        const G = Math.round((g1 + m2) * 255)
+                        const B = Math.round((b1 + m2) * 255)
+                        const toHex = (n: number) => n.toString(16).padStart(2, '0')
+                        return `#${toHex(R)}${toHex(G)}${toHex(B)}`
+                    }
+                    return { ...cfg0, fillColor: deriveDark(cfg0.fillColor) }
+                })()
+                addFillLayers(map, level, cfg, theme)
                 const centroids = generateCentroids(data)
                 addCentroidsSource(map, centroids)
-                addNameLayer(map, level)
+                addNameLayer(map, level, theme)
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                 initialized.current = true
             } catch (e) { console.warn('init map sources failed', e) }
@@ -341,8 +448,141 @@ export default forwardRef(function MapView({ data, level }: Props, ref) {
         }
     }))
 
+    // Respond to theme changes: swap style and adjust text halo/color; we re-apply style minimally
+    useEffect(() => {
+        const map = mapRef.current
+        if (!map) return
+        try {
+            const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
+            const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
+            const target = theme === 'dark' ? darkStyle : lightStyle
+            // Always setStyle; preserve camera
+            const cam = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }
+                ; (map as any).setStyle(target, { diff: true })
+            map.once('styledata', () => {
+                try {
+                    // re-add our custom sources/layers if needed
+                    const d = latestDataRef.current || data
+                    if (!d) return
+                    // add sources if missing
+                    if (!map.getSource('buildings')) {
+                        // regenerate themed data
+                        const themed = (() => {
+                            try {
+                                if (d && d.type === 'FeatureCollection') {
+                                    const deriveDark = (hex: string): string => {
+                                        const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
+                                        if (!m) return hex
+                                        const h = hex.replace('#', '')
+                                        const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
+                                        const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
+                                        const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
+                                        const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
+                                        const rn = r / 255, gn = g / 255, bn = b / 255
+                                        const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
+                                        let hdeg = 0, s = 0, l = (max + min) / 2
+                                        if (max !== min) {
+                                            const dlt = max - min
+                                            s = l > 0.5 ? dlt / (2 - max - min) : dlt / (max + min)
+                                            switch (max) {
+                                                case rn: hdeg = (gn - bn) / dlt + (gn < bn ? 6 : 0); break
+                                                case gn: hdeg = (bn - rn) / dlt + 2; break
+                                                case bn: hdeg = (rn - gn) / dlt + 4; break
+                                            }
+                                            hdeg = hdeg * 60
+                                        }
+                                        const l2 = Math.max(0, l * 0.55)
+                                        const s2 = Math.max(0, s * 0.85)
+                                        const C = (1 - Math.abs(2 * l2 - 1)) * s2
+                                        const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
+                                        const m2 = l2 - C / 2
+                                        let r1 = 0, g1 = 0, b1 = 0
+                                        if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
+                                        else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
+                                        else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
+                                        else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
+                                        else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
+                                        else { r1 = C; g1 = 0; b1 = X }
+                                        const R = Math.round((r1 + m2) * 255)
+                                        const G = Math.round((g1 + m2) * 255)
+                                        const B = Math.round((b1 + m2) * 255)
+                                        const toHex = (n: number) => n.toString(16).padStart(2, '0')
+                                        return `#${toHex(R)}${toHex(G)}${toHex(B)}`
+                                    }
+                                    return {
+                                        ...d,
+                                        features: d.features.map((f: any) => {
+                                            const p = { ...(f.properties || {}) }
+                                            if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
+                                            return { ...f, properties: p }
+                                        })
+                                    }
+                                }
+                            } catch { }
+                            return d
+                        })()
+                        addBuildingsSource(map, themed)
+                    }
+                    // layers (derive cfg for dark)
+                    const cfg0b = parsedConfigRef.current || undefined
+                    const cfgb = (() => {
+                        if (!cfg0b) return cfg0b
+                        if (!cfg0b.fillColor || theme !== 'dark') return cfg0b
+                        const deriveDark = (hex: string): string => {
+                            const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
+                            if (!m) return hex
+                            const h = hex.replace('#', '')
+                            const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
+                            const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
+                            const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
+                            const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
+                            const rn = r / 255, gn = g / 255, bn = b / 255
+                            const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
+                            let hdeg = 0, s = 0, l = (max + min) / 2
+                            if (max !== min) {
+                                const dlt = max - min
+                                s = l > 0.5 ? dlt / (2 - max - min) : dlt / (max + min)
+                                switch (max) {
+                                    case rn: hdeg = (gn - bn) / dlt + (gn < bn ? 6 : 0); break
+                                    case gn: hdeg = (bn - rn) / dlt + 2; break
+                                    case bn: hdeg = (rn - gn) / dlt + 4; break
+                                }
+                                hdeg = hdeg * 60
+                            }
+                            const l2 = Math.max(0, l * 0.55)
+                            const s2 = Math.max(0, s * 0.85)
+                            const C = (1 - Math.abs(2 * l2 - 1)) * s2
+                            const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
+                            const m2 = l2 - C / 2
+                            let r1 = 0, g1 = 0, b1 = 0
+                            if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
+                            else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
+                            else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
+                            else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
+                            else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
+                            else { r1 = C; g1 = 0; b1 = X }
+                            const R = Math.round((r1 + m2) * 255)
+                            const G = Math.round((g1 + m2) * 255)
+                            const B = Math.round((b1 + m2) * 255)
+                            const toHex = (n: number) => n.toString(16).padStart(2, '0')
+                            return `#${toHex(R)}${toHex(G)}${toHex(B)}`
+                        }
+                        return { ...cfg0b, fillColor: deriveDark(cfg0b.fillColor) }
+                    })()
+                    addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
+                    const centroids = generateCentroids(d)
+                    if (!map.getSource('buildings-centroids')) addCentroidsSource(map, centroids)
+                    addNameLayer(map, (map as any).__currentLevel ?? level, theme)
+                    addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
+                } catch (e) { }
+                // restore camera
+                try { map.jumpTo(cam as any) } catch { }
+            })
+        } catch { }
+    }, [theme])
+
     return <>
         <div id="map" ref={container} style={{ height: '100vh' }} />
-        <UserGeolocate map={mapRef.current} />
+        <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
     </>
 })

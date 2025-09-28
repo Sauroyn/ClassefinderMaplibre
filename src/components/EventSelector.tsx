@@ -143,11 +143,16 @@ export default function EventSelector({
                 noOptionsMessage={() => 'Aucun résultat'}
                 styles={{
                     container: (base) => ({ ...base, zIndex: 10000, maxWidth: '100%', width: '100%' }),
-                    control: (base) => ({ ...base, borderRadius: 999, width: '100%' }),
+                    control: (base, state) => ({ ...base, borderRadius: 999, width: '100%', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', borderColor: state.isFocused ? 'var(--btn-border, #aaa)' : 'var(--panel-border, #ddd)', boxShadow: state.isFocused ? '0 0 0 2px rgba(100,150,250,0.3)' : 'none' }),
                     valueContainer: (base) => ({ ...base, overflow: 'hidden' }),
-                    singleValue: (base) => ({ ...base, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '100%' }),
-                    menu: (base) => ({ ...base, zIndex: 10001, maxWidth: '100vw', width: '100%' }),
+                    singleValue: (base) => ({ ...base, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '100%', color: 'var(--panel-fg, #111)' }),
+                    menu: (base) => ({ ...base, zIndex: 10001, maxWidth: '100vw', width: '100%', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)' }),
                     menuList: (base) => ({ ...base, maxHeight: '45vh', overflowY: 'auto' }),
+                    option: (base, state) => ({
+                        ...base,
+                        backgroundColor: state.isFocused ? 'rgba(100,150,250,0.12)' : 'transparent',
+                        color: 'var(--panel-fg, #111)'
+                    }),
                     menuPortal: (base) => ({ ...base, zIndex: 10002 })
                 }}
                 menuPortalTarget={isMobile ? (typeof document !== 'undefined' ? document.body : undefined) : undefined}

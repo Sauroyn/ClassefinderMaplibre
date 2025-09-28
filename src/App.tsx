@@ -16,6 +16,7 @@ const TRAVEL_BUFFER_MIN_KEY = 'cf:travel_buffer_min'
 const EVENTS_ENABLED_KEY = 'cf:events_enabled'
 
 export default function App() {
+  const THEME_KEY = 'cf:theme'
   const [levels, setLevels] = useState<number[]>([])
   const [level, setLevel] = useState<number>(0)
   const [loading, setLoading] = useState(true)
@@ -40,6 +41,14 @@ export default function App() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [plannerStart, setPlannerStart] = useState<{ id: string, name: string } | null>(null)
   const [plannerEnd, setPlannerEnd] = useState<{ id: string, name: string } | null>(null)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      const v = localStorage.getItem(THEME_KEY) as 'light' | 'dark' | null
+      if (v === 'light' || v === 'dark') return v
+    } catch { }
+    // prefer system preference initially
+    try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' } catch { return 'light' }
+  })
 
   useEffect(() => {
     ; (async () => {
@@ -81,6 +90,36 @@ export default function App() {
   useEffect(() => {
     (async () => { graphRef.current = await loadGraphFromConfigOrFallback() })()
   }, [])
+
+  // Apply theme to document root via data attribute and CSS variables
+  useEffect(() => {
+    try { localStorage.setItem(THEME_KEY, theme) } catch { }
+    try {
+      const root = document.documentElement
+      root.setAttribute('data-theme', theme)
+      if (theme === 'dark') {
+        root.style.setProperty('--panel-bg', 'rgba(20,20,22,0.9)')
+        root.style.setProperty('--panel-fg', '#f5f7fb')
+        root.style.setProperty('--panel-border', '#2a2d33')
+        root.style.setProperty('--muted', '#2a2d33')
+        root.style.setProperty('--chip-bg', '#1f2329')
+        root.style.setProperty('--chip-fg', '#d7dce3')
+        root.style.setProperty('--btn-bg', '#1c1f24')
+        root.style.setProperty('--btn-fg', '#f5f7fb')
+        root.style.setProperty('--btn-border', '#2b2f36')
+      } else {
+        root.style.setProperty('--panel-bg', 'white')
+        root.style.setProperty('--panel-fg', '#111')
+        root.style.setProperty('--panel-border', '#ddd')
+        root.style.setProperty('--muted', '#f1f3f5')
+        root.style.setProperty('--chip-bg', '#f1f3f5')
+        root.style.setProperty('--chip-fg', '#111')
+        root.style.setProperty('--btn-bg', 'white')
+        root.style.setProperty('--btn-fg', '#111')
+        root.style.setProperty('--btn-border', '#ddd')
+      }
+    } catch { }
+  }, [theme])
 
   // Fetch and parse ICS when URL available; precompute travel times (only when feature enabled)
   useEffect(() => {
@@ -226,7 +265,7 @@ export default function App() {
         if (mapRef.current && mapRef.current.restoreInitialCamera) mapRef.current.restoreInitialCamera()
         if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
       }} />}
-      <MapView ref={mapRef} data={dataRef.current} level={level} />
+      <MapView ref={mapRef} data={dataRef.current} level={level} theme={theme} onThemeChange={setTheme} />
       {showPlanner && <RoutePlanner
         mapRef={mapRef}
         initialDestination={plannerDest}
@@ -372,38 +411,94 @@ export default function App() {
       )}
 
       {showSettings && (
-        <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)' }}>
-          <div style={{ position: 'relative', background: 'white', borderRadius: 10, padding: 16, width: 'min(92vw, 520px)', boxShadow: '0 6px 24px rgba(0,0,0,0.2)' }}>
-            <button onClick={() => setShowSettings(false)} aria-label="Fermer" title="Fermer" style={{ position: 'absolute', right: 8, top: 8, background: 'transparent', border: 'none', fontSize: 18 }}>✕</button>
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{ position: 'fixed', inset: 0, zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)' }}
+        >
+          <div
+            style={{
+              position: 'relative',
+              background: 'var(--panel-bg, white)',
+              color: 'var(--panel-fg, #111)',
+              border: '1px solid var(--panel-border, #ddd)',
+              borderRadius: 12,
+              padding: 16,
+              width: 'min(92vw, 560px)',
+              boxShadow: '0 8px 28px rgba(0,0,0,0.25)'
+            }}
+          >
+            <button
+              onClick={() => setShowSettings(false)}
+              aria-label="Fermer"
+              title="Fermer"
+              style={{ position: 'absolute', right: 8, top: 8, background: 'transparent', border: 'none', fontSize: 18, color: 'var(--panel-fg, #111)', cursor: 'pointer' }}
+            >
+              ✕
+            </button>
             <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 16 }}>Paramètres</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <ConfigSelector embedded />
-              <div>
+              <div style={{ borderTop: '1px solid var(--panel-border, #ddd)', paddingTop: 12 }}>
                 <div style={{ fontSize: 13, marginBottom: 6 }}>Lien iCal</div>
-                <input value={icalUrl} onChange={(e) => setIcalUrl(e.target.value)} placeholder="https://...calType=ical" style={{ width: '100%', padding: 8, opacity: eventsEnabled ? 1 : 0.6 }} />
-                <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
-                  <button onClick={() => { try { localStorage.setItem(ICAL_URL_KEY, icalUrl || '') } catch { } setShowSettings(false) }} style={{ padding: '6px 10px' }}>Sauvegarder</button>
+                <input
+                  value={icalUrl}
+                  onChange={(e) => setIcalUrl(e.target.value)}
+                  placeholder="https://...calType=ical"
+                  style={{
+                    width: '100%',
+                    padding: 8,
+                    borderRadius: 8,
+                    border: '1px solid var(--panel-border, #ddd)',
+                    background: 'var(--panel-bg, white)',
+                    color: 'var(--panel-fg, #111)',
+                    opacity: eventsEnabled ? 1 : 0.6
+                  }}
+                />
+                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button
+                    onClick={() => { try { localStorage.setItem(ICAL_URL_KEY, icalUrl || '') } catch { } setShowSettings(false) }}
+                    style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', cursor: 'pointer' }}
+                  >
+                    Sauvegarder
+                  </button>
                 </div>
               </div>
-              <div>
+              <div style={{ borderTop: '1px solid var(--panel-border, #ddd)', paddingTop: 12 }}>
                 <div style={{ fontSize: 13, marginBottom: 6 }}>Marge supplémentaire (minutes) pour départ utilisateur</div>
-                <input type="number" min={0} value={bufferMin} onChange={(e) => setBufferMin(Math.max(0, Number(e.target.value)))} style={{ width: 140, padding: 8 }} />
-                <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
-                  <button onClick={() => { try { localStorage.setItem(TRAVEL_BUFFER_MIN_KEY, String(bufferMin)) } catch { } setShowSettings(false) }} style={{ padding: '6px 10px' }}>Sauvegarder</button>
+                <input
+                  type="number"
+                  min={0}
+                  value={bufferMin}
+                  onChange={(e) => setBufferMin(Math.max(0, Number(e.target.value)))}
+                  style={{ width: 160, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }}
+                />
+                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button
+                    onClick={() => { try { localStorage.setItem(TRAVEL_BUFFER_MIN_KEY, String(bufferMin)) } catch { } setShowSettings(false) }}
+                    style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', cursor: 'pointer' }}
+                  >
+                    Sauvegarder
+                  </button>
                 </div>
               </div>
-              <div>
+              <div style={{ borderTop: '1px solid var(--panel-border, #ddd)', paddingTop: 12 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                  <input type="checkbox" checked={eventsEnabled} onChange={(e) => {
-                    const v = e.target.checked
-                    setEventsEnabled(v)
-                    try { localStorage.setItem(EVENTS_ENABLED_KEY, v ? '1' : '0') } catch { }
-                    if (!v) {
-                      setEvents([])
-                      setSelectedEventId(null)
-                      try { mapRef.current?.clearRoute?.() } catch { }
-                    }
-                  }} />
+                  <input
+                    type="checkbox"
+                    checked={eventsEnabled}
+                    onChange={(e) => {
+                      const v = e.target.checked
+                      setEventsEnabled(v)
+                      try { localStorage.setItem(EVENTS_ENABLED_KEY, v ? '1' : '0') } catch { }
+                      if (!v) {
+                        setEvents([])
+                        setSelectedEventId(null)
+                        try { mapRef.current?.clearRoute?.() } catch { }
+                      }
+                    }}
+                    style={{ accentColor: 'var(--btn-border, #777)' }}
+                  />
                   Activer la fonctionnalité événements (sélecteur, iCal, pré‑calculs)
                 </label>
               </div>

@@ -86,40 +86,40 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
     const list = (q ? items : recent).slice(0, 6)
     const showList = focused && !selected
     return (
-        <div className="searchbar" style={{ position: 'absolute', left: 12, top: 12, zIndex: 10, width: 360, background: 'white', padding: 8, borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+        <div className="searchbar" style={{ position: 'absolute', left: 12, top: 12, zIndex: 10, width: 360, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.18)', border: '1px solid var(--panel-border, #ddd)' }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {/* left icon: back | clear | search */}
                 {showBack ? (
-                    <button onClick={() => { setQ(''); setFocused(false); setShowBack(false); setSelected(null); if ((onClear)) onClear() }} style={{ width: 36, height: 36 }}>←</button>
+                    <button onClick={() => { setQ(''); setFocused(false); setShowBack(false); setSelected(null); if ((onClear)) onClear() }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>←</button>
                 ) : q.length > 0 ? (
-                    <button onClick={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setQ(''); setFocused(true); if (inputRef.current) inputRef.current.focus() }} style={{ width: 36, height: 36 }}>✕</button>
+                    <button onClick={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setQ(''); setFocused(true); if (inputRef.current) inputRef.current.focus() }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button>
                 ) : (
-                    <button onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }} style={{ width: 36, height: 36, background: 'transparent', border: 'none' }} aria-label="search">🔍</button>
+                    <button onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }} style={{ width: 36, height: 36, background: 'var(--btn-bg, transparent)', border: '1px solid var(--btn-border, transparent)', borderRadius: 8, color: 'var(--btn-fg, inherit)' }} aria-label="search">🔍</button>
                 )}
-                <input ref={inputRef} className="search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher une salle..." style={{ flex: 1, padding: '8px' }} onFocus={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setFocused(true); setSelected(null) }} onBlur={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); blurTimeout.current = window.setTimeout(() => { setFocused(false); blurTimeout.current = null }, 150) }} />
+                <input ref={inputRef} className="search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher une salle..." style={{ flex: 1, padding: '8px', background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #eee)', borderRadius: 8, outline: 'none' }} onFocus={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setFocused(true); setSelected(null) }} onBlur={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); blurTimeout.current = window.setTimeout(() => { setFocused(false); blurTimeout.current = null }, 150) }} />
             </div>
             {showList && list.map((it: any) => (
-                <div key={String(it.id)} onMouseDown={() => pick(it.id, it.name)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', borderBottom: '1px solid #eee', cursor: 'pointer' }}>
+                <div key={String(it.id)} onMouseDown={() => pick(it.id, it.name)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', borderBottom: '1px solid var(--panel-border, #2a2d33)', cursor: 'pointer' }}>
                     <div>
                         <div style={{ fontWeight: 600 }}>{it.name}</div>
                     </div>
-                    {it.level != null ? <div style={{ alignSelf: 'center', opacity: 0.9, padding: '4px 8px', background: '#f1f3f5', borderRadius: 12 }}>{it.level}</div> : <div style={{ width: 36 }} />}
+                    {it.level != null ? <div style={{ alignSelf: 'center', opacity: 0.9, padding: '4px 8px', background: 'var(--chip-bg, #f1f3f5)', color: 'var(--chip-fg, #111)', borderRadius: 12 }}>{it.level}</div> : <div style={{ width: 36 }} />}
                 </div>
             ))}
 
             {/* Selected details */}
             {selected && (
-                <div style={{ marginTop: 8, padding: 10, background: '#fbfbfb', borderRadius: 6, boxShadow: 'inset 0 0 0 1px #eee' }}>
+                <div style={{ marginTop: 8, padding: 10, background: 'var(--panel-bg, #fbfbfb)', color: 'var(--panel-fg, #111)', borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--panel-border, #eee)' }}>
                     <div style={{ fontWeight: 700 }}>{selected.name}</div>
                     <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
-                        <div style={{ padding: '6px 10px', background: '#f1f3f5', borderRadius: 12 }}>{selected.level ?? '—'}</div>
-                        <button style={{ padding: '6px 10px' }} onClick={() => {
+                        <div style={{ padding: '6px 10px', background: 'var(--chip-bg, #f1f3f5)', color: 'var(--chip-fg, #111)', borderRadius: 12 }}>{selected.level ?? '—'}</div>
+                        <button style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }} onClick={() => {
                             if (!onRouteRequest) return
                             // find feature in data
                             const feat = (data && data.features) ? data.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === selected.id || f.properties?.name === selected.name) : null
                             onRouteRequest(feat || { id: selected.id, name: selected.name })
                         }}>Itinéraire</button>
-                        <button style={{ padding: '6px 10px' }}>Alias</button>
+                        <button style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>Alias</button>
                     </div>
                 </div>
             )}

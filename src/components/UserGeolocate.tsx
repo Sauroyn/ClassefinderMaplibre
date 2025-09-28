@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import maplibre from 'maplibre-gl'
 
-type Props = { map?: maplibre.Map | null }
+type Props = { map?: maplibre.Map | null, theme?: 'light' | 'dark', onToggleTheme?: () => void }
 
-const UserGeolocate: React.FC<Props> = ({ map }) => {
+const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme }) => {
     const controlRef = useRef<maplibre.GeolocateControl | null>(null)
     const [top, setTop] = useState<number | null>(null)
 
@@ -89,13 +89,22 @@ const UserGeolocate: React.FC<Props> = ({ map }) => {
     }
 
     return (
-        <button
-            title="Me localiser"
-            aria-label="Me localiser"
-            onClick={trigger}
-            className="geolocate-button"
-            style={{ position: 'fixed', right: 10, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid #ddd', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-        >📍</button>
+        <>
+            <button
+                title="Me localiser"
+                aria-label="Me localiser"
+                onClick={trigger}
+                className="geolocate-button"
+                style={{ position: 'fixed', right: 10, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+            >📍</button>
+            <button
+                title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                onClick={() => onToggleTheme && onToggleTheme()}
+                className="theme-toggle-button"
+                style={{ position: 'fixed', right: 10 + 44 + 8, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+            >{theme === 'dark' ? '☀️' : '🌙'}</button>
+        </>
     )
 }
 

@@ -92,8 +92,8 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
         return () => { ro.disconnect(); window.removeEventListener('resize', update); window.removeEventListener('orientationchange', update) }
     }, [levels, loading])
 
-    const baseStyle: React.CSSProperties = { position: 'absolute', zIndex: 10, right: 10, top: 10, background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: '8px', color: 'white' }
-    const mobileStyle: React.CSSProperties = mobileTop != null ? { position: 'fixed', right: 10, top: mobileTop, zIndex: 29, background: 'rgba(0,0,0,0.5)', padding: '8px', borderRadius: 8, color: 'white', maxWidth: 420, width: 'calc(100% - 40px)' } : baseStyle
+    const baseStyle: React.CSSProperties = { position: 'absolute', zIndex: 10, right: 10, top: 10, background: 'var(--panel-bg, rgba(0,0,0,0.5))', padding: '8px', borderRadius: '8px', color: 'var(--panel-fg, white)', border: '1px solid var(--panel-border, transparent)', boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }
+    const mobileStyle: React.CSSProperties = mobileTop != null ? { position: 'fixed', right: 10, top: mobileTop, zIndex: 29, background: 'var(--panel-bg, rgba(0,0,0,0.5))', padding: '8px', borderRadius: 8, color: 'var(--panel-fg, white)', maxWidth: 420, width: 'calc(100% - 40px)', border: '1px solid var(--panel-border, transparent)', boxShadow: '0 2px 8px rgba(0,0,0,0.18)' } : baseStyle
 
     return (
         <div
@@ -106,7 +106,7 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
             onTouchEnd={onTouchEnd}
         >
             <label htmlFor="level-select">Niveau : </label>
-            <select id="level-select" value={level} onChange={e => onChange(Number(e.target.value))} disabled={loading || levels.length === 0}>
+            <select id="level-select" value={level} onChange={e => onChange(Number(e.target.value))} disabled={loading || levels.length === 0} style={{ background: 'var(--panel-bg, rgba(0,0,0,0.5))', color: 'var(--panel-fg, white)', border: '1px solid var(--panel-border, transparent)', borderRadius: 6 }}>
                 {loading ? (
                     <option>Chargement...</option>
                 ) : levels.length === 0 ? (

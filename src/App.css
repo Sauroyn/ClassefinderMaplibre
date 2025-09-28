@@ -5,6 +5,12 @@
   height: 100%;
 }
 
+/* Global theme backgrounds */
+:root[data-theme='dark'] body {
+  background: #0f1115;
+  color: #f5f7fb;
+}
+
 /* ensure any children overlays sit above the map, but exclude MapLibre controls */
 #map>*:not(.maplibregl-ctrl):not(.maplibregl-control-container) {
   position: relative;

@@ -238,7 +238,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     }
 
     return (
-        <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'white', padding: 8, borderRadius: 4, zIndex: 20, width: 360, boxSizing: 'border-box' }}>
+        <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
                 {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
@@ -259,8 +259,8 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                                 setStartQuery(n.name || String(n.id))
                                 setFocusedField(null)
                             }
-                        }} style={{ flex: 1, padding: 6 }} placeholder="Rechercher un départ..." />
-                        {startQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear start" style={{ padding: '6px' }}>✕</button> : null}
+                        }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher un départ..." />
+                        {startQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear start" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
                     </div>
                     <div style={{ fontSize: 12, marginTop: 8 }}>Arrivée</div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
@@ -273,23 +273,23 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                                 setEndQuery(n.name || String(n.id))
                                 setFocusedField(null)
                             }
-                        }} style={{ flex: 1, padding: 6 }} placeholder="Rechercher une arrivée..." />
-                        {endQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear end" style={{ padding: '6px' }}>✕</button> : null}
+                        }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher une arrivée..." />
+                        {endQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear end" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
                     </div>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px' }}>⇄</button>
+                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>
                 </div>
                 {showSettings && (
-                    <div style={{ position: 'absolute', right: 12, top: 40, background: 'white', border: '1px solid #ddd', padding: 8, borderRadius: 6, zIndex: 30, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                    <div style={{ position: 'absolute', right: 12, top: 40, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)', padding: 8, borderRadius: 8, zIndex: 30, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <label style={{ fontSize: 13 }}><input type="checkbox" checked={excludeStairs} onChange={(e) => setExcludeStairs(e.target.checked)} />{' '}Mode fauteuil roulant (sans escaliers)</label>
                             <label style={{ fontSize: 13 }}><input type="checkbox" checked={coveredOnly} onChange={(e) => setCoveredOnly(e.target.checked)} />{' '}Couvert uniquement</label>
                             <label style={{ fontSize: 13 }}><input type="checkbox" checked={showSecondary} onChange={(e) => setShowSecondary(e.target.checked)} />{' '}Afficher itinéraires secondaires</label>
                             <div style={{ fontSize: 12, color: '#333' }}><strong>Filtres actifs :</strong> {excludeStairs ? 'Sans escaliers' : '—'}{', '}{coveredOnly ? 'Couvert' : '—'}</div>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                <button onClick={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (graph && start && end) compute() }} style={{ padding: '6px 8px' }}>Appliquer</button>
+                                <button onClick={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (graph && start && end) compute() }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>Appliquer</button>
                             </div>
                         </div>
                     </div>
@@ -297,7 +297,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             </div>
 
             {/* Bottom suggestion panel inside planner container (full width under inputs) */}
-            <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid #eee', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
+            <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
                 <div style={{ marginBottom: 8 }}>
                     {/* Always show existing routes first (if any), then suggestions beneath when a field is focused */}
                     {routes && routes.length > 0 && (
