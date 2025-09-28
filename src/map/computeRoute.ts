@@ -15,8 +15,8 @@ function haversine(a: [number, number], b: [number, number]) {
     return R * c
 }
 
-export async function computeAndDrawRoute(params: { graph: any, start: string, end: string, excludeStairs: boolean, coveredOnly?: boolean, mapRef: any, k?: number }) {
-    const { graph, start, end, excludeStairs, coveredOnly = false, mapRef, k = 3 } = params
+export async function computeAndDrawRoute(params: { graph: any, start: string, end: string, excludeStairs: boolean, coveredOnly?: boolean, mapRef: any, k?: number, draw?: boolean }) {
+    const { graph, start, end, excludeStairs, coveredOnly = false, mapRef, k = 3, draw = true } = params
     if (!graph) return null
     const exclude = excludeStairs ? ['stairs'] : []
     // optionally filter edges before pathfinding
@@ -46,7 +46,27 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
     const nodeById = new Map<string, any>()
     for (const n of graph.nodes) nodeById.set(String(n.id), n)
     const map = (mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current)))
-    if (!map) return { routes: ks }
+    if (!map || !draw) {
+        // compute distance and time approximately from node coordinates when map not available or drawing is disabled
+        const nodeById = new Map<string, any>()
+        for (const n of graph.nodes) nodeById.set(String(n.id), n)
+        const routesOut: Array<any> = []
+        for (let idx = 0; idx < ks.length; idx++) {
+            const r = ks[idx]
+            const ids = r.path as string[]
+            let dist = 0
+            for (let i = 1; i < ids.length; i++) {
+                const a = nodeById.get(String(ids[i - 1]))
+                const b = nodeById.get(String(ids[i]))
+                if (a && b) dist += haversine(a.coord as [number, number], b.coord as [number, number])
+            }
+            const speed = 1.4
+            const timeSec = dist / speed
+            const gid = `route-planner-${idx}`
+            routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line` })
+        }
+        return { routes: routesOut }
+    }
     // make combinedCoords available for fitBounds
     const combinedCoords: number[][] = []
     try {
@@ -286,4 +306,13 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line` })
     }
     return { routes: routesOut }
+}
+
+// Convenience helper for precomputations: compute fastest route time without drawing
+export async function computeRouteTime(params: { graph: any, start: string, end: string, excludeStairs?: boolean, coveredOnly?: boolean, mapRef?: any }): Promise<{ seconds: number, distance: number } | null> {
+    const { graph, start, end, excludeStairs = false, coveredOnly = false, mapRef } = params
+    const res = await computeAndDrawRoute({ graph, start, end, excludeStairs, coveredOnly, mapRef: mapRef ?? { current: null }, k: 1, draw: false })
+    if (!res || !res.routes || !res.routes.length) return null
+    const r0 = res.routes[0]
+    return { seconds: r0.time, distance: r0.distance }
 }

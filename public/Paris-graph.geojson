@@ -117,7 +117,7 @@
         {
             "type": "Feature",
             "properties": {
-                "name": "D"
+                "name": "Salle ESGT"
             },
             "geometry": {
                 "type": "Point",
@@ -130,7 +130,7 @@
         {
             "type": "Feature",
             "properties": {
-                "name": "A"
+                "name": "Langues (Bâtiment IRA) (21 PC + 32 places)"
             },
             "geometry": {
                 "type": "Point",

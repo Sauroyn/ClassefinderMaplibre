@@ -5,7 +5,7 @@ import type { Graph } from './route-planner/utils'
 import Suggestions from './route-planner/Suggestions'
 import RouteOption from './route-planner/RouteOption'
 
-export default function RoutePlanner({ mapRef, initialDestination, onClose }: { mapRef: any, initialDestination?: any, onClose?: () => void }) {
+export default function RoutePlanner({ mapRef, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
     const [graph, setGraph] = useState<Graph | null>(null)
     const [start, setStart] = useState<string>('')
     const [end, setEnd] = useState<string>('')
@@ -89,6 +89,19 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
         }
     }, [initialDestination, nodeOptions])
 
+    // prefill start/end if explicitly provided (e.g., from EventSelector decision)
+    useEffect(() => {
+        if (!nodeOptions || nodeOptions.length === 0) return
+        if (initialStartId) {
+            setStart(initialStartId)
+            if (initialStartName) setStartQuery(initialStartName)
+        }
+        if (initialEndId) {
+            setEnd(initialEndId)
+            if (initialEndName) setEndQuery(initialEndName)
+        }
+    }, [initialStartId, initialStartName, initialEndId, initialEndName, nodeOptions])
+
     // no file input handling: graph loaded from defaults only
 
     const [routes, setRoutes] = useState<Array<any>>([])
@@ -102,8 +115,36 @@ export default function RoutePlanner({ mapRef, initialDestination, onClose }: { 
         // clear previous routes while computing
         setRoutes([])
         try {
+            // resolve 'USER_POSITION' pseudo-id to nearest node if present
+            let s = start
+            let e = end
+            const nearestToUser = async (): Promise<string | null> => {
+                try {
+                    const user = await new Promise<{ lng: number, lat: number }>((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition((pos) => resolve({ lng: pos.coords.longitude, lat: pos.coords.latitude }), (err) => reject(err), { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })
+                    })
+                    let bestId: string | null = null
+                    let bestD = Infinity
+                    const toRad = (v: number) => v * Math.PI / 180
+                    const hav = (a: [number, number], b: [number, number]) => {
+                        const R = 6371000
+                        const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
+                        const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
+                        const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
+                        const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
+                        return R * c
+                    }
+                    for (const n of graph.nodes) {
+                        const d = hav([user.lng, user.lat], n.coord as [number, number])
+                        if (d < bestD) { bestD = d; bestId = String(n.id) }
+                    }
+                    return bestId
+                } catch { return null }
+            }
+            if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) s = nid }
+            if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) e = nid }
             const k = showSecondary ? 3 : 1
-            const res = await computeAndDrawRoute({ graph, start, end, excludeStairs, coveredOnly, mapRef, k })
+            const res = await computeAndDrawRoute({ graph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k })
             if (res && res.routes) setRoutes(res.routes)
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
     }

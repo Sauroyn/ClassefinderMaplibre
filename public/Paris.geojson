@@ -4,7 +4,7 @@
         {
             "type": "Feature",
             "properties": {
-                "name": "Salle A",
+                "name": "Salle ESGT",
                 "level": 3
             },
             "geometry": {
