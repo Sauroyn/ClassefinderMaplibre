@@ -3,7 +3,9 @@ import { computeAndDrawRoute } from '../map/computeRoute'
 import { parseGeoJSON } from './route-planner/utils'
 import type { Graph } from './route-planner/utils'
 import Suggestions from './route-planner/Suggestions'
-import RouteOption from './route-planner/RouteOption'
+import RoutesList from './route-planner/RoutesList'
+import SettingsPopover from './route-planner/SettingsPopover'
+import Inputs from './route-planner/Inputs'
 
 export default function RoutePlanner({ mapRef, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
     const [graph, setGraph] = useState<Graph | null>(null)
@@ -245,54 +247,32 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div>Départ</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
-                        <input value={startQuery} onChange={(e) => { setStartQuery(e.target.value); setFocusedField('start') }} onFocus={() => { setFocusedField('start') }} onBlur={() => setTimeout(() => { setFocusedField(null) }, 150)} onKeyDown={(e) => {
-                            const list = nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((startQuery || '').toLowerCase()))
-                            if ((e.key === 'Enter' || e.key === 'Tab') && list.length === 1) {
-                                e.preventDefault()
-                                const n = list[0]
-                                setStart(n.id)
-                                setStartQuery(n.name || String(n.id))
-                                setFocusedField(null)
-                            }
-                        }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher un départ..." />
-                        {startQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear start" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
-                    </div>
-                    <div style={{ fontSize: 12, marginTop: 8 }}>Arrivée</div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
-                        <input value={endQuery} onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }} onFocus={() => { setFocusedField('end') }} onBlur={() => setTimeout(() => { setFocusedField(null) }, 150)} onKeyDown={(e) => {
-                            const list = nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((endQuery || '').toLowerCase()))
-                            if ((e.key === 'Enter' || e.key === 'Tab') && list.length === 1) {
-                                e.preventDefault()
-                                const n = list[0]
-                                setEnd(n.id)
-                                setEndQuery(n.name || String(n.id))
-                                setFocusedField(null)
-                            }
-                        }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher une arrivée..." />
-                        {endQuery ? <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); }} title="Clear end" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
-                    </div>
-                </div>
+                <Inputs
+                    startQuery={startQuery}
+                    endQuery={endQuery}
+                    setStartQuery={setStartQuery}
+                    setEndQuery={setEndQuery}
+                    nodeOptions={nodeOptions}
+                    setFocusedField={setFocusedField}
+                    onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
+                    onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
+                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null) }}
+                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null) }}
+                />
 
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>
                 </div>
                 {showSettings && (
-                    <div style={{ position: 'absolute', right: 12, top: 40, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)', padding: 8, borderRadius: 8, zIndex: 30, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <label style={{ fontSize: 13 }}><input type="checkbox" checked={excludeStairs} onChange={(e) => setExcludeStairs(e.target.checked)} />{' '}Mode fauteuil roulant (sans escaliers)</label>
-                            <label style={{ fontSize: 13 }}><input type="checkbox" checked={coveredOnly} onChange={(e) => setCoveredOnly(e.target.checked)} />{' '}Couvert uniquement</label>
-                            <label style={{ fontSize: 13 }}><input type="checkbox" checked={showSecondary} onChange={(e) => setShowSecondary(e.target.checked)} />{' '}Afficher itinéraires secondaires</label>
-                            <div style={{ fontSize: 12, color: '#333' }}><strong>Filtres actifs :</strong> {excludeStairs ? 'Sans escaliers' : '—'}{', '}{coveredOnly ? 'Couvert' : '—'}</div>
-                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                <button onClick={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (graph && start && end) compute() }} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>Appliquer</button>
-                            </div>
-                        </div>
-                    </div>
+                    <SettingsPopover
+                        excludeStairs={excludeStairs}
+                        coveredOnly={coveredOnly}
+                        showSecondary={showSecondary}
+                        onChangeExcludeStairs={setExcludeStairs}
+                        onChangeCoveredOnly={setCoveredOnly}
+                        onChangeShowSecondary={setShowSecondary}
+                        onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
+                    />
                 )}
             </div>
 
@@ -301,11 +281,13 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 <div style={{ marginBottom: 8 }}>
                     {/* Always show existing routes first (if any), then suggestions beneath when a field is focused */}
                     {routes && routes.length > 0 && (
-                        <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                            {routes.map((r: any, i: number) => (
-                                <RouteOption key={r.id} route={{ ...r, index: i }} primary={i === 0} highlighted={highlightedRoute === r.layerId} onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }} onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }} onGo={(rt: any) => { /* when Go pressed, mark route as selected and ensure it's highlighted */ setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }} />
-                            ))}
-                        </div>
+                        <RoutesList
+                            routes={routes}
+                            highlightedRoute={highlightedRoute}
+                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
+                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
+                            onGo={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
+                        />
                     )}
                     <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
                 </div>

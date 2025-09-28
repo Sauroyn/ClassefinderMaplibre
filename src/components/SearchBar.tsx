@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import SearchList from './search/SearchList'
+import SearchSelected from './search/SearchSelected'
 
 type Props = {
     data: GeoJSON.FeatureCollection | null
@@ -98,31 +100,10 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
                 )}
                 <input ref={inputRef} className="search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher une salle..." style={{ flex: 1, padding: '8px', background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #eee)', borderRadius: 8, outline: 'none' }} onFocus={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setFocused(true); setSelected(null) }} onBlur={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); blurTimeout.current = window.setTimeout(() => { setFocused(false); blurTimeout.current = null }, 150) }} />
             </div>
-            {showList && list.map((it: any) => (
-                <div key={String(it.id)} onMouseDown={() => pick(it.id, it.name)} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', borderBottom: '1px solid var(--panel-border, #2a2d33)', cursor: 'pointer' }}>
-                    <div>
-                        <div style={{ fontWeight: 600 }}>{it.name}</div>
-                    </div>
-                    {it.level != null ? <div style={{ alignSelf: 'center', opacity: 0.9, padding: '4px 8px', background: 'var(--chip-bg, #f1f3f5)', color: 'var(--chip-fg, #111)', borderRadius: 12 }}>{it.level}</div> : <div style={{ width: 36 }} />}
-                </div>
-            ))}
+            {showList && <SearchList items={list as any} onPick={(id, name) => pick(id, name)} />}
 
             {/* Selected details */}
-            {selected && (
-                <div style={{ marginTop: 8, padding: 10, background: 'var(--panel-bg, #fbfbfb)', color: 'var(--panel-fg, #111)', borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--panel-border, #eee)' }}>
-                    <div style={{ fontWeight: 700 }}>{selected.name}</div>
-                    <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
-                        <div style={{ padding: '6px 10px', background: 'var(--chip-bg, #f1f3f5)', color: 'var(--chip-fg, #111)', borderRadius: 12 }}>{selected.level ?? '—'}</div>
-                        <button style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }} onClick={() => {
-                            if (!onRouteRequest) return
-                            // find feature in data
-                            const feat = (data && data.features) ? data.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === selected.id || f.properties?.name === selected.name) : null
-                            onRouteRequest(feat || { id: selected.id, name: selected.name })
-                        }}>Itinéraire</button>
-                        <button style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>Alias</button>
-                    </div>
-                </div>
-            )}
+            <SearchSelected selected={selected as any} onRoute={(feat: any) => { if (onRouteRequest) onRouteRequest(feat) }} data={data} />
         </div>
     )
 }
