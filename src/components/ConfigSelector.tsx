@@ -13,13 +13,13 @@ const ConfigSelector: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
     }, [])
 
     const content = (
-        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: 6, padding: 8, minWidth: 220, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+        <div style={{ background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)', borderRadius: 6, padding: 8, minWidth: 220, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
             <div style={{ fontWeight: 600, marginBottom: 6 }}>Config</div>
             {files.length === 0 ? (
                 <div style={{ fontSize: 12 }}>Aucun fichier .json trouvé</div>
             ) : (
                 <select
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)', borderRadius: 6, padding: 6 }}
                     value={selected || ''}
                     onChange={(e) => {
                         const v = e.target.value || null
