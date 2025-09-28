@@ -42,6 +42,7 @@ export default function SettingsButton({ onClick }: { onClick: () => void }) {
 
     return (
         <button
+            className="settings-button"
             aria-label="Paramètres"
             title="Paramètres"
             onClick={onClick}

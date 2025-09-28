@@ -29,6 +29,7 @@ export default function EventSelector({
     const containerRef = useRef<HTMLDivElement | null>(null)
     const [isMobile, setIsMobile] = useState<boolean>(() => (typeof window !== 'undefined' ? window.innerWidth <= 640 : false))
     const [bottom, setBottom] = useState<number>(12)
+    const [rightInset, setRightInset] = useState<number>(12)
 
     useEffect(() => {
         const onResize = () => setIsMobile(window.innerWidth <= 640)
@@ -46,6 +47,15 @@ export default function EventSelector({
                 let h = 0
                 if (ctrl) { const r = ctrl.getBoundingClientRect(); h = Math.max(0, Math.ceil(r.height)) }
                 setBottom(GAP + h)
+                // compute right inset to avoid overlapping settings button on mobile
+                const settings = document.querySelector('.settings-button') as HTMLElement | null
+                const extraGap = 8
+                let inset = 12
+                if (settings) {
+                    const rs = settings.getBoundingClientRect()
+                    inset = Math.max(12, Math.ceil(rs.width) + 12 + extraGap)
+                }
+                setRightInset(inset)
             } catch { setBottom(12) }
         }
         const update = () => { try { requestAnimationFrame(() => compute()) } catch { compute() } }
@@ -112,7 +122,14 @@ export default function EventSelector({
             ref={containerRef}
             className="event-selector"
             style={isMobile
-                ? { position: 'fixed', right: 64, bottom, zIndex: 10000, width: 'min(92vw, 400px)' }
+                ? {
+                    position: 'fixed',
+                    left: 12,
+                    right: rightInset,
+                    bottom,
+                    zIndex: 10000,
+                    maxWidth: 480
+                }
                 : { position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom, zIndex: 10000, width: 'min(92vw, 450px)' }
             }
         >
@@ -125,12 +142,16 @@ export default function EventSelector({
                 placeholder="Sélectionner un événement durant la semaine"
                 noOptionsMessage={() => 'Aucun résultat'}
                 styles={{
-                    container: (base) => ({ ...base, zIndex: 10000 }),
-                    control: (base) => ({ ...base, borderRadius: 999 }),
+                    container: (base) => ({ ...base, zIndex: 10000, maxWidth: '100%', width: '100%' }),
+                    control: (base) => ({ ...base, borderRadius: 999, width: '100%' }),
                     valueContainer: (base) => ({ ...base, overflow: 'hidden' }),
                     singleValue: (base) => ({ ...base, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '100%' }),
-                    menu: (base) => ({ ...base, zIndex: 10001 })
+                    menu: (base) => ({ ...base, zIndex: 10001, maxWidth: '100vw', width: '100%' }),
+                    menuList: (base) => ({ ...base, maxHeight: '45vh', overflowY: 'auto' }),
+                    menuPortal: (base) => ({ ...base, zIndex: 10002 })
                 }}
+                menuPortalTarget={isMobile ? (typeof document !== 'undefined' ? document.body : undefined) : undefined}
+                menuPosition={isMobile ? 'fixed' : 'absolute'}
                 formatOptionLabel={(opt: any) => (
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <div>{opt.label}</div>
