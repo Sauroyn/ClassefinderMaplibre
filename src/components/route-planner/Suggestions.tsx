@@ -22,7 +22,7 @@ export default function Suggestions(props: {
                 onSelectStart('USER_POSITION', 'Ma position')
             }} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', fontWeight: 600 }}>Ma position</div>
             {list.map(n => (
-            <div key={`s-${n.id}`} onMouseDown={() => onSelectStart(n.id, n.name)} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>{n.name}<span style={{ color: '#666' }}>{n.level || ''}</span></div>
+                <div key={`s-${n.id}`} onMouseDown={() => onSelectStart(n.id, n.name)} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>{n.name}<span style={{ color: '#666' }}>{n.level || ''}</span></div>
             ))}
         </div>)
     }
@@ -39,7 +39,7 @@ export default function Suggestions(props: {
                 onSelectEnd('USER_POSITION', 'Ma position')
             }} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', fontWeight: 600 }}>Ma position</div>
             {list.map(n => (
-            <div key={`e-${n.id}`} onMouseDown={() => onSelectEnd(n.id, n.name)} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>{n.name}<span style={{ color: '#666' }}>{n.level || ''}</span></div>
+                <div key={`e-${n.id}`} onMouseDown={() => onSelectEnd(n.id, n.name)} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>{n.name}<span style={{ color: '#666' }}>{n.level || ''}</span></div>
             ))}
         </div>)
     }

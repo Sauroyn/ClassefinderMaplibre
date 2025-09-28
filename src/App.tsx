@@ -246,128 +246,128 @@ export default function App() {
           selectedId={selectedEventId}
           onClear={() => { setSelectedEventId(null); try { mapRef.current?.clearRoute?.() } catch { } }}
           onSelect={async (ev) => {
-          // On event click: choose origin based on rule
-          const g = graphRef.current
-          if (!g) return
-          setSelectedEventId(ev.id)
-          const normalize = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}+/gu, '').toLowerCase().replace(/\s+/g, ' ').trim()
-          const nodeByName = new Map<string, any>()
-          for (const n of g.nodes) { const nm = normalize(String(n.name ?? n.id ?? '')); if (nm) nodeByName.set(nm, n) }
-          const nearestNodeToCoord = (coord: [number, number]) => {
-            let best: { id: string, d: number } | null = null
-            const toRad = (v: number) => v * Math.PI / 180
-            const hav = (a: [number, number], b: [number, number]) => {
-              const R = 6371000
-              const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
-              const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
-              const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
-              const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
-              return R * c
-            }
-            for (const n of g.nodes) {
-              const d = hav(coord, n.coord as [number, number])
-              if (!best || d < best.d) best = { id: String(n.id), d }
-            }
-            return best ? best.id : null
-          }
-          const featureCenter = (geom: any): [number, number] | null => {
-            if (!geom) return null
-            try {
-              if (geom.type === 'Point') return geom.coordinates as [number, number]
-              const push = (arr: number[][], coords: any) => { for (const c of coords) arr.push(c as number[]) }
-              let all: number[][] = []
-              if (geom.type === 'Polygon') push(all, geom.coordinates.flat())
-              else if (geom.type === 'MultiPolygon') push(all, geom.coordinates.flat(2))
-              else if (geom.type === 'LineString') all = geom.coordinates
-              else if (geom.type === 'MultiLineString') all = geom.coordinates.flat()
-              if (all.length === 0) return null
-              let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-              for (const c of all) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-              return [(minX + maxX) / 2, (minY + maxY) / 2]
-            } catch { return null }
-          }
-          const resolveLoc = (loc: string | null): string | null => {
-            if (!loc) return null
-            const nrm = normalize(String(loc))
-            const n = nodeByName.get(nrm)
-            if (n) return String(n.id)
-            const data = dataRef.current
-            try {
-              const feats = (data && data.features) ? data.features : []
-              const byName: Array<{ f: any, n: string }> = feats.filter((f: any) => f?.properties?.name).map((f: any) => ({ f, n: normalize(String(f.properties.name)) }))
-              let found = byName.find((x: { f: any, n: string }) => x.n === nrm)
-              if (!found) {
-                const candidates = byName.filter((x: { f: any, n: string }) => x.n.includes(nrm) || nrm.includes(x.n))
-                if (candidates.length === 1) found = candidates[0]
+            // On event click: choose origin based on rule
+            const g = graphRef.current
+            if (!g) return
+            setSelectedEventId(ev.id)
+            const normalize = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}+/gu, '').toLowerCase().replace(/\s+/g, ' ').trim()
+            const nodeByName = new Map<string, any>()
+            for (const n of g.nodes) { const nm = normalize(String(n.name ?? n.id ?? '')); if (nm) nodeByName.set(nm, n) }
+            const nearestNodeToCoord = (coord: [number, number]) => {
+              let best: { id: string, d: number } | null = null
+              const toRad = (v: number) => v * Math.PI / 180
+              const hav = (a: [number, number], b: [number, number]) => {
+                const R = 6371000
+                const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
+                const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
+                const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
+                const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
+                return R * c
               }
-              if (found) {
-                const ctr = featureCenter(found.f.geometry)
-                if (ctr) return nearestNodeToCoord(ctr)
+              for (const n of g.nodes) {
+                const d = hav(coord, n.coord as [number, number])
+                if (!best || d < best.d) best = { id: String(n.id), d }
               }
-            } catch { }
-            return null
-          }
-          // previous same-day event
-          const prev = events.filter(e => e.start && ev.start && e.start < ev.start && e.dayKey === ev.dayKey).slice(-1)[0]
-          const startIdPrev = resolveLoc(prev?.location ?? null)
-          const endId = resolveLoc(ev.location)
-          // If no prev or cannot resolve prev, route from user position
-          let usePrev = !!(prev && startIdPrev && endId)
-          if (!endId) { alert('Localisation manquante ou introuvable pour cet événement.'); return }
-          // if same location, prefer user origin
-          if (usePrev && startIdPrev === endId) usePrev = false
-          if (usePrev) {
-            const res = await computeRouteTime({ graph: g, start: startIdPrev!, end: endId!, excludeStairs: false, coveredOnly: false, mapRef })
-            const secs = res?.seconds ?? null
-            const gap = (ev.start && prev!.end) ? ((ev.start.getTime() - prev!.end.getTime()) / 1000) : null
-            if (secs != null && gap != null && (secs + bufferMin * 60) >= gap) {
-              // Show Prev -> Current route (display on map)
-              await computeAndDrawRoute({ graph: g, start: startIdPrev!, end: endId!, excludeStairs: false, coveredOnly: false, mapRef, k: 1, draw: true })
-              // Open planner with start/end prefilled
-              setPlannerStart({ id: startIdPrev!, name: prev?.location || 'Départ' })
-              setPlannerEnd({ id: endId!, name: ev.location || 'Arrivée' })
-              setShowPlanner(true)
-              return
+              return best ? best.id : null
             }
-          }
-          // Otherwise: compute user -> current
-          const geolocate = () => new Promise<{ lng: number, lat: number }>((resolve, reject) => {
+            const featureCenter = (geom: any): [number, number] | null => {
+              if (!geom) return null
+              try {
+                if (geom.type === 'Point') return geom.coordinates as [number, number]
+                const push = (arr: number[][], coords: any) => { for (const c of coords) arr.push(c as number[]) }
+                let all: number[][] = []
+                if (geom.type === 'Polygon') push(all, geom.coordinates.flat())
+                else if (geom.type === 'MultiPolygon') push(all, geom.coordinates.flat(2))
+                else if (geom.type === 'LineString') all = geom.coordinates
+                else if (geom.type === 'MultiLineString') all = geom.coordinates.flat()
+                if (all.length === 0) return null
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                for (const c of all) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
+                return [(minX + maxX) / 2, (minY + maxY) / 2]
+              } catch { return null }
+            }
+            const resolveLoc = (loc: string | null): string | null => {
+              if (!loc) return null
+              const nrm = normalize(String(loc))
+              const n = nodeByName.get(nrm)
+              if (n) return String(n.id)
+              const data = dataRef.current
+              try {
+                const feats = (data && data.features) ? data.features : []
+                const byName: Array<{ f: any, n: string }> = feats.filter((f: any) => f?.properties?.name).map((f: any) => ({ f, n: normalize(String(f.properties.name)) }))
+                let found = byName.find((x: { f: any, n: string }) => x.n === nrm)
+                if (!found) {
+                  const candidates = byName.filter((x: { f: any, n: string }) => x.n.includes(nrm) || nrm.includes(x.n))
+                  if (candidates.length === 1) found = candidates[0]
+                }
+                if (found) {
+                  const ctr = featureCenter(found.f.geometry)
+                  if (ctr) return nearestNodeToCoord(ctr)
+                }
+              } catch { }
+              return null
+            }
+            // previous same-day event
+            const prev = events.filter(e => e.start && ev.start && e.start < ev.start && e.dayKey === ev.dayKey).slice(-1)[0]
+            const startIdPrev = resolveLoc(prev?.location ?? null)
+            const endId = resolveLoc(ev.location)
+            // If no prev or cannot resolve prev, route from user position
+            let usePrev = !!(prev && startIdPrev && endId)
+            if (!endId) { alert('Localisation manquante ou introuvable pour cet événement.'); return }
+            // if same location, prefer user origin
+            if (usePrev && startIdPrev === endId) usePrev = false
+            if (usePrev) {
+              const res = await computeRouteTime({ graph: g, start: startIdPrev!, end: endId!, excludeStairs: false, coveredOnly: false, mapRef })
+              const secs = res?.seconds ?? null
+              const gap = (ev.start && prev!.end) ? ((ev.start.getTime() - prev!.end.getTime()) / 1000) : null
+              if (secs != null && gap != null && (secs + bufferMin * 60) >= gap) {
+                // Show Prev -> Current route (display on map)
+                await computeAndDrawRoute({ graph: g, start: startIdPrev!, end: endId!, excludeStairs: false, coveredOnly: false, mapRef, k: 1, draw: true })
+                // Open planner with start/end prefilled
+                setPlannerStart({ id: startIdPrev!, name: prev?.location || 'Départ' })
+                setPlannerEnd({ id: endId!, name: ev.location || 'Arrivée' })
+                setShowPlanner(true)
+                return
+              }
+            }
+            // Otherwise: compute user -> current
+            const geolocate = () => new Promise<{ lng: number, lat: number }>((resolve, reject) => {
+              try {
+                navigator.geolocation.getCurrentPosition((pos) => resolve({ lng: pos.coords.longitude, lat: pos.coords.latitude }), (err) => reject(err), { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })
+              } catch (e) { reject(e) }
+            })
             try {
-              navigator.geolocation.getCurrentPosition((pos) => resolve({ lng: pos.coords.longitude, lat: pos.coords.latitude }), (err) => reject(err), { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })
-            } catch (e) { reject(e) }
-          })
-          try {
-            const user = await geolocate()
-            // pick nearest graph node to user
-            let bestId: string | null = null
-            let bestD = Infinity
-            const toRad = (v: number) => v * Math.PI / 180
-            const hav = (a: [number, number], b: [number, number]) => {
-              const R = 6371000
-              const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
-              const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
-              const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
-              const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
-              return R * c
+              const user = await geolocate()
+              // pick nearest graph node to user
+              let bestId: string | null = null
+              let bestD = Infinity
+              const toRad = (v: number) => v * Math.PI / 180
+              const hav = (a: [number, number], b: [number, number]) => {
+                const R = 6371000
+                const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
+                const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
+                const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
+                const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
+                return R * c
+              }
+              for (const n of g.nodes) {
+                const d = hav([user.lng, user.lat], n.coord as [number, number])
+                if (d < bestD) { bestD = d; bestId = String(n.id) }
+              }
+              if (bestId) {
+                await computeAndDrawRoute({ graph: g, start: bestId, end: endId!, excludeStairs: false, coveredOnly: false, mapRef, k: 1, draw: true })
+                setPlannerStart({ id: bestId, name: 'Ma position' })
+                setPlannerEnd({ id: endId!, name: ev.location || 'Arrivée' })
+                setShowPlanner(true)
+                return
+              }
+            } catch (e) {
+              // geolocation failed; fall back to planner with destination prefilled
             }
-            for (const n of g.nodes) {
-              const d = hav([user.lng, user.lat], n.coord as [number, number])
-              if (d < bestD) { bestD = d; bestId = String(n.id) }
-            }
-            if (bestId) {
-              await computeAndDrawRoute({ graph: g, start: bestId, end: endId!, excludeStairs: false, coveredOnly: false, mapRef, k: 1, draw: true })
-              setPlannerStart({ id: bestId, name: 'Ma position' })
-              setPlannerEnd({ id: endId!, name: ev.location || 'Arrivée' })
-              setShowPlanner(true)
-              return
-            }
-          } catch (e) {
-            // geolocation failed; fall back to planner with destination prefilled
-          }
-          setPlannerDest({ name: ev.title ?? ev.location ?? 'Destination', id: endId })
-          setPlannerStart(null); setPlannerEnd(null)
-          setShowPlanner(true)
-        }} />
+            setPlannerDest({ name: ev.title ?? ev.location ?? 'Destination', id: endId })
+            setPlannerStart(null); setPlannerEnd(null)
+            setShowPlanner(true)
+          }} />
       )}
 
       {showSettings && (

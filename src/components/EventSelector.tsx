@@ -77,25 +77,25 @@ export default function EventSelector({
         }
     }, [])
 
-        const sorted = useMemo(() => {
-            return [...events].sort((a, b) => {
+    const sorted = useMemo(() => {
+        return [...events].sort((a, b) => {
             const as = a.start ? a.start.getTime() : 0
             const bs = b.start ? b.start.getTime() : 0
             return as - bs
         })
     }, [events])
 
-        const filtered = useMemo(() => {
-            const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}+/gu, '').toLowerCase()
-            const qq = norm(q)
-            if (!qq) return sorted
-            return sorted.filter(ev => {
-                const parts = [ev.title || '', ev.location || '']
-                if (ev.start) parts.push(ev.start.toLocaleString())
-                if (ev.end) parts.push(ev.end.toLocaleString())
-                return parts.some(p => norm(String(p)).includes(qq))
-            })
-        }, [sorted, q])
+    const filtered = useMemo(() => {
+        const norm = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}+/gu, '').toLowerCase()
+        const qq = norm(q)
+        if (!qq) return sorted
+        return sorted.filter(ev => {
+            const parts = [ev.title || '', ev.location || '']
+            if (ev.start) parts.push(ev.start.toLocaleString())
+            if (ev.end) parts.push(ev.end.toLocaleString())
+            return parts.some(p => norm(String(p)).includes(qq))
+        })
+    }, [sorted, q])
 
     const labelFor = (ev: SimpleEvent) => {
         const pad = (n: number) => String(n).padStart(2, '0')
@@ -112,12 +112,12 @@ export default function EventSelector({
         return `${s}–${e} · ${name} · ${place}${travel}${fromYou}`
     }
 
-        const selected = selectedId ? events.find(e => e.id === selectedId) : null
-        const buttonLabel = selected
-            ? (() => { const pad = (n: number) => String(n).padStart(2, '0'); const s = selected.start ? `${pad(selected.start.getHours())}:${pad(selected.start.getMinutes())}` : '—'; const name = selected.title || '(Sans titre)'; return `${s} · ${name}` })()
-            : 'Sélectionner un événement durant la semaine'
+    const selected = selectedId ? events.find(e => e.id === selectedId) : null
+    const buttonLabel = selected
+        ? (() => { const pad = (n: number) => String(n).padStart(2, '0'); const s = selected.start ? `${pad(selected.start.getHours())}:${pad(selected.start.getMinutes())}` : '—'; const name = selected.title || '(Sans titre)'; return `${s} · ${name}` })()
+        : 'Sélectionner un événement durant la semaine'
 
-        return (
+    return (
         <div
             ref={containerRef}
             className="event-selector"
@@ -125,17 +125,17 @@ export default function EventSelector({
                 ? { position: 'fixed', right: 64, bottom, zIndex: 10000 }
                 : { position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom, zIndex: 10000 }}
         >
-                    <button onClick={() => setOpen(o => !o)} style={{ minWidth: 280, maxWidth: '92vw', padding: '10px 12px', borderRadius: 999, border: '1px solid #ddd', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-                        {sorted.length ? buttonLabel : 'Aucun événement'}
+            <button onClick={() => setOpen(o => !o)} style={{ minWidth: 280, maxWidth: '92vw', padding: '10px 12px', borderRadius: 999, border: '1px solid #ddd', background: 'white', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                {sorted.length ? buttonLabel : 'Aucun événement'}
             </button>
             {open && (
-                        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 46, background: 'white', border: '1px solid #ddd', borderRadius: 8, maxHeight: '45vh', overflow: 'auto', width: 'min(92vw, 780px)', boxShadow: '0 6px 24px rgba(0,0,0,0.2)' }}>
-                            <div style={{ padding: 8, borderBottom: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center' }}>
-                                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un événement..." style={{ flex: 1, padding: 8 }} />
-                                {onClear && <button onMouseDown={() => { onClear(); setQ(''); setOpen(false) }} title="Effacer la sélection" style={{ padding: '6px 8px' }}>✕</button>}
-                            </div>
-                            <div onMouseDown={() => { if (onClear) onClear(); setOpen(false) }} style={{ padding: '10px 12px', borderBottom: '1px solid #eee', cursor: 'pointer', fontWeight: 600, background: '#fbfbfb' }}>Sélectionner un événement durant la semaine</div>
-                            {filtered.map(ev => (
+                <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 46, background: 'white', border: '1px solid #ddd', borderRadius: 8, maxHeight: '45vh', overflow: 'auto', width: 'min(92vw, 780px)', boxShadow: '0 6px 24px rgba(0,0,0,0.2)' }}>
+                    <div style={{ padding: 8, borderBottom: '1px solid #eee', display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un événement..." style={{ flex: 1, padding: 8 }} />
+                        {onClear && <button onMouseDown={() => { onClear(); setQ(''); setOpen(false) }} title="Effacer la sélection" style={{ padding: '6px 8px' }}>✕</button>}
+                    </div>
+                    <div onMouseDown={() => { if (onClear) onClear(); setOpen(false) }} style={{ padding: '10px 12px', borderBottom: '1px solid #eee', cursor: 'pointer', fontWeight: 600, background: '#fbfbfb' }}>Sélectionner un événement durant la semaine</div>
+                    {filtered.map(ev => (
                         <div key={ev.id} onMouseDown={() => { onSelect(ev); setOpen(false) }} style={{ padding: '10px 12px', borderBottom: '1px solid #eee', cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'center' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{labelFor(ev)}</div>
