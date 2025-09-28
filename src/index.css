@@ -12,6 +12,8 @@ body,
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
+  /* Reduce double-tap zoom on some browsers */
 }
 
 /* Route planner custom markers */
@@ -21,4 +23,19 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   overflow: hidden;
   background-color: transparent;
+}
+
+/* Prevent iOS from zooming on input focus by keeping font-size >= 16px */
+input,
+select,
+textarea,
+button {
+  font-size: 16px;
+}
+
+/* Prevent pinch-zoom on map container and app root where appropriate */
+#root,
+.maplibregl-canvas,
+.maplibregl-map {
+  touch-action: none;
 }
