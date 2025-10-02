@@ -6,6 +6,11 @@ import Suggestions from './route-planner/Suggestions'
 import RoutesList from './route-planner/RoutesList'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
+import RouteSheetModal from './route-planner/RouteSheetModal'
+import RouteDetailModal from './route-planner/RouteDetailModal'
+import NavigationModule from './route-planner/NavigationModule'
+import { generateRouteSteps } from './route-planner/RouteStepsGenerator'
+import { saveRoute } from '../utils/savedRoutes'
 
 export default function RoutePlanner({ mapRef, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
     const [graph, setGraph] = useState<Graph | null>(null)
@@ -112,10 +117,22 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [coveredOnly, setCoveredOnly] = useState<boolean>(false)
     const [showSecondary, setShowSecondary] = useState<boolean>(true)
     const [showSettings, setShowSettings] = useState<boolean>(false)
+
+    // Nouveaux états pour les modales et la navigation
+    const [showRouteSheet, setShowRouteSheet] = useState<boolean>(false)
+    const [showRouteDetail, setShowRouteDetail] = useState<boolean>(false)
+    const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
+    const [isNavigating, setIsNavigating] = useState<boolean>(false)
+    const [navigationSteps, setNavigationSteps] = useState<any[]>([])
+    const [routeSheetDismissed, setRouteSheetDismissed] = useState<boolean>(false)
+
+    // Détection mobile
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
     async function compute() {
         if (!graph) { console.warn('[RoutePlanner] no graph loaded'); return }
-        // clear previous routes while computing
+        // clear previous routes while computing and reset dismissed state
         setRoutes([])
+        setRouteSheetDismissed(false)
         try {
             // resolve 'USER_POSITION' pseudo-id to nearest node if present
             let s = start
@@ -161,6 +178,141 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [start, end, graph])
+
+    // Afficher la modal des itinéraires sur mobile quand il y a des résultats
+    useEffect(() => {
+        if (routes && routes.length > 0 && isMobile && !isNavigating && !showRouteDetail && !routeSheetDismissed) {
+            // Délai très court pour éviter les conflits de state
+            const timer = setTimeout(() => {
+                setShowRouteSheet(true)
+            }, 100)
+            return () => clearTimeout(timer)
+        }
+    }, [routes, isMobile, isNavigating, showRouteDetail, routeSheetDismissed])
+
+    // Empêcher la fermeture des modales par swipe en les ré-ouvrant si besoin
+    useEffect(() => {
+        if (!isMobile) return
+        if (routes.length === 0) return
+        if (!isNavigating && !showRouteDetail && !showRouteSheet && !routeSheetDismissed) {
+            const t = setTimeout(() => setShowRouteSheet(true), 50)
+            return () => clearTimeout(t)
+        }
+    }, [showRouteSheet, showRouteDetail, isNavigating, isMobile, routes.length, routeSheetDismissed])
+
+    // Ecouter les évènements hors itinéraire pour recalculer
+    useEffect(() => {
+        const onOff = () => {
+            if (!graph || !isNavigating || !selectedRoute) return
+            try {
+                // on recalcule depuis la position utilisateur (USER_POSITION) jusqu'à la fin prévue
+                const endId = end
+                computeAndDrawRoute({ graph, start: 'USER_POSITION', end: endId, excludeStairs, coveredOnly, mapRef, k: showSecondary ? 3 : 1 })
+                    .then(res => {
+                        if (res && res.routes && res.routes.length) {
+                            setRoutes(res.routes)
+                            const primary = res.routes[0]
+                            setSelectedRoute(primary)
+                            try {
+                                const steps = generateRouteSteps(graph, primary.path)
+                                setNavigationSteps(steps)
+                            } catch { }
+                        }
+                    })
+                    .catch(() => { })
+            } catch { }
+        }
+        window.addEventListener('route:off', onOff as any)
+        return () => { window.removeEventListener('route:off', onOff as any) }
+    }, [graph, isNavigating, selectedRoute, end, excludeStairs, coveredOnly, mapRef, showSecondary])
+
+    // Nouvelles fonctions pour la gestion des modales et navigation
+    const handleSelectRoute = (route: any) => {
+        console.log('[RoutePlanner] handleSelectRoute called with:', route)
+        setSelectedRoute(route)
+        setShowRouteSheet(false)
+        setShowRouteDetail(true)
+        console.log('[RoutePlanner] Setting showRouteDetail to true')
+
+        // Génerer les étapes pour la navigation
+        if (graph) {
+            const steps = generateRouteSteps(graph, route.path)
+            setNavigationSteps(steps)
+            console.log('[RoutePlanner] Generated steps:', steps.length)
+        }
+
+        // Mettre en avant uniquement l'itinéraire sélectionné (couleur bleue), les autres conservent leur couleur d'origine
+        try {
+            const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
+            if (map) {
+                const style = map.getStyle && map.getStyle()
+                const layers = (style && style.layers) || []
+                for (const lyr of layers) {
+                    if (!lyr || typeof lyr.id !== 'string') continue
+                    if (lyr.id.startsWith('route-planner-') && lyr.id.endsWith('-line')) {
+                        // réinitialiser la couleur selon l'index
+                        let idx = -1
+                        try { const m = /route-planner-(\d+)-line/.exec(lyr.id); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
+                        const baseColor = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
+                        try { map.setPaintProperty(lyr.id, 'line-gradient', null) } catch { }
+                        try { map.setPaintProperty(lyr.id, 'line-color', baseColor) } catch { }
+                    }
+                }
+                // colorer la sélection en bleu
+                try { map.setPaintProperty(route.layerId, 'line-color', '#007AFF') } catch { }
+            }
+        } catch (e) { }
+    }
+
+    const handleStartNavigation = () => {
+        setShowRouteDetail(false)
+        setIsNavigating(true)
+    }
+
+    const handleFinishNavigation = () => {
+        setIsNavigating(false)
+        setSelectedRoute(null)
+        setNavigationSteps([])
+
+        // Remettre la carte en vue normale
+        const map = mapRef && mapRef.current && (
+            mapRef.current.getMap ? mapRef.current.getMap() :
+                (mapRef.current.map ? mapRef.current.map : mapRef.current)
+        )
+        if (map) {
+            try {
+                map.easeTo({
+                    pitch: 0,
+                    bearing: 0,
+                    duration: 1000
+                })
+
+                // Réafficher tous les itinéraires
+                routes.forEach((route) => {
+                    try {
+                        map.setLayoutProperty(route.layerId, 'visibility', 'visible')
+                        // enlever tout dégradé de progression et restaurer couleurs de base
+                        try { map.setPaintProperty(route.layerId, 'line-gradient', null) } catch { }
+                        let idx = -1
+                        try { const m = /route-planner-(\d+)-line/.exec(route.layerId); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
+                        const baseColor = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
+                        try { map.setPaintProperty(route.layerId, 'line-color', baseColor) } catch { }
+                    } catch (e) { }
+                })
+            } catch (e) { }
+        }
+    }
+
+    const handleSaveRoute = (route: any, name: string) => {
+        try {
+            saveRoute(route, name, graph)
+            // Vous pourriez ajouter une notification ici
+            console.log('Itinéraire sauvegardé:', name)
+        } catch (error) {
+            console.error('Erreur lors de la sauvegarde:', error)
+            // Vous pourriez ajouter une notification d'erreur ici
+        }
+    }
 
     // listen for map feature clicks to allow quick fill of focused field or set destination
     useEffect(() => {
@@ -240,9 +392,32 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     }
 
     return (
-        <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }}>
+        <div className="route-planner" style={{
+            position: 'absolute',
+            top: isMobile ? 0 : 10,
+            left: isMobile ? 0 : 10,
+            right: isMobile ? 0 : 'auto',
+            background: 'var(--panel-bg, white)',
+            color: 'var(--panel-fg, #111)',
+            padding: 8,
+            borderRadius: isMobile ? 0 : 6,
+            zIndex: 20,
+            width: isMobile ? '100%' : 360,
+            boxSizing: 'border-box',
+            border: isMobile ? 'none' : '1px solid var(--panel-border, #ddd)',
+            boxShadow: isMobile ? 'none' : '0 4px 12px rgba(0,0,0,0.18)'
+        }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
-                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
+                {onClose && <button onClick={() => {
+                    try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { }
+                    // Fermer toutes les modales mobiles
+                    setShowRouteSheet(false)
+                    setShowRouteDetail(false)
+                    setIsNavigating(false)
+                    setSelectedRoute(null)
+                    setNavigationSteps([])
+                    if (onClose) onClose()
+                }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
                 <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
             </div>
@@ -280,18 +455,67 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
                 <div style={{ marginBottom: 8 }}>
                     {/* Always show existing routes first (if any), then suggestions beneath when a field is focused */}
-                    {routes && routes.length > 0 && (
+                    {routes && routes.length > 0 && !isMobile && (
                         <RoutesList
                             routes={routes}
                             highlightedRoute={highlightedRoute}
                             onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
                             onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
-                            onGo={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
+                            onGo={(rt: any) => {
+                                // Sur desktop, simplement mettre en évidence l'itinéraire
+                                if (!isMobile) {
+                                    setHighlightedRoute(rt.layerId);
+                                    highlightRouteLayer(rt.layerId);
+                                } else {
+                                    // Sur mobile, ouvrir les détails
+                                    handleSelectRoute(rt);
+                                }
+                            }}
                         />
                     )}
                     <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
                 </div>
             </div>
+
+            {/* Modales pour mobile */}
+            <RouteSheetModal
+                isOpen={showRouteSheet && !isNavigating}
+                routes={routes}
+                highlightedRoute={highlightedRoute}
+                onSelectRoute={handleSelectRoute}
+            />            <RouteDetailModal
+                isOpen={showRouteDetail && !isNavigating}
+                onClose={() => {
+                    // réinitialiser les couleurs à la fermeture du détail
+                    try {
+                        const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
+                        if (map) {
+                            routes.forEach((rt: any) => {
+                                try { map.setPaintProperty(rt.layerId, 'line-gradient', null) } catch { }
+                                let idx = -1
+                                try { const m = /route-planner-(\d+)-line/.exec(rt.layerId); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
+                                const baseColor = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
+                                try { map.setPaintProperty(rt.layerId, 'line-color', baseColor) } catch { }
+                            })
+                        }
+                    } catch { }
+                    setShowRouteDetail(false)
+                }}
+                route={selectedRoute}
+                graph={graph}
+                onStartNavigation={handleStartNavigation}
+                onSaveRoute={handleSaveRoute}
+            />
+
+            {/* Module de navigation */}
+            <NavigationModule
+                isActive={isNavigating}
+                route={selectedRoute}
+                steps={navigationSteps}
+                mapRef={mapRef}
+                graph={graph}
+                onFinishNavigation={handleFinishNavigation}
+            />
         </div>
     )
 }

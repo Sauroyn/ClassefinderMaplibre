@@ -600,7 +600,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         ]
                         for (const saved of savedRouteSources) {
                             try {
-                                if (!map.getSource(saved.id)) map.addSource(saved.id, { type: 'geojson', data: saved.data })
+                                if (!map.getSource(saved.id)) map.addSource(saved.id, { type: 'geojson', data: saved.data, lineMetrics: true as any })
                             } catch { }
                             const layerId = `${saved.id}-line`
                             // Compute styling: connector vs route indexes (0 primary)

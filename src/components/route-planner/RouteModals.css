@@ -1,0 +1,248 @@
+/* Styles pour react-modal-sheet */
+[data-rsbs-overlay] {
+    background: rgba(0, 0, 0, 0.6) !important;
+    z-index: 1000 !important;
+}
+
+[data-rsbs-backdrop] {
+    background: rgba(0, 0, 0, 0.6) !important;
+}
+
+[data-rsbs-root] {
+    z-index: 1000 !important;
+}
+
+[data-rsbs-header] {
+    background: var(--panel-bg, white) !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+
+[data-rsbs-header]:before {
+    background: var(--panel-border, #e0e0e0) !important;
+}
+
+[data-rsbs-scroll] {
+    background: var(--panel-bg, white) !important;
+    color: var(--panel-fg, #111) !important;
+}
+
+.react-modal-sheet-container {
+    background: var(--panel-bg, white) !important;
+    border-radius: 16px 16px 0 0 !important;
+}
+
+.react-modal-sheet-header {
+    background: var(--panel-bg, white) !important;
+}
+
+.react-modal-sheet-content {
+    background: var(--panel-bg, white) !important;
+    color: var(--panel-fg, #111) !important;
+}
+
+.react-modal-sheet-backdrop {
+    background: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Styles pour la navigation */
+.navigation-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--primary-color, #007AFF);
+    color: white;
+    padding: 16px 20px;
+    z-index: 100;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.navigation-finish-button {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 100;
+}
+
+/* Animations pour les transitions */
+.route-transition {
+    transition: all 0.3s ease;
+}
+
+.navigation-active .route-planner {
+    display: none;
+}
+
+/* Styles pour les étapes d'itinéraire */
+.route-step {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 12px;
+    background: var(--panel-bg-alt, #f8f9fa);
+    border: 1px solid var(--panel-border, #e0e0e0);
+    transition: all 0.2s ease;
+}
+
+.route-step:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.route-step-icon {
+    font-size: 20px;
+    min-width: 24px;
+    text-align: center;
+}
+
+.route-step-content {
+    flex: 1;
+}
+
+.route-step-instruction {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--panel-fg, #111);
+    margin-bottom: 4px;
+}
+
+.route-step-details {
+    font-size: 14px;
+    color: var(--text-muted, #666);
+}
+
+/* Styles pour les boutons d'action */
+.action-button {
+    padding: 12px 20px;
+    border-radius: 24px;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-button:hover {
+    transform: translateY(-1px);
+}
+
+.action-button-primary {
+    background: var(--primary-color, #007AFF);
+    color: white;
+}
+
+.action-button-secondary {
+    border: 1px solid var(--panel-border, #e0e0e0);
+    background: var(--panel-bg, white);
+    color: var(--panel-fg, #111);
+}
+
+.action-button-danger {
+    background: #ff3b30;
+    color: white;
+}
+
+/* Responsive pour mobile */
+@media (max-width: 768px) {
+    .route-planner {
+        position: fixed !important;
+        width: 100% !important;
+        left: 0 !important;
+        top: 0 !important;
+        right: 0 !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: var(--panel-bg, white) !important;
+        z-index: 20 !important;
+    }
+
+    .navigation-active .route-planner {
+        display: none !important;
+    }
+}
+
+/* Styles pour l'indicateur de position utilisateur */
+.user-position-marker {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--primary-color, #007AFF);
+    border: 3px solid white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.5s ease;
+}
+
+.user-position-marker.moving {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(0, 122, 255, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(0, 122, 255, 0);
+    }
+}
+
+/* Styles pour les sauvegardes d'itinéraires */
+.saved-route-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: var(--panel-bg-alt, #f8f9fa);
+    border: 1px solid var(--panel-border, #e0e0e0);
+    margin-bottom: 8px;
+}
+
+.saved-route-info h4 {
+    margin: 0 0 4px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--panel-fg, #111);
+}
+
+.saved-route-info p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-muted, #666);
+}
+
+.saved-route-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.saved-route-actions button {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--panel-border, #e0e0e0);
+    background: var(--panel-bg, white);
+    color: var(--panel-fg, #111);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.saved-route-actions button:hover {
+    background: var(--panel-bg-hover, #f0f0f0);
+}
+
+.saved-route-actions .delete-button {
+    background: #ff3b30;
+    color: white;
+    border-color: #ff3b30;
+}
+
+.saved-route-actions .delete-button:hover {
+    background: #d70015;
+}

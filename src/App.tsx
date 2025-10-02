@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+import './components/route-planner/RouteModals.css'
 import MapView from './components/MapView'
 import LevelSelector from './components/LevelSelector'
 import SearchBar from './components/SearchBar'

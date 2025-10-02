@@ -57,8 +57,8 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
     for (let idx = 0; idx < routes.length; idx++) {
         const { id, geo } = routes[idx]
         try {
-            if (map.getSource && map.getSource(id)) map.getSource(id).setData(geo)
-            else if (map.addSource) map.addSource(id, { type: 'geojson', data: geo })
+            if (map.getSource && map.getSource(id)) (map.getSource(id) as any).setData(geo)
+            else if (map.addSource) map.addSource(id, { type: 'geojson', data: geo, lineMetrics: true as any })
         } catch { }
         const layerId = `${id}-line`
         const color = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
@@ -71,6 +71,7 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
                 map.setPaintProperty(layerId, 'line-color', color)
                 map.setPaintProperty(layerId, 'line-width', width)
                 map.setPaintProperty(layerId, 'line-opacity', opacity)
+                try { map.setPaintProperty(layerId, 'line-gradient', null) } catch { }
             }
         } catch { }
     }
