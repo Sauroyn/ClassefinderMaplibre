@@ -37,6 +37,11 @@ export default function NavigationModule({
     const devOverrideRef = useRef<boolean>(false)
     const routeCoordsRef = useRef<[number, number][]>([])
     const progressRef = useRef<number>(0)
+    const markerPositionRef = useRef<[number, number] | null>(null)
+    const isOnConnectorRef = useRef<boolean>(false)
+    const animationFrameRef = useRef<number | null>(null)
+    const lastRerouteTimeRef = useRef<number>(0)
+    const rerouteCountRef = useRef<number>(0)
 
     // Détection mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
@@ -48,10 +53,42 @@ export default function NavigationModule({
                 navigator.geolocation.clearWatch(watchIdRef.current)
                 watchIdRef.current = null
             }
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current)
+                animationFrameRef.current = null
+            }
             try { onRouteMarkerRef.current?.remove?.(); onRouteMarkerRef.current = null } catch { }
+
+            // Restore default user location display
+            try {
+                const map = getMap()
+                if (map) {
+                    const container = map.getContainer()
+                    if (container) {
+                        const userLocationDots = container.querySelectorAll('.maplibregl-user-location-dot, .mapboxgl-user-location-dot')
+                        userLocationDots.forEach((dot: any) => { dot.style.display = 'block' })
+                    }
+                }
+            } catch { }
+
             hasCenteredRef.current = false
+            markerPositionRef.current = null
+            isOnConnectorRef.current = false
             return
         }
+
+        // Hide default user location during navigation
+        try {
+            const map = getMap()
+            if (map) {
+                // Hide geolocate control marker
+                const container = map.getContainer()
+                if (container) {
+                    const userLocationDots = container.querySelectorAll('.maplibregl-user-location-dot, .mapboxgl-user-location-dot')
+                    userLocationDots.forEach((dot: any) => { dot.style.display = 'none' })
+                }
+            }
+        } catch { }
 
         // Get route coordinates and setup gradient
         const map = getMap()
@@ -102,6 +139,46 @@ export default function NavigationModule({
         // Start location tracking
         startLocationTracking()
 
+        // Add map click handler for connector line clicks
+        const mapInstance = getMap()
+        if (mapInstance) {
+            const onMapClick = (e: any) => {
+                try {
+                    // Check if click is on connector line area
+                    const clickCoords: [number, number] = [e.lngLat.lng, e.lngLat.lat]
+                    const routeCoords = routeCoordsRef.current
+                    if (routeCoords.length > 0) {
+                        // Project click onto route
+                        const projection = projectOntoRoute(clickCoords, routeCoords)
+                        const distanceFromRoute = haversineDistance(clickCoords, projection.point)
+
+                        // If click is reasonably close to route (within 100m), move marker there
+                        if (distanceFromRoute <= 100) {
+                            // Update progress and marker position
+                            progressRef.current = Math.max(progressRef.current, projection.progress)
+                            markerPositionRef.current = projection.point
+
+                            // Animate marker to new position
+                            animateMarkerTo(projection.point)
+                            updateRouteGradient()
+                            updateCurrentStep()
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error handling map click:', e)
+                }
+            }
+            mapInstance.on('click', onMapClick)
+
+            // Store click handler for cleanup
+            const cleanup = () => {
+                try {
+                    mapInstance.off('click', onMapClick)
+                } catch { }
+            }
+            return cleanup
+        }
+
         // Dev-only: listen to simulated positions
         const onDevPos = (e: any) => {
             try {
@@ -113,7 +190,7 @@ export default function NavigationModule({
                     watchIdRef.current = null
                 }
                 updateUserLocationOnMap(pos)
-                updateCurrentStep(pos)
+                updateCurrentStep()
             } catch { }
         }
         try { if (import.meta.env && import.meta.env.DEV) window.addEventListener('dev:fake-position', onDevPos as any) } catch { }
@@ -122,6 +199,10 @@ export default function NavigationModule({
             if (watchIdRef.current !== null) {
                 navigator.geolocation.clearWatch(watchIdRef.current)
                 watchIdRef.current = null
+            }
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current)
+                animationFrameRef.current = null
             }
             try { if (import.meta.env && import.meta.env.DEV) window.removeEventListener('dev:fake-position', onDevPos as any) } catch { }
         }
@@ -133,7 +214,7 @@ export default function NavigationModule({
         const options = {
             enableHighAccuracy: true,
             timeout: 10000,
-            maximumAge: 1000
+            maximumAge: 2000  // Increased to reduce frequency and avoid spam
         }
 
         watchIdRef.current = navigator.geolocation.watchPosition(
@@ -145,7 +226,7 @@ export default function NavigationModule({
                     heading: position.coords.heading || undefined
                 }
                 updateUserLocationOnMap(newPosition)
-                updateCurrentStep(newPosition)
+                updateCurrentStep()
             },
             (error) => {
                 console.warn('Erreur de géolocalisation:', error)
@@ -162,25 +243,46 @@ export default function NavigationModule({
         const routeCoords = routeCoordsRef.current
 
         try {
-            // Project user position onto route line
+            // Simple logic: marqueur suit la position GPS de l'utilisateur
+            // Pas de projection complexe qui cause des problèmes
+
+            // Project user position onto route line for progress calculation only
             const projection = projectOntoRoute(userCoords, routeCoords)
             const onRouteCoords = projection.point
             const progress = projection.progress
 
-            // Check if user is too far from route (> 50m)
+            // Check if user is too far from route with improved logic
             const distanceFromRoute = haversineDistance(userCoords, onRouteCoords)
-            if (distanceFromRoute > 50) {
-                // Trigger reroute
-                const ev = new CustomEvent('route:off', { detail: { distance: distanceFromRoute, coords: userCoords } })
-                window.dispatchEvent(ev)
+            const maxDistance = 200 // Increased tolerance to 200m
+            const currentTime = Date.now()
+
+            // Protection contre les boucles infinites de reroute
+            if (distanceFromRoute > maxDistance && markerPositionRef.current) {
+                // Éviter le spam : max 1 reroute par 10 secondes et max 3 reroutes au total
+                if (currentTime - lastRerouteTimeRef.current > 10000 && rerouteCountRef.current < 3) {
+                    console.warn('Triggering reroute: distance =', Math.round(distanceFromRoute), 'm')
+                    lastRerouteTimeRef.current = currentTime
+                    rerouteCountRef.current += 1
+                    const ev = new CustomEvent('route:off', { detail: { distance: distanceFromRoute, coords: userCoords } })
+                    window.dispatchEvent(ev)
+                }
                 return
             }
 
-            // Update progress (monotonic - never go backwards)
-            progressRef.current = Math.max(progressRef.current, progress)
+            // Set marker to user's ACTUAL GPS position (not projected)
+            markerPositionRef.current = userCoords
 
-            // Create/update marker on route line
+            // Update progress for gradient (based on projection)
+            if (progress >= progressRef.current) {
+                progressRef.current = progress
+                console.log('Progress updated to:', progress)
+            }
+
+            // Create/update marker with user's actual position and correct orientation
             if (!onRouteMarkerRef.current) {
+                // Calculer l'angle de direction
+                const bearing = calculateBearing(userCoords, routeCoords)
+
                 const el = document.createElement('div')
                 // Triangle marker pointing in direction of travel
                 el.style.width = '0'
@@ -189,29 +291,35 @@ export default function NavigationModule({
                 el.style.borderRight = '12px solid transparent'
                 el.style.borderBottom = '24px solid #007AFF'
                 el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                el.style.transform = `rotate(${bearing}deg)`
+                el.style.transformOrigin = 'center bottom'
 
                 onRouteMarkerRef.current = new maplibre.Marker({
                     element: el,
                     anchor: 'bottom'
                 })
-                    .setLngLat(onRouteCoords)
+                    .setLngLat(userCoords)
                     .addTo(map)
             } else {
-                onRouteMarkerRef.current.setLngLat(onRouteCoords)
+                // Smoothly move marker to user's position and update orientation
+                const bearing = calculateBearing(userCoords, routeCoords)
+                const el = onRouteMarkerRef.current.getElement()
+                if (el) {
+                    el.style.transform = `rotate(${bearing}deg)`
+                }
+                animateMarkerTo(userCoords)
             }
 
             // Update route color gradient based on progress
-            updateRouteGradient(progressRef.current)
+            updateRouteGradient()
 
-            // Center camera once, then follow smoothly
+            // Center camera on USER's actual position (pas d'animation constante pour éviter les bugs)
             if (!hasCenteredRef.current) {
-                try { map.jumpTo({ center: onRouteCoords, zoom: 18 }) } catch { }
+                try { map.jumpTo({ center: userCoords, zoom: 18 }) } catch { }
                 hasCenteredRef.current = true
-            } else {
-                map.easeTo({ center: onRouteCoords, duration: 500 })
             }
+            // Plus d'easeTo constant qui cause des problèmes de zoom
 
-            // Progress tracking is now handled above
         } catch (error) {
             console.warn('Erreur lors de la mise à jour de la position:', error)
         }
@@ -295,33 +403,204 @@ export default function NavigationModule({
         ]
     }
 
-    const updateRouteGradient = (progress: number) => {
+    // Calculer l'angle de direction pour orienter le triangle
+    const calculateBearing = (userCoords: [number, number], routeCoords: [number, number][]): number => {
+        if (routeCoords.length < 2) return 0
+
+        // Trouver la position actuelle sur la route
+        const projection = projectOntoRoute(userCoords, routeCoords)
+        const currentProgress = projection.progress
+
+        // Calculer la distance totale
+        let totalDistance = 0
+        for (let i = 0; i < routeCoords.length - 1; i++) {
+            totalDistance += haversineDistance(routeCoords[i], routeCoords[i + 1])
+        }
+
+        // Trouver le segment actuel et le point suivant
+        let targetDistance = currentProgress * totalDistance
+        let currentDistance = 0
+
+        for (let i = 0; i < routeCoords.length - 1; i++) {
+            const segmentDistance = haversineDistance(routeCoords[i], routeCoords[i + 1])
+            if (currentDistance + segmentDistance >= targetDistance) {
+                // Utiliser ce segment pour calculer la direction
+                const from = routeCoords[i]
+                const to = routeCoords[i + 1]
+
+                // Formule correcte pour calculer le bearing géographique
+                const lat1 = from[1] * Math.PI / 180
+                const lat2 = to[1] * Math.PI / 180
+                const deltaLng = (to[0] - from[0]) * Math.PI / 180
+
+                const y = Math.sin(deltaLng) * Math.cos(lat2)
+                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng)
+
+                let bearing = Math.atan2(y, x) * 180 / Math.PI
+                // Normaliser l'angle entre 0 et 360
+                bearing = (bearing + 360) % 360
+                return bearing
+            }
+            currentDistance += segmentDistance
+        }
+
+        // Fallback: utiliser la direction du dernier segment
+        if (routeCoords.length >= 2) {
+            const from = routeCoords[routeCoords.length - 2]
+            const to = routeCoords[routeCoords.length - 1]
+
+            const lat1 = from[1] * Math.PI / 180
+            const lat2 = to[1] * Math.PI / 180
+            const deltaLng = (to[0] - from[0]) * Math.PI / 180
+
+            const y = Math.sin(deltaLng) * Math.cos(lat2)
+            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng)
+
+            let bearing = Math.atan2(y, x) * 180 / Math.PI
+            bearing = (bearing + 360) % 360
+            return bearing
+        }
+
+        return 0
+    }
+
+    const updateRouteGradient = () => {
         const map = getMap()
         if (!map || !route) return
 
         try {
             if (map.getLayer && map.getLayer(route.layerId)) {
-                // Use step function to create sharp color transition
-                const threshold = Math.max(0, Math.min(1, progress))
-                map.setPaintProperty(route.layerId, 'line-gradient', [
-                    'step',
-                    ['line-progress'],
-                    '#9aa0a6', // gray for completed section
-                    threshold,
-                    '#007AFF'  // blue for remaining section
-                ])
+                // Calculate progress based on user's position on route
+                const userCoords = markerPositionRef.current
+                if (!userCoords) return
+
+                const routeCoords = routeCoordsRef.current
+                const projection = projectOntoRoute(userCoords, routeCoords)
+                const actualProgress = Math.max(0, Math.min(0.98, projection.progress))
+
+                // SOLUTION: Créer une LineString continue pour que le gradient fonctionne sur toute la ligne
+                const source = map.getSource(route.id)
+                if (source && source._data) {
+                    // Créer une seule LineString continue avec tous les points de la route
+                    const continuousLineData = {
+                        type: 'FeatureCollection',
+                        features: [{
+                            type: 'Feature',
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: routeCoords
+                            },
+                            properties: {}
+                        }]
+                    }
+
+                    // Recréer la source avec la LineString continue et lineMetrics
+                    map.removeLayer(route.layerId)
+                    map.removeSource(route.id)
+                    map.addSource(route.id, {
+                        type: 'geojson',
+                        data: continuousLineData,
+                        lineMetrics: true
+                    })
+                    map.addLayer({
+                        id: route.layerId,
+                        type: 'line',
+                        source: route.id,
+                        paint: {
+                            'line-width': 8,
+                            'line-opacity': 1
+                        },
+                        layout: {
+                            'line-cap': 'round',
+                            'line-join': 'round'
+                        }
+                    })
+                }
+
+                if (actualProgress < 0.01) {
+                    // Start: all blue (not yet started)
+                    map.setPaintProperty(route.layerId, 'line-gradient', [
+                        'interpolate',
+                        ['linear'],
+                        ['line-progress'],
+                        0, '#007AFF',
+                        1, '#007AFF'
+                    ])
+                } else {
+                    // COULEURS CORRIGÉES: gris pour parcouru, bleu pour à venir
+                    map.setPaintProperty(route.layerId, 'line-gradient', [
+                        'interpolate',
+                        ['linear'],
+                        ['line-progress'],
+                        0, '#9aa0a6',                    // gris depuis le début (parcouru)
+                        actualProgress, '#9aa0a6',       // gris jusqu'à la position actuelle
+                        actualProgress + 0.01, '#007AFF', // bleu commence juste après
+                        1, '#007AFF'                     // bleu jusqu'à la fin (à venir)
+                    ])
+                }
             }
         } catch (e) {
             console.warn('Error updating gradient:', e)
+            // Fallback: solid blue color
+            try {
+                map.setPaintProperty(route.layerId, 'line-color', '#007AFF')
+            } catch { }
         }
     }
 
     // Remove unused function
 
-    const updateCurrentStep = (position: any) => {
+    const animateMarkerTo = (targetCoords: [number, number]) => {
+        if (!onRouteMarkerRef.current) return
+
+        const currentLngLat = onRouteMarkerRef.current.getLngLat()
+        const currentCoords: [number, number] = [currentLngLat.lng, currentLngLat.lat]
+
+        // Calculate distance to see if animation is needed
+        const distance = haversineDistance(currentCoords, targetCoords)
+        if (distance < 1) {
+            // Too small to animate, just set position
+            onRouteMarkerRef.current.setLngLat(targetCoords)
+            return
+        }
+
+        // Cancel any existing animation
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current)
+        }
+
+        // Animate smoothly over 300ms
+        const startTime = Date.now()
+        const duration = 300
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime
+            const progress = Math.min(elapsed / duration, 1)
+
+            // Easing function for smooth animation
+            const eased = 1 - Math.pow(1 - progress, 3)
+
+            const currentLng = currentCoords[0] + (targetCoords[0] - currentCoords[0]) * eased
+            const currentLat = currentCoords[1] + (targetCoords[1] - currentCoords[1]) * eased
+
+            onRouteMarkerRef.current?.setLngLat([currentLng, currentLat])
+
+            if (progress < 1) {
+                animationFrameRef.current = requestAnimationFrame(animate)
+            } else {
+                animationFrameRef.current = null
+            }
+        }
+
+        animationFrameRef.current = requestAnimationFrame(animate)
+    }
+
+    const updateCurrentStep = () => {
         if (!steps || steps.length === 0) return
 
-        const userCoords: [number, number] = [position.longitude, position.latitude]
+        // Use actual marker position (which is now user's real GPS position)
+        const userCoords = markerPositionRef.current
+        if (!userCoords) return
 
         // Check if user is close to next step
         for (let i = currentStepIndex; i < steps.length; i++) {
@@ -330,14 +609,14 @@ export default function NavigationModule({
                 const stepCoords = step.coordinates[0] as [number, number]
                 const distance = haversineDistance(userCoords, stepCoords)
 
-                if (distance <= 20) { // 20 meters tolerance
+                if (distance <= 30) { // 30 meters tolerance for user position
                     setCurrentStepIndex(i)
                     break
                 }
             }
         }
 
-        // Calculate distance to next step
+        // Calculate distance to next step from user position
         const nextStep = steps[currentStepIndex + 1]
         if (nextStep && nextStep.coordinates && nextStep.coordinates[0]) {
             const nextStepCoords = nextStep.coordinates[0] as [number, number]

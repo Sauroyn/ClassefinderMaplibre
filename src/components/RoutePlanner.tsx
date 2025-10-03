@@ -480,36 +480,8 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     }
 
     return (
-        <div className="route-planner" style={{
-            position: 'absolute',
-            top: isMobile ? 0 : 10,
-            left: isMobile ? 0 : 10,
-            right: isMobile ? 0 : 'auto',
-            background: 'var(--panel-bg, white)',
-            color: 'var(--panel-fg, #111)',
-            padding: 8,
-            borderRadius: isMobile ? 0 : 6,
-            zIndex: 20,
-            width: isMobile ? '100%' : 360,
-            boxSizing: 'border-box',
-            border: isMobile ? 'none' : '1px solid var(--panel-border, #ddd)',
-            boxShadow: isMobile ? 'none' : '0 4px 12px rgba(0,0,0,0.18)'
-        }}>
-            <div style={{ position: 'relative', marginBottom: 6 }}>
-                {onClose && <button onClick={() => {
-                    try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { }
-                    // Fermer toutes les modales mobiles
-                    setShowRouteSheet(false)
-                    setShowRouteDetail(false)
-                    setIsNavigating(false)
-                    setSelectedRoute(null)
-                    setNavigationSteps([])
-                    if (onClose) onClose()
-                }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
-                <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
-                <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
-            </div>
-            {/* Bandeau de navigation visible pendant le trajet (mobile + desktop) */}
+        <>
+            {/* Bandeau de navigation visible pendant le trajet (mobile + desktop) - SORTI du div route-planner */}
             {isNavigating && navigationSteps && navigationSteps.length > 0 && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0,
@@ -535,111 +507,144 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     )}
                 </div>
             )}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                <Inputs
-                    startQuery={startQuery}
-                    endQuery={endQuery}
-                    setStartQuery={setStartQuery}
-                    setEndQuery={setEndQuery}
-                    nodeOptions={nodeOptions}
-                    setFocusedField={setFocusedField}
-                    onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
-                    onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
-                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null) }}
-                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null) }}
-                />
 
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>
+            <div className="route-planner" style={{
+                position: 'absolute',
+                top: isMobile ? 0 : 10,
+                left: isMobile ? 0 : 10,
+                right: isMobile ? 0 : 'auto',
+                background: 'var(--panel-bg, white)',
+                color: 'var(--panel-fg, #111)',
+                padding: 8,
+                borderRadius: isMobile ? 0 : 6,
+                zIndex: 20,
+                width: isMobile ? '100%' : 360,
+                boxSizing: 'border-box',
+                border: isMobile ? 'none' : '1px solid var(--panel-border, #ddd)',
+                boxShadow: isMobile ? 'none' : '0 4px 12px rgba(0,0,0,0.18)',
+                // Masquer le planificateur pendant la navigation
+                display: isNavigating ? 'none' : 'block'
+            }}>
+                <div style={{ position: 'relative', marginBottom: 6 }}>
+                    {onClose && <button onClick={() => {
+                        try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { }
+                        // Fermer toutes les modales mobiles
+                        setShowRouteSheet(false)
+                        setShowRouteDetail(false)
+                        setIsNavigating(false)
+                        setSelectedRoute(null)
+                        setNavigationSteps([])
+                        if (onClose) onClose()
+                    }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
+                    <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
+                    <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
                 </div>
-                {showSettings && (
-                    <SettingsPopover
-                        excludeStairs={excludeStairs}
-                        coveredOnly={coveredOnly}
-                        showSecondary={showSecondary}
-                        onChangeExcludeStairs={setExcludeStairs}
-                        onChangeCoveredOnly={setCoveredOnly}
-                        onChangeShowSecondary={setShowSecondary}
-                        onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                    <Inputs
+                        startQuery={startQuery}
+                        endQuery={endQuery}
+                        setStartQuery={setStartQuery}
+                        setEndQuery={setEndQuery}
+                        nodeOptions={nodeOptions}
+                        setFocusedField={setFocusedField}
+                        onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
+                        onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
+                        onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null) }}
+                        onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null) }}
                     />
-                )}
-            </div>
 
-            {/* Bottom suggestion panel inside planner container (full width under inputs) */}
-            <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
-                <div style={{ marginBottom: 8 }}>
-                    {/* Always show existing routes first (if any), then suggestions beneath when a field is focused */}
-                    {routes && routes.length > 0 && !isMobile && (
-                        <RoutesList
-                            routes={routes}
-                            highlightedRoute={highlightedRoute}
-                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
-                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
-                            onGo={(rt: any) => {
-                                // Sur desktop, simplement mettre en évidence l'itinéraire
-                                if (!isMobile) {
-                                    setHighlightedRoute(rt.layerId);
-                                    highlightRouteLayer(rt.layerId);
-                                } else {
-                                    // Sur mobile, ouvrir les détails
-                                    handleSelectRoute(rt);
-                                }
-                            }}
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>
+                    </div>
+                    {showSettings && (
+                        <SettingsPopover
+                            excludeStairs={excludeStairs}
+                            coveredOnly={coveredOnly}
+                            showSecondary={showSecondary}
+                            onChangeExcludeStairs={setExcludeStairs}
+                            onChangeCoveredOnly={setCoveredOnly}
+                            onChangeShowSecondary={setShowSecondary}
+                            onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
                         />
                     )}
-                    <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
                 </div>
+
+                {/* Bottom suggestion panel inside planner container (full width under inputs) */}
+                <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
+                    <div style={{ marginBottom: 8 }}>
+                        {/* Always show existing routes first (if any), then suggestions beneath when a field is focused */}
+                        {routes && routes.length > 0 && !isMobile && (
+                            <RoutesList
+                                routes={routes}
+                                highlightedRoute={highlightedRoute}
+                                onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
+                                onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
+                                onGo={(rt: any) => {
+                                    // Sur desktop, simplement mettre en évidence l'itinéraire
+                                    if (!isMobile) {
+                                        setHighlightedRoute(rt.layerId);
+                                        highlightRouteLayer(rt.layerId);
+                                    } else {
+                                        // Sur mobile, ouvrir les détails
+                                        handleSelectRoute(rt);
+                                    }
+                                }}
+                            />
+                        )}
+                        <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
+                    </div>
+                </div>
+
+                {/* Modales pour mobile */}
+                <RouteSheetModal
+                    isOpen={showRouteSheet && !isNavigating}
+                    routes={routes}
+                    highlightedRoute={highlightedRoute}
+                    onSelectRoute={handleSelectRoute}
+                />            <RouteDetailModal
+                    isOpen={showRouteDetail && !isNavigating}
+                    onClose={() => {
+                        // réinitialiser les couleurs à la fermeture du détail
+                        try {
+                            const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
+                            if (map) {
+                                routes.forEach((rt: any) => {
+                                    try { map.setPaintProperty(rt.layerId, 'line-gradient', null) } catch { }
+                                    let idx = -1
+                                    try { const m = /route-planner-(\d+)-line/.exec(rt.layerId); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
+                                    const baseColor = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
+                                    try { map.setPaintProperty(rt.layerId, 'line-color', baseColor) } catch { }
+                                })
+                            }
+                        } catch { }
+                        setShowRouteDetail(false)
+                    }}
+                    mapRef={mapRef}
+                    route={selectedRoute}
+                    graph={graph}
+                    onStartNavigation={handleStartNavigation}
+                    onSaveRoute={handleSaveRoute}
+                />
+
+                {/* Module de navigation */}
+                <NavigationModule
+                    isActive={isNavigating}
+                    route={selectedRoute}
+                    steps={navigationSteps}
+                    mapRef={mapRef}
+                    graph={graph}
+                />
+
+                {/* Feuille de navigation mobile */}
+                <NavigationSheetModal
+                    isOpen={isNavigating}
+                    steps={navigationSteps}
+                    currentStepIndex={currentStepIndex}
+                    etaMinutes={etaMinutes}
+                    remainingDistance={remainingDistance}
+                    onStop={handleFinishNavigation}
+                />
             </div>
-
-            {/* Modales pour mobile */}
-            <RouteSheetModal
-                isOpen={showRouteSheet && !isNavigating}
-                routes={routes}
-                highlightedRoute={highlightedRoute}
-                onSelectRoute={handleSelectRoute}
-            />            <RouteDetailModal
-                isOpen={showRouteDetail && !isNavigating}
-                onClose={() => {
-                    // réinitialiser les couleurs à la fermeture du détail
-                    try {
-                        const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
-                        if (map) {
-                            routes.forEach((rt: any) => {
-                                try { map.setPaintProperty(rt.layerId, 'line-gradient', null) } catch { }
-                                let idx = -1
-                                try { const m = /route-planner-(\d+)-line/.exec(rt.layerId); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
-                                const baseColor = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
-                                try { map.setPaintProperty(rt.layerId, 'line-color', baseColor) } catch { }
-                            })
-                        }
-                    } catch { }
-                    setShowRouteDetail(false)
-                }}
-                mapRef={mapRef}
-                route={selectedRoute}
-                graph={graph}
-                onStartNavigation={handleStartNavigation}
-                onSaveRoute={handleSaveRoute}
-            />
-
-            {/* Module de navigation */}
-            <NavigationModule
-                isActive={isNavigating}
-                route={selectedRoute}
-                steps={navigationSteps}
-                mapRef={mapRef}
-                graph={graph}
-            />
-
-            {/* Feuille de navigation mobile */}
-            <NavigationSheetModal
-                isOpen={isNavigating}
-                steps={navigationSteps}
-                currentStepIndex={currentStepIndex}
-                etaMinutes={etaMinutes}
-                remainingDistance={remainingDistance}
-                onStop={handleFinishNavigation}
-            />
-        </div>
+        </>
     )
 }
