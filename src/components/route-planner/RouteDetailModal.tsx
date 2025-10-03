@@ -2,6 +2,7 @@ import { Sheet } from 'react-modal-sheet'
 import { generateRouteSteps, getDirectionIcon, type RouteStep } from './RouteStepsGenerator'
 import { useEffect, useRef, useState } from 'react'
 import type { SheetRef } from 'react-modal-sheet'
+import { focusPoint } from '../../map/viewportDynamic'
 
 type Route = {
     id: string
@@ -20,6 +21,7 @@ type Props = {
     graph: any
     onStartNavigation: () => void
     onSaveRoute: (route: Route, name: string) => void
+    mapRef?: any
 }
 
 export default function RouteDetailModal({
@@ -28,7 +30,8 @@ export default function RouteDetailModal({
     route,
     graph,
     onStartNavigation,
-    onSaveRoute
+    onSaveRoute,
+    mapRef
 }: Props) {
     const sheetRef = useRef<SheetRef | null>(null)
     const [steps, setSteps] = useState<RouteStep[]>([])
@@ -88,8 +91,8 @@ export default function RouteDetailModal({
                     try { sheetRef.current.snapTo(1) } catch { }
                 }
             }}
-            snapPoints={[0, 0.95, 1]}
-            initialSnap={1}
+            snapPoints={[0, 0.08, 0.3, 0.65, 0.95, 1]}
+            initialSnap={3}
             style={{ zIndex: 1100 }}
         >
             <Sheet.Container>
@@ -188,6 +191,13 @@ export default function RouteDetailModal({
                                 {steps.map((step, index) => (
                                     <div
                                         key={step.id}
+                                        onClick={() => {
+                                            try {
+                                                const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
+                                                const coords = step.coordinates?.[0]
+                                                if (map && coords) focusPoint(map, coords as [number, number], { zoom: 18 })
+                                            } catch { }
+                                        }}
                                         style={{
                                             display: 'flex',
                                             gap: '12px',
@@ -196,7 +206,8 @@ export default function RouteDetailModal({
                                             background: index === 0 || step.id === 'end' ?
                                                 'var(--primary-bg-light, #f0f8ff)' :
                                                 'var(--panel-bg-alt, #f8f9fa)',
-                                            border: '1px solid var(--panel-border, #e0e0e0)'
+                                            border: '1px solid var(--panel-border, #e0e0e0)',
+                                            cursor: 'pointer'
                                         }}
                                     >
                                         <div style={{

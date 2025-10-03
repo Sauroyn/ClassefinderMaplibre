@@ -8,8 +8,22 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
     const { graph, start, end, excludeStairs, coveredOnly = false, mapRef, k = 3, draw = true, userOriginLngLat } = params
     if (!graph) return null
     const ks = preparePaths(graph, String(start), String(end), { excludeStairs, coveredOnly, k })
-    if (!ks || ks.length === 0) return null
     const map = (mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current)))
+    if (!ks || ks.length === 0) {
+        // Fallback: if drawing on map and we have a user origin, draw a straight connector to nearest graph node
+        if (map && draw && userOriginLngLat) {
+            const nodeById = new Map<string, any>(graph.nodes.map((n: any) => [String(n.id), n]))
+            const combinedCoords: number[][] = []
+            try {
+                drawUserConnector(map, graph, [], userOriginLngLat, nodeById, combinedCoords)
+                placeMarkers(map, graph, String(start), String(end), [], userOriginLngLat)
+                if (combinedCoords.length === 0) combinedCoords.push(userOriginLngLat)
+                fitToCombined(map, combinedCoords)
+            } catch { /* ignore */ }
+            return { routes: [] }
+        }
+        return null
+    }
     if (!map || !draw) {
         const nodeById = new Map<string, any>(graph.nodes.map((n: any) => [String(n.id), n]))
         const routesOut: Array<any> = []

@@ -8,7 +8,8 @@ import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 import RouteSheetModal from './route-planner/RouteSheetModal'
 import RouteDetailModal from './route-planner/RouteDetailModal'
-import NavigationModule from './route-planner/NavigationModule'
+import NavigationModule from './route-planner/NavigationModuleSimple'
+import NavigationSheetModal from './route-planner/NavigationSheetModal'
 import { generateRouteSteps } from './route-planner/RouteStepsGenerator'
 import { saveRoute } from '../utils/savedRoutes'
 
@@ -124,10 +125,17 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
     const [isNavigating, setIsNavigating] = useState<boolean>(false)
     const [navigationSteps, setNavigationSteps] = useState<any[]>([])
+    const [currentStepIndex, setCurrentStepIndex] = useState<number>(0)
+    const [etaMinutes, setEtaMinutes] = useState<number | null>(null)
+    const [remainingDistance, setRemainingDistance] = useState<number | null>(null)
+    const [distanceToNextStep, setDistanceToNextStep] = useState<number | null>(null)
     const [routeSheetDismissed, setRouteSheetDismissed] = useState<boolean>(false)
 
     // Détection mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
+    // exposer un accès global de secours pour les focus depuis les modales
+    try { (window as any).mapRef = mapRef } catch { }
+
     async function compute() {
         if (!graph) { console.warn('[RoutePlanner] no graph loaded'); return }
         // clear previous routes while computing and reset dismissed state
@@ -202,24 +210,45 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
 
     // Ecouter les évènements hors itinéraire pour recalculer
     useEffect(() => {
-        const onOff = () => {
+        const onOff = async (ev: any) => {
             if (!graph || !isNavigating || !selectedRoute) return
             try {
-                // on recalcule depuis la position utilisateur (USER_POSITION) jusqu'à la fin prévue
+                const detail = ev?.detail || {}
+                const coords: [number, number] | undefined = Array.isArray(detail.coords) && detail.coords.length === 2 ? detail.coords as [number, number] : undefined
+                let startId: string | null = null
+                if (coords) {
+                    // trouver le noeud le plus proche des coords
+                    let bestId: string | null = null
+                    let bestD = Infinity
+                    const toRad = (v: number) => v * Math.PI / 180
+                    const hav = (a: [number, number], b: [number, number]) => {
+                        const R = 6371000
+                        const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
+                        const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
+                        const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
+                        const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
+                        return R * c
+                    }
+                    for (const n of graph.nodes) {
+                        const d = hav(coords, n.coord as [number, number])
+                        if (d < bestD) { bestD = d; bestId = String(n.id) }
+                    }
+                    startId = bestId
+                }
+
+                // Fallback: utiliser USER_POSITION si on n'a pas de coords
+                const effectiveStart = startId || 'USER_POSITION'
                 const endId = end
-                computeAndDrawRoute({ graph, start: 'USER_POSITION', end: endId, excludeStairs, coveredOnly, mapRef, k: showSecondary ? 3 : 1 })
-                    .then(res => {
-                        if (res && res.routes && res.routes.length) {
-                            setRoutes(res.routes)
-                            const primary = res.routes[0]
-                            setSelectedRoute(primary)
-                            try {
-                                const steps = generateRouteSteps(graph, primary.path)
-                                setNavigationSteps(steps)
-                            } catch { }
-                        }
-                    })
-                    .catch(() => { })
+                const res = await computeAndDrawRoute({ graph, start: effectiveStart, end: endId, excludeStairs, coveredOnly, mapRef, k: showSecondary ? 3 : 1, userOriginLngLat: coords })
+                if (res && res.routes && res.routes.length) {
+                    setRoutes(res.routes)
+                    const primary = res.routes[0]
+                    setSelectedRoute(primary)
+                    try {
+                        const steps = generateRouteSteps(graph, primary.path)
+                        setNavigationSteps(steps)
+                    } catch { }
+                }
             } catch { }
         }
         window.addEventListener('route:off', onOff as any)
@@ -254,18 +283,61 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                         let idx = -1
                         try { const m = /route-planner-(\d+)-line/.exec(lyr.id); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
                         const baseColor = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
-                        try { map.setPaintProperty(lyr.id, 'line-gradient', null) } catch { }
-                        try { map.setPaintProperty(lyr.id, 'line-color', baseColor) } catch { }
+                        try { if (map.getLayer && map.getLayer(lyr.id)) map.setPaintProperty(lyr.id, 'line-gradient', null) } catch { }
+                        try { if (map.getLayer && map.getLayer(lyr.id)) map.setPaintProperty(lyr.id, 'line-color', baseColor) } catch { }
                     }
                 }
                 // colorer la sélection en bleu
-                try { map.setPaintProperty(route.layerId, 'line-color', '#007AFF') } catch { }
+                try { if (map.getLayer && map.getLayer(route.layerId)) map.setPaintProperty(route.layerId, 'line-color', '#007AFF') } catch { }
             }
         } catch (e) { }
     }
 
-    const handleStartNavigation = () => {
+    const handleStartNavigation = async () => {
+        // Vérifier la distance au départ
+        try {
+            if (graph && selectedRoute) {
+                const startNodeId = String(selectedRoute.path[0])
+                const node = graph.nodes.find((n: any) => String(n.id) === startNodeId)
+                if (node && navigator.geolocation) {
+                    const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }))
+                    const from: [number, number] = [pos.coords.longitude, pos.coords.latitude]
+                    const to: [number, number] = node.coord
+                    const d = (() => {
+                        const toRad = (v: number) => v * Math.PI / 180
+                        const R = 6371000
+                        const dLat = toRad(to[1] - from[1])
+                        const dLon = toRad(to[0] - from[0])
+                        const lat1 = toRad(from[1])
+                        const lat2 = toRad(to[1])
+                        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
+                        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+                    })()
+                    if (d > 60) {
+                        // Afficher un message non bloquant avec 2 options
+                        const acceptUseHere = confirm("Vous êtes loin du départ de l'itinéraire. Voulez-vous démarrer depuis votre position actuelle ?")
+                        if (acceptUseHere) {
+                            // Recalculer avec start = USER_POSITION
+                            const endId = end
+                            try {
+                                const res = await computeAndDrawRoute({ graph, start: 'USER_POSITION', end: endId, excludeStairs, coveredOnly, mapRef, k: showSecondary ? 3 : 1 })
+                                if (res && res.routes && res.routes.length) {
+                                    setRoutes(res.routes)
+                                    setSelectedRoute(res.routes[0])
+                                    const steps = generateRouteSteps(graph, res.routes[0].path)
+                                    setNavigationSteps(steps)
+                                }
+                            } catch { }
+                        } else {
+                            alert('Modifiez le point de départ puis relancez \"Démarrer\".')
+                            return
+                        }
+                    }
+                }
+            }
+        } catch { }
         setShowRouteDetail(false)
+        setShowRouteSheet(false)
         setIsNavigating(true)
     }
 
@@ -273,6 +345,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         setIsNavigating(false)
         setSelectedRoute(null)
         setNavigationSteps([])
+        setCurrentStepIndex(0)
 
         // Remettre la carte en vue normale
         const map = mapRef && mapRef.current && (
@@ -290,18 +363,33 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 // Réafficher tous les itinéraires
                 routes.forEach((route) => {
                     try {
-                        map.setLayoutProperty(route.layerId, 'visibility', 'visible')
+                        if (map.getLayer && map.getLayer(route.layerId)) map.setLayoutProperty(route.layerId, 'visibility', 'visible')
                         // enlever tout dégradé de progression et restaurer couleurs de base
-                        try { map.setPaintProperty(route.layerId, 'line-gradient', null) } catch { }
+                        try { if (map.getLayer && map.getLayer(route.layerId)) map.setPaintProperty(route.layerId, 'line-gradient', null) } catch { }
                         let idx = -1
                         try { const m = /route-planner-(\d+)-line/.exec(route.layerId); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
                         const baseColor = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
-                        try { map.setPaintProperty(route.layerId, 'line-color', baseColor) } catch { }
+                        try { if (map.getLayer && map.getLayer(route.layerId)) map.setPaintProperty(route.layerId, 'line-color', baseColor) } catch { }
                     } catch (e) { }
                 })
             } catch (e) { }
         }
     }
+
+    // recevoir updates du module de navigation (étape en cours, ETA)
+    useEffect(() => {
+        const onNavState = (e: any) => {
+            try {
+                const d = e.detail || {}
+                if (typeof d.currentStepIndex === 'number') setCurrentStepIndex(d.currentStepIndex)
+                if (typeof d.etaMinutes === 'number') setEtaMinutes(d.etaMinutes)
+                if (typeof d.remainingDistance === 'number') setRemainingDistance(d.remainingDistance)
+                if (typeof d.distanceToNextStep === 'number' || d.distanceToNextStep === null) setDistanceToNextStep(d.distanceToNextStep)
+            } catch { }
+        }
+        window.addEventListener('nav:state', onNavState as any)
+        return () => { window.removeEventListener('nav:state', onNavState as any) }
+    }, [])
 
     const handleSaveRoute = (route: any, name: string) => {
         try {
@@ -386,8 +474,8 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         if (!map) return
         // reset all route layers to default opacity and width
         routes.forEach((r) => {
-            try { map.setPaintProperty(r.layerId, 'line-width', r.layerId === layerId ? 22 : (r.layerId === 'route-planner-0-line' ? 18 : 12)) } catch (e) { }
-            try { map.setPaintProperty(r.layerId, 'line-opacity', r.layerId === layerId ? 1 : 0.6) } catch (e) { }
+            try { if (map.getLayer && map.getLayer(r.layerId)) map.setPaintProperty(r.layerId, 'line-width', r.layerId === layerId ? 22 : (r.layerId === 'route-planner-0-line' ? 18 : 12)) } catch (e) { }
+            try { if (map.getLayer && map.getLayer(r.layerId)) map.setPaintProperty(r.layerId, 'line-opacity', r.layerId === layerId ? 1 : 0.6) } catch (e) { }
         })
     }
 
@@ -421,6 +509,32 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
                 <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
             </div>
+            {/* Bandeau de navigation visible pendant le trajet (mobile + desktop) */}
+            {isNavigating && navigationSteps && navigationSteps.length > 0 && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0,
+                    background: 'var(--primary-color, #007AFF)', color: 'white',
+                    padding: '10px 14px', zIndex: 100,
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+                }}>
+                    {navigationSteps[currentStepIndex + 1] ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>
+                                {navigationSteps[currentStepIndex + 1].instruction}
+                            </div>
+                            {distanceToNextStep != null && (
+                                <div style={{ fontSize: 14, opacity: 0.95 }}>{distanceToNextStep} m</div>
+                            )}
+                            {etaMinutes != null && (
+                                <div style={{ fontSize: 14, opacity: 0.95 }}>ETA {etaMinutes} min</div>
+                            )}
+                            <button onClick={handleFinishNavigation} style={{ marginLeft: 8, background: '#ff3b30', color: 'white', border: 'none', borderRadius: 8, padding: '6px 10px', fontWeight: 600 }}>Stop</button>
+                        </div>
+                    ) : (
+                        <div style={{ textAlign: 'center', fontWeight: 700 }}>Arrivée proche</div>
+                    )}
+                </div>
+            )}
             <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
                 <Inputs
                     startQuery={startQuery}
@@ -501,6 +615,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     } catch { }
                     setShowRouteDetail(false)
                 }}
+                mapRef={mapRef}
                 route={selectedRoute}
                 graph={graph}
                 onStartNavigation={handleStartNavigation}
@@ -514,7 +629,16 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 steps={navigationSteps}
                 mapRef={mapRef}
                 graph={graph}
-                onFinishNavigation={handleFinishNavigation}
+            />
+
+            {/* Feuille de navigation mobile */}
+            <NavigationSheetModal
+                isOpen={isNavigating}
+                steps={navigationSteps}
+                currentStepIndex={currentStepIndex}
+                etaMinutes={etaMinutes}
+                remainingDistance={remainingDistance}
+                onStop={handleFinishNavigation}
             />
         </div>
     )

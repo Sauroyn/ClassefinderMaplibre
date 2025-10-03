@@ -1,5 +1,5 @@
 import maplibre from 'maplibre-gl'
-import { fitBoundsSmart } from './viewport'
+import { focusBounds, focusPoint } from './viewportDynamic'
 
 export function addInteractions(map: maplibre.Map, refs: any) {
     function setHover(id: number | null) {
@@ -34,7 +34,7 @@ export function addInteractions(map: maplibre.Map, refs: any) {
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
                 for (const c of ring) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
                 if (isFinite(minX)) {
-                    fitBoundsSmart(map, [[minX, minY], [maxX, maxY]])
+                    focusBounds(map, [[minX, minY], [maxX, maxY]])
                     try { window.dispatchEvent(new CustomEvent('map:feature-click', { detail: feat })) } catch (e) { }
                     return
                 }
@@ -49,7 +49,7 @@ export function addInteractions(map: maplibre.Map, refs: any) {
                     if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
                 }
                 if (best) {
-                    fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]])
+                    focusBounds(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]])
                     try { window.dispatchEvent(new CustomEvent('map:feature-click', { detail: feat })) } catch (e) { }
                     return
                 }
@@ -57,16 +57,7 @@ export function addInteractions(map: maplibre.Map, refs: any) {
         }
         const center = (e.lngLat && [e.lngLat.lng, e.lngLat.lat]) as [number, number] | undefined
         // only flyTo if the center point is outside current view to avoid jitter
-        if (center) {
-            try {
-                const p = map.project(center as any)
-                const w = map.getCanvas().width, h = map.getCanvas().height
-                // keep 10px margin
-                if (p.x < 10 || p.x > w - 10 || p.y < 10 || p.y > h - 10) {
-                    map.flyTo({ center, zoom: 16 })
-                }
-            } catch (e) { try { map.flyTo({ center, zoom: 16 }) } catch (e) { } }
-        }
+        if (center) { try { focusPoint(map, center as any, { zoom: 16 }) } catch { } }
         // dispatch a global event so UI components can react to feature clicks
         try { window.dispatchEvent(new CustomEvent('map:feature-click', { detail: feat })) } catch (e) { }
     }

@@ -68,12 +68,14 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
             if (!map.getLayer || !map.getLayer(layerId)) {
                 map.addLayer({ id: layerId, type: 'line', source: id, paint: { 'line-color': color, 'line-width': width, 'line-opacity': opacity }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
             } else {
-                map.setPaintProperty(layerId, 'line-color', color)
-                map.setPaintProperty(layerId, 'line-width', width)
-                map.setPaintProperty(layerId, 'line-opacity', opacity)
-                try { map.setPaintProperty(layerId, 'line-gradient', null) } catch { }
+                if (map.getLayer && map.getLayer(layerId)) {
+                    map.setPaintProperty(layerId, 'line-color', color)
+                    map.setPaintProperty(layerId, 'line-width', width)
+                    map.setPaintProperty(layerId, 'line-opacity', opacity)
+                    try { map.setPaintProperty(layerId, 'line-gradient', null) } catch { }
+                }
             }
         } catch { }
     }
-    try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
+    try { if (map.moveLayer && map.getLayer && map.getLayer('route-planner-0-line')) map.moveLayer('route-planner-0-line') } catch { }
 }

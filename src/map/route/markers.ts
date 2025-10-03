@@ -1,4 +1,5 @@
 import maplibre from 'maplibre-gl'
+import { haversine } from '../measure'
 
 export const USER_CONNECTOR_LEVEL = 1
 export const USER_CONNECTOR_COLOR = '#ff8888ff'
@@ -6,15 +7,32 @@ export const USER_CONNECTOR_OPACITY = 0.55
 export const USER_CONNECTOR_WIDTH = 8
 
 export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLngLat?: [number, number], nodeById?: Map<string, any>, combinedCoords?: number[][]) {
-    if (!userOriginLngLat || !ks || ks.length === 0) return
+    if (!userOriginLngLat) return
     const nb = nodeById || new Map<string, any>(graph.nodes.map((n: any) => [String(n.id), n]))
-    const startNodeId = String(ks[0].path[0])
-    const startNode = nb.get(startNodeId)
-    if (!startNode || !Array.isArray(startNode.coord)) return
+    let targetCoord: [number, number] | null = null
+    if (ks && ks.length > 0) {
+        const startNodeId = String(ks[0].path[0])
+        const startNode = nb.get(startNodeId)
+        if (startNode && Array.isArray(startNode.coord)) targetCoord = startNode.coord as [number, number]
+    }
+    // Fallback: no route available -> connect to nearest graph node
+    if (!targetCoord) {
+        try {
+            let best: [number, number] | null = null
+            let bestD = Infinity
+            for (const n of graph.nodes) {
+                const c = n.coord as [number, number]
+                const d = haversine(userOriginLngLat, c)
+                if (d < bestD) { bestD = d; best = c }
+            }
+            targetCoord = best
+        } catch { /* ignore */ }
+    }
+    if (!targetCoord) return
     const connId = 'route-planner-user-connector'
     const fc = {
         type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, startNode.coord] }, properties: { level: USER_CONNECTOR_LEVEL } }]
+        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, targetCoord] }, properties: { level: USER_CONNECTOR_LEVEL } }]
     }
     if (map.getSource && map.getSource(connId)) (map.getSource(connId) as any).setData(fc as any)
     else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc })
@@ -22,11 +40,11 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
     if (!map.getLayer || !map.getLayer(layerId)) {
         map.addLayer({ id: layerId, type: 'line', source: connId, paint: { 'line-color': USER_CONNECTOR_COLOR, 'line-width': USER_CONNECTOR_WIDTH, 'line-opacity': USER_CONNECTOR_OPACITY }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
     } else {
-        map.setPaintProperty(layerId, 'line-color', USER_CONNECTOR_COLOR)
-        map.setPaintProperty(layerId, 'line-width', USER_CONNECTOR_WIDTH)
-        map.setPaintProperty(layerId, 'line-opacity', USER_CONNECTOR_OPACITY)
+        try { if (map.getLayer && map.getLayer(layerId)) map.setPaintProperty(layerId, 'line-color', USER_CONNECTOR_COLOR) } catch { }
+        try { if (map.getLayer && map.getLayer(layerId)) map.setPaintProperty(layerId, 'line-width', USER_CONNECTOR_WIDTH) } catch { }
+        try { if (map.getLayer && map.getLayer(layerId)) map.setPaintProperty(layerId, 'line-opacity', USER_CONNECTOR_OPACITY) } catch { }
     }
-    try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
+    try { if (map.moveLayer && map.getLayer && map.getLayer('route-planner-0-line')) map.moveLayer('route-planner-0-line') } catch { }
     try { combinedCoords && combinedCoords.push(userOriginLngLat as any) } catch { }
 }
 

@@ -6,7 +6,8 @@ import { addFillLayers, addNameLayer } from '../map/layers'
 import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
 import { USER_CONNECTOR_COLOR, USER_CONNECTOR_OPACITY, USER_CONNECTOR_WIDTH } from '../map/route/markers'
-import { fitBoundsSmart } from '../map/viewport'
+// viewport helpers
+import { focusBounds } from '../map/viewportDynamic'
 
 type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
 
@@ -122,6 +123,20 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             }
 
             if (map.loaded()) { saveInit(); loadRouteIcons() } else map.on('load', () => { saveInit(); loadRouteIcons() })
+
+            // Dev-only simulated user position: click on empty map to set a fake user location
+            try {
+                if (import.meta.env && import.meta.env.DEV) {
+                    map.on('click', (e: any) => {
+                        const features = map.queryRenderedFeatures(e.point, { layers: ['buildings-fill', 'buildings-extrusion'] })
+                        if (!features || features.length === 0) {
+                            const fake: [number, number] = [e.lngLat.lng, e.lngLat.lat]
+                                ; (window as any).__DEV_FAKE_POS__ = fake
+                            try { window.dispatchEvent(new CustomEvent('dev:fake-position', { detail: fake })) } catch { }
+                        }
+                    })
+                }
+            } catch { }
             return () => { map.remove(); mapRef.current = null }
         })()
     }, [])
@@ -329,7 +344,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
                     const coords = feat.geometry.coordinates[0]
                     for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                    if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
+                    if (isFinite(minX)) { focusBounds(map, [[minX, minY], [maxX, maxY]]); return }
                 } else if (feat.geometry.type === 'MultiPolygon') {
                     let best: { area: number, bounds: [number, number, number, number] } | null = null
                     for (const poly of feat.geometry.coordinates) {
@@ -339,7 +354,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         a = Math.abs(a) / 2
                         if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
                     }
-                    if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
+                    if (best) { focusBounds(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
                 }
             }
             // if feature wasn't found in the source, try to find it in latestDataRef (search results when data not yet added)
@@ -353,7 +368,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
                             const coords = geom.coordinates[0]
                             for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
+                            if (isFinite(minX)) { focusBounds(map, [[minX, minY], [maxX, maxY]]); return }
                         } else if (geom.type === 'MultiPolygon') {
                             let best: { area: number, bounds: [number, number, number, number] } | null = null
                             for (const poly of geom.coordinates) {
@@ -363,7 +378,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                 a = Math.abs(a) / 2
                                 if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
                             }
-                            if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
+                            if (best) { focusBounds(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
                         }
                     }
                 }
@@ -622,7 +637,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             } catch { }
                             try { map.setFilter(layerId, routeFilter) } catch { }
                         }
-                        try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
+                        try { if (map.moveLayer && map.getLayer && map.getLayer('route-planner-0-line')) map.moveLayer('route-planner-0-line') } catch { }
                     } catch { }
                 } catch (e) { }
                 // restore camera

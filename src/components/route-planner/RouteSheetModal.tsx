@@ -42,8 +42,8 @@ export default function RouteSheetModal({
                     try { sheetRef.current.snapTo(2) } catch { }
                 }
             }}
-            snapPoints={[0, 0.4, 0.7, 1]} // Ajouter le 0 pour satisfaire react-modal-sheet
-            initialSnap={2} // Index 2 = 0.7 (70%)
+            snapPoints={[0, 0.05, 0.25, 0.5, 0.88, 1]}
+            initialSnap={2} // index 2 -> 0.25 (ouvert modestement)
             onSnap={(index) => {
                 // Ne rien faire sur snap 0 pour empêcher la fermeture
                 if (index === 0) {
