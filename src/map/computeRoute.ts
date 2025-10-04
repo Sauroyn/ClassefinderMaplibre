@@ -36,6 +36,11 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 const b = nodeById.get(String(ids[i]))
                 if (a && b) dist += haversine(a.coord as [number, number], b.coord as [number, number])
             }
+            // Add connector distance if user origin is provided (approx: to first node)
+            if (userOriginLngLat && ids.length > 0) {
+                const first = nodeById.get(String(ids[0]))
+                if (first && first.coord) dist += haversine(userOriginLngLat, first.coord as [number, number])
+            }
             const speed = 1.4
             const timeSec = dist / speed
             const gid = `route-planner-${idx}`
@@ -63,6 +68,17 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 }
             }
         }
+        // Add connector distance from its source if available
+        try {
+            if (userOriginLngLat) {
+                const connSrc: any = map.getSource && map.getSource('route-planner-user-connector')
+                const data = connSrc && connSrc._data
+                if (data && data.features && data.features[0] && data.features[0].geometry && data.features[0].geometry.type === 'LineString') {
+                    const cc = data.features[0].geometry.coordinates
+                    for (let j = 1; j < cc.length; j++) dist += haversine(cc[j - 1] as [number, number], cc[j] as [number, number])
+                }
+            }
+        } catch { /* ignore */ }
         const speed = 1.4
         const timeSec = dist / speed
         routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line` })

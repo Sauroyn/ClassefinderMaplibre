@@ -42,6 +42,7 @@ export default function NavigationModule({
     const animationFrameRef = useRef<number | null>(null)
     const lastRerouteTimeRef = useRef<number>(0)
     const rerouteCountRef = useRef<number>(0)
+    const isSimulatingClickRef = useRef<boolean>(false)
 
     // Détection mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
@@ -74,6 +75,8 @@ export default function NavigationModule({
             hasCenteredRef.current = false
             markerPositionRef.current = null
             isOnConnectorRef.current = false
+            devOverrideRef.current = false
+            isSimulatingClickRef.current = false
             return
         }
 
@@ -90,12 +93,12 @@ export default function NavigationModule({
             }
         } catch { }
 
-        // Get route coordinates and setup gradient
+        // Get route coordinates (including connector if present) and setup gradient
         const map = getMap()
         if (map && route.layerId) {
             try {
-                // Get route coordinates from graph
-                const coords = getRouteCoordinates()
+                // Build full coordinates including connector segment (user -> first graph node) when present
+                const coords = getFullRouteCoordinates()
                 routeCoordsRef.current = coords
                 progressRef.current = 0
 
@@ -139,61 +142,108 @@ export default function NavigationModule({
         // Start location tracking
         startLocationTracking()
 
-        // Add map click handler for connector line clicks
+        // Determine whether simulation features are enabled (strictly dev/local or explicit opt-in)
+        const simEnabled = (() => {
+            try {
+                const isDev = !!(import.meta as any).env?.DEV
+                const host = typeof window !== 'undefined' ? window.location.hostname : ''
+                const isLocal = host === 'localhost' || host === '127.0.0.1'
+                const hasOptIn = typeof window !== 'undefined' && /(?:^|[?&])sim=1(?:&|$)/.test(window.location.search)
+                return isDev || isLocal || hasOptIn
+            } catch {
+                return false
+            }
+        })()
+
+        // Add map click handler for tests to simulate position (DEV/local only)
         const mapInstance = getMap()
-        if (mapInstance) {
+        if (mapInstance && simEnabled) {
             const onMapClick = (e: any) => {
                 try {
-                    // Check if click is on connector line area
+                    // Activate simulation mode and stop geolocation updates for good
+                    if (!isSimulatingClickRef.current) {
+                        if ((import.meta as any).env?.DEV) {
+                            console.log('Click simulation activated. Geolocation is now ignored.')
+                        }
+                        isSimulatingClickRef.current = true
+                        if (watchIdRef.current !== null) {
+                            navigator.geolocation.clearWatch(watchIdRef.current)
+                            watchIdRef.current = null
+                        }
+                    }
+                    devOverrideRef.current = true; // Also set this for good measure
+
+                    // Simulate user click by snapping to the closest point on the route
                     const clickCoords: [number, number] = [e.lngLat.lng, e.lngLat.lat]
                     const routeCoords = routeCoordsRef.current
                     if (routeCoords.length > 0) {
-                        // Project click onto route
                         const projection = projectOntoRoute(clickCoords, routeCoords)
                         const distanceFromRoute = haversineDistance(clickCoords, projection.point)
 
-                        // If click is reasonably close to route (within 100m), move marker there
+                        // Only accept clicks reasonably close to the path (<= 100m)
                         if (distanceFromRoute <= 100) {
-                            // Update progress and marker position
                             progressRef.current = Math.max(progressRef.current, projection.progress)
                             markerPositionRef.current = projection.point
 
-                            // Animate marker to new position
+                            // Ensure marker exists and update its position and orientation
+                            ensureMarkerExists(projection.point)
                             animateMarkerTo(projection.point)
+                            updateMarkerOrientation(projection.point)
                             updateRouteGradient()
                             updateCurrentStep()
+
+                            // Center on simulated position the first time
+                            if (!hasCenteredRef.current) {
+                                try { mapInstance?.jumpTo({ center: projection.point, zoom: 18 }) } catch { }
+                                hasCenteredRef.current = true
+                            }
                         }
                     }
-                } catch (e) {
-                    console.warn('Error handling map click:', e)
+                } catch (err) {
+                    console.warn('Error handling map click:', err)
                 }
             }
             mapInstance.on('click', onMapClick)
 
             // Store click handler for cleanup
-            const cleanup = () => {
+            return () => {
                 try {
                     mapInstance.off('click', onMapClick)
                 } catch { }
             }
-            return cleanup
         }
 
-        // Dev-only: listen to simulated positions
+        // Keep marker orientation in sync with map bearing changes
+        const mapForRotation = mapInstance
+        const onRotate = () => {
+            try {
+                const pos = markerPositionRef.current
+                if (pos) updateMarkerOrientation(pos)
+            } catch { }
+        }
+        try { mapForRotation?.on?.('rotate', onRotate) } catch { }
+        try { mapForRotation?.on?.('move', onRotate) } catch { }
+
+        // Dev/local-only: listen to simulated positions from other tools
         const onDevPos = (e: any) => {
+            if (!simEnabled) return
             try {
                 const d = e.detail as [number, number]
                 const pos = { longitude: d[0], latitude: d[1], accuracy: 5 }
                 devOverrideRef.current = true
                 if (watchIdRef.current !== null) {
-                    try { navigator.geolocation.clearWatch(watchIdRef.current) } catch { }
+                    navigator.geolocation.clearWatch(watchIdRef.current)
                     watchIdRef.current = null
                 }
+                // Mark this update as simulation-allowed
+                ; (pos as any).__allowSimOverride = true
                 updateUserLocationOnMap(pos)
                 updateCurrentStep()
             } catch { }
         }
-        try { if (import.meta.env && import.meta.env.DEV) window.addEventListener('dev:fake-position', onDevPos as any) } catch { }
+        if (simEnabled) {
+            window.addEventListener('dev:fake-position', onDevPos as any)
+        }
 
         return () => {
             if (watchIdRef.current !== null) {
@@ -204,21 +254,31 @@ export default function NavigationModule({
                 cancelAnimationFrame(animationFrameRef.current)
                 animationFrameRef.current = null
             }
-            try { if (import.meta.env && import.meta.env.DEV) window.removeEventListener('dev:fake-position', onDevPos as any) } catch { }
+            if (simEnabled) {
+                try { window.removeEventListener('dev:fake-position', onDevPos as any) } catch { }
+            }
+            try { mapForRotation?.off?.('rotate', onRotate) } catch { }
+            try { mapForRotation?.off?.('move', onRotate) } catch { }
         }
     }, [isActive, route, isMobile])
 
     const startLocationTracking = () => {
-        if (!navigator.geolocation || devOverrideRef.current) return
+        // Do not start tracking if we are in simulation mode
+        if (!navigator.geolocation || devOverrideRef.current || isSimulatingClickRef.current) {
+            return
+        }
 
         const options = {
             enableHighAccuracy: true,
             timeout: 10000,
-            maximumAge: 2000  // Increased to reduce frequency and avoid spam
+            maximumAge: 2000
         }
 
         watchIdRef.current = navigator.geolocation.watchPosition(
             (position) => {
+                // Double-check to ignore updates if simulation was activated after starting
+                if (isSimulatingClickRef.current) return
+
                 const newPosition = {
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
@@ -239,6 +299,11 @@ export default function NavigationModule({
         const map = getMap()
         if (!map) return
 
+        // If a simulation click is active, ignore geolocation updates unless explicitly allowed
+        if (isSimulatingClickRef.current && !position?.__allowSimOverride) {
+            return
+        }
+
         const userCoords: [number, number] = [position.longitude, position.latitude]
         const routeCoords = routeCoordsRef.current
 
@@ -253,24 +318,48 @@ export default function NavigationModule({
 
             // Check if user is too far from route with improved logic
             const distanceFromRoute = haversineDistance(userCoords, onRouteCoords)
-            const maxDistance = 200 // Increased tolerance to 200m
+            const maxDistance = 100 // Distance tolerance from route
             const currentTime = Date.now()
 
+            // Vérifier si l'utilisateur est sur la ligne de connexion (connector line)
+            let isOnConnector = false
+            try {
+                const map = getMap()
+                if (map && map.getSource && map.getSource('route-planner-user-connector')) {
+                    // Si la ligne de connexion existe, l'utilisateur peut être dessus
+                    isOnConnector = true
+                    isOnConnectorRef.current = true
+                }
+            } catch { }
+
             // Protection contre les boucles infinites de reroute
-            if (distanceFromRoute > maxDistance && markerPositionRef.current) {
+            // NE PAS rerouter si l'utilisateur est sur la ligne de connexion
+            if (distanceFromRoute > maxDistance && markerPositionRef.current && !isOnConnector && !isOnConnectorRef.current) {
                 // Éviter le spam : max 1 reroute par 10 secondes et max 3 reroutes au total
                 if (currentTime - lastRerouteTimeRef.current > 10000 && rerouteCountRef.current < 3) {
-                    console.warn('Triggering reroute: distance =', Math.round(distanceFromRoute), 'm')
+                    console.warn('Triggering reroute: distance =', Math.round(distanceFromRoute), 'm (not on connector)')
                     lastRerouteTimeRef.current = currentTime
                     rerouteCountRef.current += 1
                     const ev = new CustomEvent('route:off', { detail: { distance: distanceFromRoute, coords: userCoords } })
                     window.dispatchEvent(ev)
                 }
                 return
+            }            // Déterminer la position du marqueur : position utilisateur OU position sur la route
+            let markerCoords = userCoords
+
+            // Si l'utilisateur est proche de la route (< 50m), placer le marqueur sur la route
+            if (distanceFromRoute <= 50) {
+                markerCoords = onRouteCoords
+                // Reset le compteur de reroute si on revient sur la route
+                rerouteCountRef.current = 0
+                isOnConnectorRef.current = false
+            } else {
+                // Sinon, garder le marqueur à la position de l'utilisateur (sur la ligne de connexion)
+                markerCoords = userCoords
             }
 
-            // Set marker to user's ACTUAL GPS position (not projected)
-            markerPositionRef.current = userCoords
+            // Set marker position
+            markerPositionRef.current = markerCoords
 
             // Update progress for gradient (based on projection)
             if (progress >= progressRef.current) {
@@ -278,44 +367,19 @@ export default function NavigationModule({
                 console.log('Progress updated to:', progress)
             }
 
-            // Create/update marker with user's actual position and correct orientation
-            if (!onRouteMarkerRef.current) {
-                // Calculer l'angle de direction
-                const bearing = calculateBearing(userCoords, routeCoords)
-
-                const el = document.createElement('div')
-                // Triangle marker pointing in direction of travel
-                el.style.width = '0'
-                el.style.height = '0'
-                el.style.borderLeft = '12px solid transparent'
-                el.style.borderRight = '12px solid transparent'
-                el.style.borderBottom = '24px solid #007AFF'
-                el.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-                el.style.transform = `rotate(${bearing}deg)`
-                el.style.transformOrigin = 'center bottom'
-
-                onRouteMarkerRef.current = new maplibre.Marker({
-                    element: el,
-                    anchor: 'bottom'
-                })
-                    .setLngLat(userCoords)
-                    .addTo(map)
-            } else {
-                // Smoothly move marker to user's position and update orientation
-                const bearing = calculateBearing(userCoords, routeCoords)
-                const el = onRouteMarkerRef.current.getElement()
-                if (el) {
-                    el.style.transform = `rotate(${bearing}deg)`
-                }
-                animateMarkerTo(userCoords)
-            }
-
+            // Create/update marker with determined position and correct orientation
+            ensureMarkerExists(markerCoords)
+            updateMarkerOrientation(markerCoords)
+            animateMarkerTo(markerCoords)
             // Update route color gradient based on progress
             updateRouteGradient()
 
-            // Center camera on USER's actual position (pas d'animation constante pour éviter les bugs)
+            // Center camera on the active marker position (simulated or real) only once
             if (!hasCenteredRef.current) {
-                try { map.jumpTo({ center: userCoords, zoom: 18 }) } catch { }
+                const centerCoords = (isSimulatingClickRef.current && markerPositionRef.current)
+                    ? markerPositionRef.current
+                    : userCoords
+                try { map.jumpTo({ center: centerCoords as [number, number], zoom: 18 }) } catch { }
                 hasCenteredRef.current = true
             }
             // Plus d'easeTo constant qui cause des problèmes de zoom
@@ -346,15 +410,57 @@ export default function NavigationModule({
         }
     }
 
+    // Retrieve the connector line coordinates if drawn (user origin -> nearest graph node)
+    const getConnectorCoordinates = (): [number, number][] => {
+        try {
+            const map = getMap()
+            const src: any = map && map.getSource ? map.getSource('route-planner-user-connector') : null
+            const data = src && src._data
+            if (data && data.features && data.features.length) {
+                const f = data.features[0]
+                if (f && f.geometry && f.geometry.type === 'LineString' && Array.isArray(f.geometry.coordinates)) {
+                    return (f.geometry.coordinates as [number, number][])
+                }
+            }
+        } catch { }
+        return []
+    }
+
+    // Combine connector + graph path into a single continuous polyline
+    const getFullRouteCoordinates = (): [number, number][] => {
+        const graphCoords = getRouteCoordinates()
+        const connector = getConnectorCoordinates()
+        if (!connector.length) return graphCoords
+        if (!graphCoords.length) return connector
+
+        const startOfGraph = graphCoords[0]
+        const endOfConnector = connector[connector.length - 1]
+        const d = haversineDistance(startOfGraph, endOfConnector)
+        if (d < 1e-3) {
+            // Same point (or extremely close): merge without duplication
+            return [...connector.slice(0, connector.length - 1), ...graphCoords]
+        }
+        // Otherwise just concatenate (best-effort)
+        return [...connector, ...graphCoords]
+    }
+
     const projectOntoRoute = (userCoords: [number, number], routeCoords: [number, number][]): { point: [number, number], progress: number } => {
+        const det = projectOntoRouteDetailed(userCoords, routeCoords)
+        return { point: det.point, progress: det.progress }
+    }
+
+    // Detailed projection: also return segment index and local parameter t within segment
+    const projectOntoRouteDetailed = (userCoords: [number, number], routeCoords: [number, number][]): { point: [number, number], progress: number, segIndex: number, t: number } => {
         if (routeCoords.length < 2) {
-            return { point: userCoords, progress: 0 }
+            return { point: userCoords, progress: 0, segIndex: 0, t: 0 }
         }
 
         let closestPoint = routeCoords[0]
         let minDistance = Infinity
         let totalDistance = 0
         let reachedDistance = 0
+        let bestSegIndex = 0
+        let bestT = 0
 
         // Calculate total route distance
         for (let i = 0; i < routeCoords.length - 1; i++) {
@@ -366,23 +472,27 @@ export default function NavigationModule({
         for (let i = 0; i < routeCoords.length - 1; i++) {
             const segmentStart = routeCoords[i]
             const segmentEnd = routeCoords[i + 1]
-            const projected = projectPointOnSegment(userCoords, segmentStart, segmentEnd)
+            const { point: projected, t } = projectPointOnSegmentWithT(userCoords, segmentStart, segmentEnd)
             const distance = haversineDistance(userCoords, projected)
 
             if (distance < minDistance) {
                 minDistance = distance
                 closestPoint = projected
                 reachedDistance = currentDistance + haversineDistance(segmentStart, projected)
+                bestSegIndex = i
+                bestT = t
             }
 
             currentDistance += haversineDistance(segmentStart, segmentEnd)
         }
 
         const progress = totalDistance > 0 ? Math.min(1, reachedDistance / totalDistance) : 0
-        return { point: closestPoint, progress }
+        return { point: closestPoint, progress, segIndex: bestSegIndex, t: bestT }
     }
 
-    const projectPointOnSegment = (point: [number, number], segStart: [number, number], segEnd: [number, number]): [number, number] => {
+    // (legacy helper removed; use projectPointOnSegmentWithT)
+
+    const projectPointOnSegmentWithT = (point: [number, number], segStart: [number, number], segEnd: [number, number]): { point: [number, number], t: number } => {
         const A = point[0] - segStart[0]
         const B = point[1] - segStart[1]
         const C = segEnd[0] - segStart[0]
@@ -390,78 +500,129 @@ export default function NavigationModule({
 
         const dot = A * C + B * D
         const lenSq = C * C + D * D
-
-        if (lenSq === 0) return segStart
-
+        if (lenSq === 0) return { point: segStart, t: 0 }
         let param = dot / lenSq
-        if (param < 0) return segStart
-        if (param > 1) return segEnd
-
-        return [
-            segStart[0] + param * C,
-            segStart[1] + param * D
-        ]
+        if (param < 0) return { point: segStart, t: 0 }
+        if (param > 1) return { point: segEnd, t: 1 }
+        return { point: [segStart[0] + param * C, segStart[1] + param * D], t: param }
     }
 
-    // Calculer l'angle de direction pour orienter le triangle
-    const calculateBearing = (userCoords: [number, number], routeCoords: [number, number][]): number => {
-        if (routeCoords.length < 2) return 0
+    // (bearing helpers removed; orientation now computed in screen space)
 
-        // Trouver la position actuelle sur la route
-        const projection = projectOntoRoute(userCoords, routeCoords)
-        const currentProgress = projection.progress
+    // Crée le marqueur si besoin
+    const ensureMarkerExists = (coords: [number, number]) => {
+        const map = getMap()
+        if (!map) return
+        if (!onRouteMarkerRef.current) {
+            // Outer container (MapLibre will apply translate transforms here for positioning)
+            const el = document.createElement('div')
+            el.style.width = '28px'
+            el.style.height = '28px'
+            el.style.display = 'flex'
+            el.style.alignItems = 'center'
+            el.style.justifyContent = 'center'
+            el.style.pointerEvents = 'none'
 
-        // Calculer la distance totale
-        let totalDistance = 0
-        for (let i = 0; i < routeCoords.length - 1; i++) {
-            totalDistance += haversineDistance(routeCoords[i], routeCoords[i + 1])
+            // Inner rotatable container for the arrow (we'll rotate this, not the outer element)
+            const rot = document.createElement('div')
+            rot.className = 'nav-arrow-rot'
+            rot.style.width = '24px'
+            rot.style.height = '24px'
+            rot.style.display = 'flex'
+            rot.style.alignItems = 'center'
+            rot.style.justifyContent = 'center'
+            rot.style.transformOrigin = '50% 50%'
+            rot.style.willChange = 'transform'
+
+            // SVG arrow pointing UP by default
+            const svgNS = 'http://www.w3.org/2000/svg'
+            const svg = document.createElementNS(svgNS, 'svg')
+            svg.setAttribute('width', '24')
+            svg.setAttribute('height', '24')
+            svg.setAttribute('viewBox', '0 0 24 24')
+            svg.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+
+            const path = document.createElementNS(svgNS, 'path')
+            // Simple arrow (triangle) pointing up
+            path.setAttribute('d', 'M12 2 L20 18 L12 14 L4 18 Z')
+            path.setAttribute('fill', '#007AFF')
+            svg.appendChild(path)
+            rot.appendChild(svg)
+            el.appendChild(rot)
+
+            onRouteMarkerRef.current = new maplibre.Marker({ element: el, anchor: 'center' })
+                .setLngLat(coords)
+                .addTo(map)
         }
+    }
 
-        // Trouver le segment actuel et le point suivant
-        let targetDistance = currentProgress * totalDistance
-        let currentDistance = 0
+    // Met à jour l'orientation du marqueur selon la direction locale, en espace écran
+    const updateMarkerOrientation = (coords: [number, number]) => {
+        const routeCoords = routeCoordsRef.current
+        if (!onRouteMarkerRef.current || routeCoords.length < 2) return
 
-        for (let i = 0; i < routeCoords.length - 1; i++) {
-            const segmentDistance = haversineDistance(routeCoords[i], routeCoords[i + 1])
-            if (currentDistance + segmentDistance >= targetDistance) {
-                // Utiliser ce segment pour calculer la direction
-                const from = routeCoords[i]
-                const to = routeCoords[i + 1]
+        const map = getMap()
+        if (!map || !map.project) return
 
-                // Formule correcte pour calculer le bearing géographique
-                const lat1 = from[1] * Math.PI / 180
-                const lat2 = to[1] * Math.PI / 180
-                const deltaLng = (to[0] - from[0]) * Math.PI / 180
+        // Projection détaillée pour trouver le segment et avancer légèrement dans la direction du tracé
+        const det = projectOntoRouteDetailed(coords, routeCoords)
+        const p0 = det.point
+        const p1 = getPointAheadOnPolyline(routeCoords, det.segIndex, det.t, 8) || routeCoords[Math.min(det.segIndex + 1, routeCoords.length - 1)]
 
-                const y = Math.sin(deltaLng) * Math.cos(lat2)
-                const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng)
+        // Calculer l'angle en espace écran (y vers le bas). 0° = vers le haut.
+        const s0 = map.project({ lng: p0[0], lat: p0[1] })
+        const s1 = map.project({ lng: p1[0], lat: p1[1] })
+        const dx = s1.x - s0.x
+        const dy = s1.y - s0.y
+        const angleRad = Math.atan2(dx, -dy)
+        const rotation = (angleRad * 180 / Math.PI + 360) % 360
+        const el = onRouteMarkerRef.current.getElement()
+        const rotEl = el?.querySelector?.('.nav-arrow-rot') as HTMLElement | null
+        if (rotEl) {
+            rotEl.style.transform = `rotate(${rotation}deg)`
+        }
+    }
 
-                let bearing = Math.atan2(y, x) * 180 / Math.PI
-                // Normaliser l'angle entre 0 et 360
-                bearing = (bearing + 360) % 360
-                return bearing
+    // Avance d'une distance en mètres le long de la polyligne à partir d'un point (segment index + t)
+    const getPointAheadOnPolyline = (coords: [number, number][], segIndex: number, t: number, distanceMeters: number): [number, number] | null => {
+        let i = segIndex
+        let localT = t
+        let remaining = distanceMeters
+        // avancer sur le segment courant
+        const advanceOnSegment = (a: [number, number], b: [number, number], fromT: number, dist: number): { point: [number, number], used: number } => {
+            const segLen = haversineDistance(a, b)
+            const remLen = segLen * (1 - fromT)
+            if (remLen <= 1e-6) return { point: b, used: 0 }
+            const use = Math.min(remLen, dist)
+            const dt = (use / segLen)
+            const newT = Math.min(1, fromT + dt)
+            const p: [number, number] = [a[0] + (b[0] - a[0]) * newT, a[1] + (b[1] - a[1]) * newT]
+            return { point: p, used: use }
+        }
+        let a = coords[i]
+        let b = coords[i + 1]
+        if (!a || !b) return null
+        // point de départ exact
+        const start: [number, number] = [a[0] + (b[0] - a[0]) * localT, a[1] + (b[1] - a[1]) * localT]
+        let currentPoint = start
+        let remainingToUse = remaining
+        // avancer tant qu'il reste
+        while (remainingToUse > 0 && i < coords.length - 1) {
+            a = coords[i]
+            b = coords[i + 1]
+            const { point, used } = advanceOnSegment(a, b, localT, remainingToUse)
+            currentPoint = point
+            remainingToUse -= used
+            if (localT + (used / Math.max(1e-6, haversineDistance(a, b))) >= 1 - 1e-9) {
+                // passer au segment suivant
+                i += 1
+                localT = 0
+            } else {
+                // assez avancé sur le segment courant
+                break
             }
-            currentDistance += segmentDistance
         }
-
-        // Fallback: utiliser la direction du dernier segment
-        if (routeCoords.length >= 2) {
-            const from = routeCoords[routeCoords.length - 2]
-            const to = routeCoords[routeCoords.length - 1]
-
-            const lat1 = from[1] * Math.PI / 180
-            const lat2 = to[1] * Math.PI / 180
-            const deltaLng = (to[0] - from[0]) * Math.PI / 180
-
-            const y = Math.sin(deltaLng) * Math.cos(lat2)
-            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng)
-
-            let bearing = Math.atan2(y, x) * 180 / Math.PI
-            bearing = (bearing + 360) % 360
-            return bearing
-        }
-
-        return 0
+        return currentPoint
     }
 
     const updateRouteGradient = () => {
@@ -474,9 +635,10 @@ export default function NavigationModule({
                 const userCoords = markerPositionRef.current
                 if (!userCoords) return
 
-                const routeCoords = routeCoordsRef.current
+                // Always use the full polyline (connector + graph)
+                const routeCoords = routeCoordsRef.current.length ? routeCoordsRef.current : getFullRouteCoordinates()
                 const projection = projectOntoRoute(userCoords, routeCoords)
-                const actualProgress = Math.max(0, Math.min(0.98, projection.progress))
+                const actualProgress = Math.max(0, Math.min(1, projection.progress))
 
                 // SOLUTION: Créer une LineString continue pour que le gradient fonctionne sur toute la ligne
                 const source = map.getSource(route.id)
@@ -517,27 +679,14 @@ export default function NavigationModule({
                     })
                 }
 
-                if (actualProgress < 0.01) {
-                    // Start: all blue (not yet started)
-                    map.setPaintProperty(route.layerId, 'line-gradient', [
-                        'interpolate',
-                        ['linear'],
-                        ['line-progress'],
-                        0, '#007AFF',
-                        1, '#007AFF'
-                    ])
-                } else {
-                    // COULEURS CORRIGÉES: gris pour parcouru, bleu pour à venir
-                    map.setPaintProperty(route.layerId, 'line-gradient', [
-                        'interpolate',
-                        ['linear'],
-                        ['line-progress'],
-                        0, '#9aa0a6',                    // gris depuis le début (parcouru)
-                        actualProgress, '#9aa0a6',       // gris jusqu'à la position actuelle
-                        actualProgress + 0.01, '#007AFF', // bleu commence juste après
-                        1, '#007AFF'                     // bleu jusqu'à la fin (à venir)
-                    ])
-                }
+                // Hard step: grey up to progress, blue after
+                map.setPaintProperty(route.layerId, 'line-gradient', [
+                    'step',
+                    ['line-progress'],
+                    '#9aa0a6',
+                    actualProgress,
+                    '#007AFF'
+                ])
             }
         } catch (e) {
             console.warn('Error updating gradient:', e)
@@ -584,6 +733,7 @@ export default function NavigationModule({
             const currentLat = currentCoords[1] + (targetCoords[1] - currentCoords[1]) * eased
 
             onRouteMarkerRef.current?.setLngLat([currentLng, currentLat])
+            try { updateMarkerOrientation([currentLng, currentLat]) } catch { }
 
             if (progress < 1) {
                 animationFrameRef.current = requestAnimationFrame(animate)
@@ -626,8 +776,8 @@ export default function NavigationModule({
             setDistanceToNextStep(null)
         }
 
-        // Calculate remaining distance based on progress
-        const routeCoords = routeCoordsRef.current
+        // Calculate remaining distance based on progress over the full polyline
+        const routeCoords = routeCoordsRef.current.length ? routeCoordsRef.current : getFullRouteCoordinates()
         let totalRouteDistance = 0
         if (routeCoords.length > 1) {
             for (let i = 0; i < routeCoords.length - 1; i++) {
