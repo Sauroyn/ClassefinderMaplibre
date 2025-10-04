@@ -45,9 +45,12 @@ export default function NavigationModule({
     const rerouteCountRef = useRef<number>(0)
     const isSimulatingClickRef = useRef<boolean>(false)
     const finishedRef = useRef<boolean>(false)
-    // Progress overlay (single merged line with lineMetrics: true)
-    const progressSourceIdRef = useRef<string | null>(null)
-    const progressLayerIdRef = useRef<string | null>(null)
+    // Itinerary overlays (traveled/remaining) replacing unsupported line-gradient data expressions
+    const itinTraveledSrcRef = useRef<string | null>(null)
+    const itinRemainingSrcRef = useRef<string | null>(null)
+    const itinTraveledLyrRef = useRef<string | null>(null)
+    const itinRemainingLyrRef = useRef<string | null>(null)
+    const hiddenBaseRef = useRef<boolean>(false)
 
     // Détection mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
@@ -98,7 +101,7 @@ export default function NavigationModule({
             }
         } catch { }
 
-        // Get route coordinates (including connector if present) and setup gradient/overlay
+        // Get route coordinates (including connector if present)
         const map = getMap()
         if (map && route.layerId) {
             try {
@@ -107,8 +110,8 @@ export default function NavigationModule({
                 routeCoordsRef.current = built.coords
                 segmentMetaRef.current = built.segMeta
                 progressRef.current = 0
-                // Ensure a single merged overlay line exists for continuous gradient across the whole itinerary
-                ensureProgressOverlay()
+                // Initialize overlays and first render
+                rebuildItineraryOverlays(0)
             } catch (e) {
                 console.warn('Error setting up route:', e)
             }
@@ -229,8 +232,8 @@ export default function NavigationModule({
                 cancelAnimationFrame(animationFrameRef.current)
                 animationFrameRef.current = null
             }
-            // Cleanup progress overlay
-            try { removeProgressOverlay() } catch { }
+            // Cleanup itinerary overlays and restore base layers
+            try { removeItineraryOverlays(true) } catch { }
             if (simEnabled) {
                 try { window.removeEventListener('dev:fake-position', onDevPos as any) } catch { }
             }
@@ -341,7 +344,7 @@ export default function NavigationModule({
             // Update progress for gradient (based on projection)
             if (progress >= progressRef.current) {
                 progressRef.current = progress
-                console.log('Progress updated to:', progress)
+                // progress updated
             }
 
             // Create/update marker with determined position and correct orientation
@@ -350,8 +353,8 @@ export default function NavigationModule({
             animateMarkerTo(markerCoords)
             // Apply floor visibility + auto-switch based on segment level
             try { applyMarkerLevelVisibilityAndAutoSwitch(markerCoords) } catch { }
-            // Update route color gradient based on progress
-            updateRouteGradient()
+            // Update itinerary coloring based on progress
+            rebuildItineraryOverlays(progressRef.current)
 
             // Center camera on the active marker position (simulated or real) only once
             if (!hasCenteredRef.current) {
@@ -694,35 +697,16 @@ export default function NavigationModule({
     const updateRouteGradient = () => {
         const map = getMap()
         if (!map || !route) return
-
+        // Calculate progress based on user's position on route and rebuild overlays
         try {
-            // Ensure overlay exists and is updated
-            ensureProgressOverlay()
-
-            // Calculate progress based on user's position on route
             const userCoords = markerPositionRef.current
             if (!userCoords) return
-
             const routeCoords = routeCoordsRef.current.length ? routeCoordsRef.current : buildFullRouteWithLevels().coords
             const projection = projectOntoRoute(userCoords, routeCoords)
             const actualProgress = Math.max(0, Math.min(1, projection.progress))
-
-            const layerId = progressLayerIdRef.current
-            if (layerId && map.getLayer && map.getLayer(layerId)) {
-                try {
-                    map.setPaintProperty(layerId, 'line-gradient', [
-                        'step', ['line-progress'], '#9aa0a6',
-                        actualProgress, '#007AFF'
-                    ])
-                } catch { }
-            }
+            rebuildItineraryOverlays(actualProgress)
         } catch (e) {
-            console.warn('Error updating gradient:', e)
-            // Fallback: solid blue color
-            try {
-                const lid = progressLayerIdRef.current
-                if (lid && map.getLayer && map.getLayer(lid)) map.setPaintProperty(lid, 'line-color', '#007AFF')
-            } catch { }
+            console.warn('Error updating itinerary coloring:', e)
         }
     }
 
@@ -902,99 +886,179 @@ export default function NavigationModule({
         }
     }
 
-    // Create a single merged overlay line used purely for continuous progress gradient
-    const ensureProgressOverlay = () => {
+    // Build overlays for traveled/remaining parts of connector + route, preserving level/levels
+    const rebuildItineraryOverlays = (progress: number) => {
         const map = getMap()
         if (!map || !route) return
-        const srcId = progressSourceIdRef.current || `route-progress-${route.id}`
-        const lyrId = progressLayerIdRef.current || `route-progress-${route.id}-line`
-        progressSourceIdRef.current = srcId
-        progressLayerIdRef.current = lyrId
+        const conn = getConnectorFeature(map)
+        const feats = getRouteFeatures(map, route.id)
+        if (!feats) return
 
-        // Build or reuse merged coordinates and split by current level to preserve per-floor display
-        const built = routeCoordsRef.current.length ? { coords: routeCoordsRef.current, segMeta: segmentMetaRef.current } : buildFullRouteWithLevels()
-        const coords = built.coords
-        const segMeta = built.segMeta
-        const currentLevel: number | null = (() => { try { const v = (map as any).__currentLevel; return Number.isFinite(v) ? Number(v) : null } catch { return null } })()
-
-        // Collect LineStrings only for current level (avoid cross-floor drawing)
-        const lines: [number, number][][] = []
-        if (currentLevel != null && coords.length > 1 && segMeta.length === coords.length - 1) {
-            let currentLine: [number, number][] = []
-            for (let i = 0; i < coords.length - 1; i++) {
-                const meta = segMeta[i] || {}
-                const hasLevel = (lvl: number) => {
-                    const cands: number[] = []
-                    if (meta.level != null && Number.isFinite(Number(meta.level))) cands.push(Number(meta.level))
-                    if (Array.isArray(meta.levels)) for (const v of meta.levels) { const n = Number(v as any); if (!Number.isNaN(n)) cands.push(n) }
-                    return cands.includes(lvl)
-                }
-                const onThis = hasLevel(currentLevel)
-                if (onThis) {
-                    // start or continue the current line
-                    if (currentLine.length === 0) currentLine.push(coords[i])
-                    // avoid creating long straight connectors across gaps: split if too far from previous
-                    const prev = currentLine[currentLine.length - 1]
-                    const next = coords[i + 1]
-                    if (prev && next && haversineDistance(prev, next) > 50) {
-                        // flush the existing small line and start a new one
-                        if (currentLine.length >= 2) lines.push(currentLine)
-                        currentLine = [coords[i], next]
-                    } else {
-                        currentLine.push(next)
-                    }
-                } else {
-                    // flush current line
-                    if (currentLine.length >= 2) lines.push(currentLine)
-                    currentLine = []
-                }
+        const lenOf = (coords: [number, number][]) => {
+            let s = 0
+            for (let i = 1; i < coords.length; i++) s += haversineDistance(coords[i - 1], coords[i])
+            return s
+        }
+        let total = 0
+        const featList: Array<{ coords: [number, number][], props: any }> = []
+        if (conn && conn.geometry?.type === 'LineString') {
+            const c = conn.geometry.coordinates as [number, number][]
+            total += lenOf(c)
+            featList.push({ coords: c, props: conn.properties || {} })
+        }
+        for (const f of feats) {
+            if (f.geometry?.type === 'LineString') {
+                const c = f.geometry.coordinates as [number, number][]
+                total += lenOf(c)
+                featList.push({ coords: c, props: f.properties || {} })
             }
-            if (currentLine.length >= 2) lines.push(currentLine)
+        }
+        if (total <= 0) return
+        const cut = Math.max(0, Math.min(1, progress)) * total
+
+        const traveled: any[] = []
+        const remaining: any[] = []
+        let acc = 0
+        for (const item of featList) {
+            const L = lenOf(item.coords)
+            const start = acc
+            const end = acc + L
+            if (cut <= start + 1e-6) {
+                // entirely remaining
+                remaining.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: item.coords }, properties: { ...item.props } })
+            } else if (cut >= end - 1e-6) {
+                // entirely traveled
+                traveled.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: item.coords }, properties: { ...item.props } })
+            } else {
+                // split within this feature
+                const within = cut - start
+                const [pre, post] = splitLineStringByDistance(item.coords, within)
+                if (pre.length >= 2) traveled.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: pre }, properties: { ...item.props } })
+                if (post.length >= 2) remaining.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: post }, properties: { ...item.props } })
+            }
+            acc = end
         }
 
-        // Fallback: if no per-level lines, split the whole path into chunks to avoid big straight connectors
-        let fallbackLines: [number, number][][] = []
-        if (lines.length === 0 && coords.length > 1) {
-            let cur: [number, number][] = [coords[0]]
-            for (let i = 0; i < coords.length - 1; i++) {
-                const a = coords[i], b = coords[i + 1]
-                if (haversineDistance(a, b) > 50) {
-                    if (cur.length >= 2) fallbackLines.push(cur)
-                    cur = [b]
-                } else {
-                    cur.push(b)
-                }
+        const srcTr = itinTraveledSrcRef.current || `itinerary-${route.id}-traveled`
+        const srcRm = itinRemainingSrcRef.current || `itinerary-${route.id}-remaining`
+        const lyrTr = itinTraveledLyrRef.current || `itinerary-${route.id}-traveled-line`
+        const lyrRm = itinRemainingLyrRef.current || `itinerary-${route.id}-remaining-line`
+        itinTraveledSrcRef.current = srcTr
+        itinRemainingSrcRef.current = srcRm
+        itinTraveledLyrRef.current = lyrTr
+        itinRemainingLyrRef.current = lyrRm
+
+        const fcTr = { type: 'FeatureCollection', features: traveled }
+        const fcRm = { type: 'FeatureCollection', features: remaining }
+        try {
+            if (map.getSource && map.getSource(srcTr)) (map.getSource(srcTr) as any).setData(fcTr)
+            else if (map.addSource) map.addSource(srcTr, { type: 'geojson', data: fcTr })
+        } catch { }
+        try {
+            if (map.getSource && map.getSource(srcRm)) (map.getSource(srcRm) as any).setData(fcRm)
+            else if (map.addSource) map.addSource(srcRm, { type: 'geojson', data: fcRm })
+        } catch { }
+
+        // Route filter per current level
+        const mapAny = map as any
+        const level = mapAny.__currentLevel ?? null
+        const routeFilter: any = level == null ? true : [
+            'any',
+            ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+            ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
+            ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+        ]
+
+        // Layers
+        try {
+            if (!map.getLayer || !map.getLayer(lyrRm)) {
+                map.addLayer({ id: lyrRm, type: 'line', source: srcRm, paint: { 'line-color': '#9aa0a6', 'line-width': 18, 'line-opacity': 1 }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
             }
-            if (cur.length >= 2) fallbackLines.push(cur)
+            map.setFilter(lyrRm, routeFilter)
+        } catch { }
+        try {
+            if (!map.getLayer || !map.getLayer(lyrTr)) {
+                map.addLayer({ id: lyrTr, type: 'line', source: srcTr, paint: { 'line-color': '#007AFF', 'line-width': 18, 'line-opacity': 1 }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
+            }
+            map.setFilter(lyrTr, routeFilter)
+        } catch { }
+
+        // Ensure overlays above original selected route
+        try { if (map.moveLayer && route.layerId && map.getLayer(route.layerId)) map.moveLayer(lyrRm, route.layerId) } catch { }
+        try { if (map.moveLayer && route.layerId && map.getLayer(route.layerId)) map.moveLayer(lyrTr, lyrRm) } catch { }
+
+        // Hide base layers to avoid double drawing
+        if (!hiddenBaseRef.current) {
+            try { if (route.layerId && map.getLayer && map.getLayer(route.layerId)) map.setPaintProperty(route.layerId, 'line-opacity', 0) } catch { }
+            try { if (map.getLayer && map.getLayer('route-planner-user-connector-line')) map.setPaintProperty('route-planner-user-connector-line', 'line-opacity', 0) } catch { }
+            hiddenBaseRef.current = true
         }
-        const toDraw = lines.length > 0 ? lines : (fallbackLines.length > 0 ? fallbackLines : [coords])
-        const features = toDraw.map((line) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: line }, properties: {} }))
-        const fc = { type: 'FeatureCollection', features }
-        try {
-            if (map.getSource && map.getSource(srcId)) (map.getSource(srcId) as any).setData(fc)
-            else if (map.addSource) map.addSource(srcId, { type: 'geojson', data: fc, lineMetrics: true as any })
-        } catch { }
-        try {
-            if (!map.getLayer || !map.getLayer(lyrId)) {
-                map.addLayer({ id: lyrId, type: 'line', source: srcId, paint: { 'line-color': '#007AFF', 'line-width': 18, 'line-opacity': 1 }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
-                // Move overlay above the main selected route layer if possible
-                try { if (map.moveLayer && route.layerId && map.getLayer(route.layerId)) map.moveLayer(lyrId, route.layerId) } catch { }
-            }
-        } catch { }
     }
 
-    const removeProgressOverlay = () => {
+    const removeItineraryOverlays = (restoreBase: boolean) => {
         const map = getMap()
         if (!map) return
         try {
-            const lyrId = progressLayerIdRef.current
-            const srcId = progressSourceIdRef.current
-            if (lyrId && map.getLayer && map.getLayer(lyrId)) map.removeLayer(lyrId)
-            if (srcId && map.getSource && map.getSource(srcId)) map.removeSource(srcId)
+            const lyrTr = itinTraveledLyrRef.current
+            const lyrRm = itinRemainingLyrRef.current
+            const srcTr = itinTraveledSrcRef.current
+            const srcRm = itinRemainingSrcRef.current
+            if (lyrTr && map.getLayer && map.getLayer(lyrTr)) map.removeLayer(lyrTr)
+            if (lyrRm && map.getLayer && map.getLayer(lyrRm)) map.removeLayer(lyrRm)
+            if (srcTr && map.getSource && map.getSource(srcTr)) map.removeSource(srcTr)
+            if (srcRm && map.getSource && map.getSource(srcRm)) map.removeSource(srcRm)
         } catch { }
-        progressLayerIdRef.current = null
-        progressSourceIdRef.current = null
+        itinTraveledLyrRef.current = null
+        itinRemainingLyrRef.current = null
+        itinTraveledSrcRef.current = null
+        itinRemainingSrcRef.current = null
+        if (restoreBase) {
+            try { if (route && route.layerId && map.getLayer && map.getLayer(route.layerId)) map.setPaintProperty(route.layerId, 'line-opacity', 1) } catch { }
+            try { if (map.getLayer && map.getLayer('route-planner-user-connector-line')) map.setPaintProperty('route-planner-user-connector-line', 'line-opacity', 0.55) } catch { }
+            hiddenBaseRef.current = false
+        }
     }
+
+    const getConnectorFeature = (map: any): any | null => {
+        try {
+            const src: any = map.getSource && map.getSource('route-planner-user-connector')
+            const d = src ? src._data : null
+            if (d && d.features && d.features[0]) return d.features[0]
+        } catch { }
+        return null
+    }
+
+    const getRouteFeatures = (map: any, srcId: string): any[] | null => {
+        try {
+            const src: any = map.getSource && map.getSource(srcId)
+            const d = src ? src._data : null
+            if (d && Array.isArray(d.features)) return d.features
+        } catch { }
+        return null
+    }
+
+    const splitLineStringByDistance = (coords: [number, number][], cutMeters: number): [[number, number][], [number, number][]] => {
+        if (!coords || coords.length < 2 || cutMeters <= 0) return [[], coords.slice()]
+        let acc = 0
+        for (let i = 0; i < coords.length - 1; i++) {
+            const a = coords[i]
+            const b = coords[i + 1]
+            const seg = haversineDistance(a, b)
+            if (acc + seg < cutMeters) {
+                acc += seg
+                continue
+            }
+            const remain = cutMeters - acc
+            const t = Math.max(0, Math.min(1, remain / Math.max(1e-6, seg)))
+            const mid: [number, number] = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+            const pre = coords.slice(0, i + 1)
+            pre.push(mid)
+            const post = [mid, ...coords.slice(i + 1)]
+            return [pre, post]
+        }
+        return [coords.slice(), []]
+    }
+
 
     return null
 }

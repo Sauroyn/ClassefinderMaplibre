@@ -35,7 +35,7 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
         features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, targetCoord] }, properties: { level: USER_CONNECTOR_LEVEL } }]
     }
     if (map.getSource && map.getSource(connId)) (map.getSource(connId) as any).setData(fc as any)
-    else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc })
+    else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc, lineMetrics: true as any })
     const layerId = connId + '-line'
     if (!map.getLayer || !map.getLayer(layerId)) {
         map.addLayer({ id: layerId, type: 'line', source: connId, paint: { 'line-color': USER_CONNECTOR_COLOR, 'line-width': USER_CONNECTOR_WIDTH, 'line-opacity': USER_CONNECTOR_OPACITY }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
