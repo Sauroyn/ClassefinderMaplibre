@@ -387,8 +387,27 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 if (typeof d.distanceToNextStep === 'number' || d.distanceToNextStep === null) setDistanceToNextStep(d.distanceToNextStep)
             } catch { }
         }
+        const onFinish = () => {
+            try { alert('Itinéraire terminé. 🎉') } catch { }
+            handleFinishNavigation()
+        }
+        const onAutoLevel = (e: any) => {
+            try {
+                const lvl = Number(e?.detail)
+                if (!Number.isNaN(lvl)) {
+                    // update app level state so LevelSelector reflects the change
+                    // setLevel is provided by App, but not directly here; forward to MapView via __currentLevel already done. Optional.
+                }
+            } catch { }
+        }
         window.addEventListener('nav:state', onNavState as any)
-        return () => { window.removeEventListener('nav:state', onNavState as any) }
+        window.addEventListener('nav:finish', onFinish as any)
+        window.addEventListener('level:auto', onAutoLevel as any)
+        return () => {
+            window.removeEventListener('nav:state', onNavState as any)
+            window.removeEventListener('nav:finish', onFinish as any)
+            window.removeEventListener('level:auto', onAutoLevel as any)
+        }
     }, [])
 
     const handleSaveRoute = (route: any, name: string) => {
@@ -398,7 +417,6 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             console.log('Itinéraire sauvegardé:', name)
         } catch (error) {
             console.error('Erreur lors de la sauvegarde:', error)
-            // Vous pourriez ajouter une notification d'erreur ici
         }
     }
 

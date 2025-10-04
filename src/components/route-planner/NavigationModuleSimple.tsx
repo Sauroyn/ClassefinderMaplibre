@@ -36,6 +36,7 @@ export default function NavigationModule({
     const hasCenteredRef = useRef<boolean>(false)
     const devOverrideRef = useRef<boolean>(false)
     const routeCoordsRef = useRef<[number, number][]>([])
+    const segmentMetaRef = useRef<Array<{ level?: number | null, levels?: Array<number | string> | null }>>([])
     const progressRef = useRef<number>(0)
     const markerPositionRef = useRef<[number, number] | null>(null)
     const isOnConnectorRef = useRef<boolean>(false)
@@ -43,6 +44,10 @@ export default function NavigationModule({
     const lastRerouteTimeRef = useRef<number>(0)
     const rerouteCountRef = useRef<number>(0)
     const isSimulatingClickRef = useRef<boolean>(false)
+    const finishedRef = useRef<boolean>(false)
+    // Progress overlay (single merged line with lineMetrics: true)
+    const progressSourceIdRef = useRef<string | null>(null)
+    const progressLayerIdRef = useRef<string | null>(null)
 
     // Détection mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
@@ -93,47 +98,17 @@ export default function NavigationModule({
             }
         } catch { }
 
-        // Get route coordinates (including connector if present) and setup gradient
+        // Get route coordinates (including connector if present) and setup gradient/overlay
         const map = getMap()
         if (map && route.layerId) {
             try {
-                // Build full coordinates including connector segment (user -> first graph node) when present
-                const coords = getFullRouteCoordinates()
-                routeCoordsRef.current = coords
+                // Build full coordinates including connector with per-segment levels
+                const built = buildFullRouteWithLevels()
+                routeCoordsRef.current = built.coords
+                segmentMetaRef.current = built.segMeta
                 progressRef.current = 0
-
-                // Setup route layer with lineMetrics for gradient
-                if (map.getLayer && map.getLayer(route.layerId)) {
-                    // Add lineMetrics to the source
-                    const source = map.getSource(route.id)
-                    if (source && source.setData) {
-                        const data = source._data
-                        if (data && data.features) {
-                            // Update source with lineMetrics
-                            map.removeLayer(route.layerId)
-                            map.removeSource(route.id)
-                            map.addSource(route.id, {
-                                type: 'geojson',
-                                data: data,
-                                lineMetrics: true
-                            })
-                            map.addLayer({
-                                id: route.layerId,
-                                type: 'line',
-                                source: route.id,
-                                paint: {
-                                    'line-color': '#007AFF',
-                                    'line-width': 8,
-                                    'line-opacity': 1
-                                },
-                                layout: {
-                                    'line-cap': 'round',
-                                    'line-join': 'round'
-                                }
-                            })
-                        }
-                    }
-                }
+                // Ensure a single merged overlay line exists for continuous gradient across the whole itinerary
+                ensureProgressOverlay()
             } catch (e) {
                 console.warn('Error setting up route:', e)
             }
@@ -254,6 +229,8 @@ export default function NavigationModule({
                 cancelAnimationFrame(animationFrameRef.current)
                 animationFrameRef.current = null
             }
+            // Cleanup progress overlay
+            try { removeProgressOverlay() } catch { }
             if (simEnabled) {
                 try { window.removeEventListener('dev:fake-position', onDevPos as any) } catch { }
             }
@@ -371,6 +348,8 @@ export default function NavigationModule({
             ensureMarkerExists(markerCoords)
             updateMarkerOrientation(markerCoords)
             animateMarkerTo(markerCoords)
+            // Apply floor visibility + auto-switch based on segment level
+            try { applyMarkerLevelVisibilityAndAutoSwitch(markerCoords) } catch { }
             // Update route color gradient based on progress
             updateRouteGradient()
 
@@ -383,6 +362,9 @@ export default function NavigationModule({
                 hasCenteredRef.current = true
             }
             // Plus d'easeTo constant qui cause des problèmes de zoom
+
+            // Arrival check
+            try { maybeFinishIfArrived(markerCoords) } catch { }
 
         } catch (error) {
             console.warn('Erreur lors de la mise à jour de la position:', error)
@@ -410,38 +392,83 @@ export default function NavigationModule({
         }
     }
 
-    // Retrieve the connector line coordinates if drawn (user origin -> nearest graph node)
-    const getConnectorCoordinates = (): [number, number][] => {
-        try {
-            const map = getMap()
-            const src: any = map && map.getSource ? map.getSource('route-planner-user-connector') : null
-            const data = src && src._data
-            if (data && data.features && data.features.length) {
-                const f = data.features[0]
-                if (f && f.geometry && f.geometry.type === 'LineString' && Array.isArray(f.geometry.coordinates)) {
-                    return (f.geometry.coordinates as [number, number][])
+    // connector coords are read directly in buildFullRouteWithLevels
+
+    // Build continuous route with segment level metadata
+    const buildFullRouteWithLevels = (): { coords: [number, number][], segMeta: Array<{ level?: number | null, levels?: Array<number | string> | null }> } => {
+        const map = getMap()
+        const out: [number, number][] = []
+        const meta: Array<{ level?: number | null, levels?: Array<number | string> | null }> = []
+        const appendSegment = (seg: [number, number][], props?: any) => {
+            if (!seg || seg.length < 2) return
+            let coords = seg.slice() as [number, number][]
+            // Reorient segment to connect from current end
+            if (out.length > 0) {
+                const last = out[out.length - 1]
+                const dStart = haversineDistance(last, coords[0])
+                const dEnd = haversineDistance(last, coords[coords.length - 1])
+                if (dEnd < dStart) coords = coords.slice().reverse() as any
+                // If still not contiguous, do not force-connect by drawing a long straight line; instead, if gap is large, start a new chain
+                const dToFirst = haversineDistance(last, coords[0])
+                if (dToFirst > 5) {
+                    // start a new small connector only if tiny rounding gap; otherwise, push coords as-is starting fresh
+                    // Do nothing to out (avoid adding a fake straight segment)
                 }
             }
+            for (let i = 0; i < coords.length - 1; i++) {
+                const a = coords[i]
+                const b = coords[i + 1]
+                if (out.length === 0) out.push(a)
+                else {
+                    const last = out[out.length - 1]
+                    if (!(last[0] === a[0] && last[1] === a[1])) out.push(a)
+                }
+                out.push(b)
+                const lvl = normalizeMaybeNumber(props?.level)
+                const lvls = normalizeMaybeLevels(props?.levels)
+                meta.push({ level: lvl, levels: lvls })
+            }
+        }
+        try {
+            const connSrc: any = map && map.getSource ? map.getSource('route-planner-user-connector') : null
+            const connData = connSrc && connSrc._data
+            if (connData && connData.features && connData.features.length) {
+                const f = connData.features[0]
+                if (f && f.geometry && f.geometry.type === 'LineString') appendSegment(f.geometry.coordinates as any, f.properties || {})
+            }
         } catch { }
-        return []
+        try {
+            const src: any = map && route ? map.getSource(route.id) : null
+            const data = src && src._data
+            if (data && Array.isArray(data.features)) {
+                for (const f of data.features) {
+                    if (!f || !f.geometry || f.geometry.type !== 'LineString') continue
+                    appendSegment(f.geometry.coordinates as any, f.properties || {})
+                }
+            } else {
+                const coords = getRouteCoordinates()
+                for (let i = 0; i < coords.length - 1; i++) appendSegment([coords[i], coords[i + 1]], {})
+            }
+        } catch { }
+        // compact duplicates
+        const compact: [number, number][] = []
+        for (const c of out) {
+            if (!compact.length) { compact.push(c); continue }
+            const last = compact[compact.length - 1]
+            if (last[0] === c[0] && last[1] === c[1]) continue
+            compact.push(c)
+        }
+        return { coords: compact.length ? compact : out, segMeta: meta }
     }
 
-    // Combine connector + graph path into a single continuous polyline
-    const getFullRouteCoordinates = (): [number, number][] => {
-        const graphCoords = getRouteCoordinates()
-        const connector = getConnectorCoordinates()
-        if (!connector.length) return graphCoords
-        if (!graphCoords.length) return connector
-
-        const startOfGraph = graphCoords[0]
-        const endOfConnector = connector[connector.length - 1]
-        const d = haversineDistance(startOfGraph, endOfConnector)
-        if (d < 1e-3) {
-            // Same point (or extremely close): merge without duplication
-            return [...connector.slice(0, connector.length - 1), ...graphCoords]
-        }
-        // Otherwise just concatenate (best-effort)
-        return [...connector, ...graphCoords]
+    const normalizeMaybeNumber = (v: any): number | null => {
+        if (v === null || v === undefined) return null
+        const n = Number(v)
+        return Number.isFinite(n) ? n : null
+    }
+    const normalizeMaybeLevels = (arr: any): Array<number | string> | null => {
+        if (!arr || !Array.isArray(arr)) return null
+        return arr.map((x: any) => { const n = Number(x); return Number.isFinite(n) ? n : String(x) })
     }
 
     const projectOntoRoute = (userCoords: [number, number], routeCoords: [number, number][]): { point: [number, number], progress: number } => {
@@ -566,16 +593,18 @@ export default function NavigationModule({
 
         // Projection détaillée pour trouver le segment et avancer légèrement dans la direction du tracé
         const det = projectOntoRouteDetailed(coords, routeCoords)
-        const p0 = det.point
-        const p1 = getPointAheadOnPolyline(routeCoords, det.segIndex, det.t, 8) || routeCoords[Math.min(det.segIndex + 1, routeCoords.length - 1)]
+        const pBehind = getPointBehindOnPolyline(routeCoords, det.segIndex, det.t, 8) || det.point
+        const pAhead = getPointAheadOnPolyline(routeCoords, det.segIndex, det.t, 8) || routeCoords[Math.min(det.segIndex + 1, routeCoords.length - 1)]
 
-        // Calculer l'angle en espace écran (y vers le bas). 0° = vers le haut.
-        const s0 = map.project({ lng: p0[0], lat: p0[1] })
-        const s1 = map.project({ lng: p1[0], lat: p1[1] })
+        // Calculer l'angle en espace écran du vecteur pBehind -> pAhead (y vers le bas). 0° = vers le haut.
+        const s0 = map.project({ lng: pBehind[0], lat: pBehind[1] })
+        const s1 = map.project({ lng: pAhead[0], lat: pAhead[1] })
         const dx = s1.x - s0.x
         const dy = s1.y - s0.y
-        const angleRad = Math.atan2(dx, -dy)
-        const rotation = (angleRad * 180 / Math.PI + 360) % 360
+        // Robust screen-space orientation: angle of vector (dx, dy), then rotate +90° so 0° means arrow up
+        let angleDeg = (Math.atan2(dy, dx) * 180 / Math.PI) + 90
+        if (angleDeg < 0) angleDeg += 360
+        const rotation = angleDeg % 360
         const el = onRouteMarkerRef.current.getElement()
         const rotEl = el?.querySelector?.('.nav-arrow-rot') as HTMLElement | null
         if (rotEl) {
@@ -625,74 +654,74 @@ export default function NavigationModule({
         return currentPoint
     }
 
+    // Recule d'une distance en mètres le long de la polyligne (utile pour orienter la flèche)
+    const getPointBehindOnPolyline = (coords: [number, number][], segIndex: number, t: number, distanceMeters: number): [number, number] | null => {
+        let i = segIndex
+        let localT = t
+        let remaining = distanceMeters
+        const retreatOnSegment = (a: [number, number], b: [number, number], toT: number, dist: number): { point: [number, number], used: number } => {
+            const segLen = haversineDistance(a, b)
+            const used = Math.min(segLen * toT, dist)
+            const newT = Math.max(0, toT - (used / Math.max(1e-6, segLen)))
+            const p: [number, number] = [a[0] + (b[0] - a[0]) * newT, a[1] + (b[1] - a[1]) * newT]
+            return { point: p, used }
+        }
+        let a = coords[i]
+        let b = coords[i + 1]
+        if (!a || !b) return null
+        // point de départ exact
+        const start: [number, number] = [a[0] + (b[0] - a[0]) * localT, a[1] + (b[1] - a[1]) * localT]
+        let currentPoint = start
+        let remainingToUse = remaining
+        while (remainingToUse > 0 && i >= 0) {
+            a = coords[i]
+            b = coords[i + 1]
+            const { point, used } = retreatOnSegment(a, b, localT, remainingToUse)
+            currentPoint = point
+            remainingToUse -= used
+            if (localT - (used / Math.max(1e-6, haversineDistance(a, b))) <= 1e-9) {
+                // passer au segment précédent
+                i -= 1
+                if (i < 0) break
+                localT = 1
+            } else {
+                break
+            }
+        }
+        return currentPoint
+    }
+
     const updateRouteGradient = () => {
         const map = getMap()
         if (!map || !route) return
 
         try {
-            if (map.getLayer && map.getLayer(route.layerId)) {
-                // Calculate progress based on user's position on route
-                const userCoords = markerPositionRef.current
-                if (!userCoords) return
+            // Ensure overlay exists and is updated
+            ensureProgressOverlay()
 
-                // Always use the full polyline (connector + graph)
-                const routeCoords = routeCoordsRef.current.length ? routeCoordsRef.current : getFullRouteCoordinates()
-                const projection = projectOntoRoute(userCoords, routeCoords)
-                const actualProgress = Math.max(0, Math.min(1, projection.progress))
+            // Calculate progress based on user's position on route
+            const userCoords = markerPositionRef.current
+            if (!userCoords) return
 
-                // SOLUTION: Créer une LineString continue pour que le gradient fonctionne sur toute la ligne
-                const source = map.getSource(route.id)
-                if (source && source._data) {
-                    // Créer une seule LineString continue avec tous les points de la route
-                    const continuousLineData = {
-                        type: 'FeatureCollection',
-                        features: [{
-                            type: 'Feature',
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: routeCoords
-                            },
-                            properties: {}
-                        }]
-                    }
+            const routeCoords = routeCoordsRef.current.length ? routeCoordsRef.current : buildFullRouteWithLevels().coords
+            const projection = projectOntoRoute(userCoords, routeCoords)
+            const actualProgress = Math.max(0, Math.min(1, projection.progress))
 
-                    // Recréer la source avec la LineString continue et lineMetrics
-                    map.removeLayer(route.layerId)
-                    map.removeSource(route.id)
-                    map.addSource(route.id, {
-                        type: 'geojson',
-                        data: continuousLineData,
-                        lineMetrics: true
-                    })
-                    map.addLayer({
-                        id: route.layerId,
-                        type: 'line',
-                        source: route.id,
-                        paint: {
-                            'line-width': 8,
-                            'line-opacity': 1
-                        },
-                        layout: {
-                            'line-cap': 'round',
-                            'line-join': 'round'
-                        }
-                    })
-                }
-
-                // Hard step: grey up to progress, blue after
-                map.setPaintProperty(route.layerId, 'line-gradient', [
-                    'step',
-                    ['line-progress'],
-                    '#9aa0a6',
-                    actualProgress,
-                    '#007AFF'
-                ])
+            const layerId = progressLayerIdRef.current
+            if (layerId && map.getLayer && map.getLayer(layerId)) {
+                try {
+                    map.setPaintProperty(layerId, 'line-gradient', [
+                        'step', ['line-progress'], '#9aa0a6',
+                        actualProgress, '#007AFF'
+                    ])
+                } catch { }
             }
         } catch (e) {
             console.warn('Error updating gradient:', e)
             // Fallback: solid blue color
             try {
-                map.setPaintProperty(route.layerId, 'line-color', '#007AFF')
+                const lid = progressLayerIdRef.current
+                if (lid && map.getLayer && map.getLayer(lid)) map.setPaintProperty(lid, 'line-color', '#007AFF')
             } catch { }
         }
     }
@@ -777,7 +806,7 @@ export default function NavigationModule({
         }
 
         // Calculate remaining distance based on progress over the full polyline
-        const routeCoords = routeCoordsRef.current.length ? routeCoordsRef.current : getFullRouteCoordinates()
+        const routeCoords = routeCoordsRef.current.length ? routeCoordsRef.current : buildFullRouteWithLevels().coords
         let totalRouteDistance = 0
         if (routeCoords.length > 1) {
             for (let i = 0; i < routeCoords.length - 1; i++) {
@@ -810,6 +839,161 @@ export default function NavigationModule({
             mapRef.current.getMap ? mapRef.current.getMap() :
                 (mapRef.current.map ? mapRef.current.map : mapRef.current)
         )
+    }
+
+    // Floor visibility and auto switching
+    const applyMarkerLevelVisibilityAndAutoSwitch = (coords: [number, number]) => {
+        const map = getMap()
+        if (!map) return
+        const rc = routeCoordsRef.current
+        const sm = segmentMetaRef.current
+        if (!rc.length || !sm.length) return
+        const det = projectOntoRouteDetailed(coords, rc)
+        const meta = sm[Math.min(det.segIndex, sm.length - 1)] || {}
+        const current: number = (map as any).__currentLevel ?? 0
+        const active = chooseActiveLevel(meta, current)
+        const el = onRouteMarkerRef.current?.getElement?.()
+        if (active != null) {
+            if (el) el.style.display = (active === current) ? 'block' : 'none'
+            if (active !== current) setCurrentLevel(map, active)
+        } else {
+            if (el) el.style.display = 'block'
+        }
+    }
+
+    const chooseActiveLevel = (meta: { level?: number | null, levels?: Array<number | string> | null }, currentLevel: number): number | null => {
+        const cands: number[] = []
+        if (meta.level != null) { const n = Number(meta.level); if (!Number.isNaN(n)) cands.push(n) }
+        if (meta.levels && Array.isArray(meta.levels)) { for (const v of meta.levels) { const n = Number(v); if (!Number.isNaN(n)) cands.push(n) } }
+        if (cands.length === 0) return null
+        if (cands.includes(currentLevel)) return currentLevel
+        return cands[0]
+    }
+
+    const setCurrentLevel = (map: any, level: number) => {
+        try { (map as any).__currentLevel = level } catch { }
+        const filter = ['==', ['get', 'level'], level]
+        try { if (map.getLayer('buildings-extrusion')) map.setFilter('buildings-extrusion', filter as any) } catch { }
+        try { if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any) } catch { }
+        try { if (map.getLayer('buildings-name')) map.setFilter('buildings-name', filter as any) } catch { }
+        try {
+            const style = map.getStyle && map.getStyle()
+            const layers = (style && style.layers) || []
+            const routeFilter: any = [
+                'any',
+                ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
+                ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+            ]
+            for (const lyr of layers) if (lyr && typeof lyr.id === 'string' && lyr.id.startsWith('route-planner-')) { try { map.setFilter(lyr.id, routeFilter) } catch { } }
+        } catch { }
+        try { window.dispatchEvent(new CustomEvent('level:auto', { detail: level })) } catch { }
+    }
+
+    const maybeFinishIfArrived = (coords: [number, number]) => {
+        if (finishedRef.current) return
+        const rc = routeCoordsRef.current
+        if (!rc || rc.length === 0) return
+        const last = rc[rc.length - 1]
+        const d = haversineDistance(coords, last)
+        if (d <= 15) {
+            finishedRef.current = true
+            try { window.dispatchEvent(new CustomEvent('nav:finish')) } catch { }
+        }
+    }
+
+    // Create a single merged overlay line used purely for continuous progress gradient
+    const ensureProgressOverlay = () => {
+        const map = getMap()
+        if (!map || !route) return
+        const srcId = progressSourceIdRef.current || `route-progress-${route.id}`
+        const lyrId = progressLayerIdRef.current || `route-progress-${route.id}-line`
+        progressSourceIdRef.current = srcId
+        progressLayerIdRef.current = lyrId
+
+        // Build or reuse merged coordinates and split by current level to preserve per-floor display
+        const built = routeCoordsRef.current.length ? { coords: routeCoordsRef.current, segMeta: segmentMetaRef.current } : buildFullRouteWithLevels()
+        const coords = built.coords
+        const segMeta = built.segMeta
+        const currentLevel: number | null = (() => { try { const v = (map as any).__currentLevel; return Number.isFinite(v) ? Number(v) : null } catch { return null } })()
+
+        // Collect LineStrings only for current level (avoid cross-floor drawing)
+        const lines: [number, number][][] = []
+        if (currentLevel != null && coords.length > 1 && segMeta.length === coords.length - 1) {
+            let currentLine: [number, number][] = []
+            for (let i = 0; i < coords.length - 1; i++) {
+                const meta = segMeta[i] || {}
+                const hasLevel = (lvl: number) => {
+                    const cands: number[] = []
+                    if (meta.level != null && Number.isFinite(Number(meta.level))) cands.push(Number(meta.level))
+                    if (Array.isArray(meta.levels)) for (const v of meta.levels) { const n = Number(v as any); if (!Number.isNaN(n)) cands.push(n) }
+                    return cands.includes(lvl)
+                }
+                const onThis = hasLevel(currentLevel)
+                if (onThis) {
+                    // start or continue the current line
+                    if (currentLine.length === 0) currentLine.push(coords[i])
+                    // avoid creating long straight connectors across gaps: split if too far from previous
+                    const prev = currentLine[currentLine.length - 1]
+                    const next = coords[i + 1]
+                    if (prev && next && haversineDistance(prev, next) > 50) {
+                        // flush the existing small line and start a new one
+                        if (currentLine.length >= 2) lines.push(currentLine)
+                        currentLine = [coords[i], next]
+                    } else {
+                        currentLine.push(next)
+                    }
+                } else {
+                    // flush current line
+                    if (currentLine.length >= 2) lines.push(currentLine)
+                    currentLine = []
+                }
+            }
+            if (currentLine.length >= 2) lines.push(currentLine)
+        }
+
+        // Fallback: if no per-level lines, split the whole path into chunks to avoid big straight connectors
+        let fallbackLines: [number, number][][] = []
+        if (lines.length === 0 && coords.length > 1) {
+            let cur: [number, number][] = [coords[0]]
+            for (let i = 0; i < coords.length - 1; i++) {
+                const a = coords[i], b = coords[i + 1]
+                if (haversineDistance(a, b) > 50) {
+                    if (cur.length >= 2) fallbackLines.push(cur)
+                    cur = [b]
+                } else {
+                    cur.push(b)
+                }
+            }
+            if (cur.length >= 2) fallbackLines.push(cur)
+        }
+        const toDraw = lines.length > 0 ? lines : (fallbackLines.length > 0 ? fallbackLines : [coords])
+        const features = toDraw.map((line) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: line }, properties: {} }))
+        const fc = { type: 'FeatureCollection', features }
+        try {
+            if (map.getSource && map.getSource(srcId)) (map.getSource(srcId) as any).setData(fc)
+            else if (map.addSource) map.addSource(srcId, { type: 'geojson', data: fc, lineMetrics: true as any })
+        } catch { }
+        try {
+            if (!map.getLayer || !map.getLayer(lyrId)) {
+                map.addLayer({ id: lyrId, type: 'line', source: srcId, paint: { 'line-color': '#007AFF', 'line-width': 18, 'line-opacity': 1 }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
+                // Move overlay above the main selected route layer if possible
+                try { if (map.moveLayer && route.layerId && map.getLayer(route.layerId)) map.moveLayer(lyrId, route.layerId) } catch { }
+            }
+        } catch { }
+    }
+
+    const removeProgressOverlay = () => {
+        const map = getMap()
+        if (!map) return
+        try {
+            const lyrId = progressLayerIdRef.current
+            const srcId = progressSourceIdRef.current
+            if (lyrId && map.getLayer && map.getLayer(lyrId)) map.removeLayer(lyrId)
+            if (srcId && map.getSource && map.getSource(srcId)) map.removeSource(srcId)
+        } catch { }
+        progressLayerIdRef.current = null
+        progressSourceIdRef.current = null
     }
 
     return null
