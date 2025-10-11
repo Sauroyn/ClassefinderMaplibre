@@ -1,6 +1,7 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import maplibre from 'maplibre-gl'
 import UserGeolocate from './UserGeolocate'
+import { useNavigationActive } from '../hooks/useNavigationActive'
 import { addBuildingsSource, addCentroidsSource } from '../map/sources'
 import { addFillLayers, addNameLayer } from '../map/layers'
 import { generateCentroids } from '../map/generateCentroids'
@@ -19,6 +20,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
     const initialized = useRef(false)
     const initialCamera = useRef<any>(null)
     const parsedConfigRef = useRef<any | null>(null)
+    const navActive = useNavigationActive()
     useEffect(() => {
         if (!container.current) return
 
@@ -631,8 +633,20 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         } catch { }
     }, [theme])
 
+    const themeToggle = (
+        <button
+            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
+            style={{ position: 'fixed', right: 10, top: 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+        >{theme === 'dark' ? '☀️' : '🌙'}</button>
+    )
     return <>
         <div id="map" ref={container} style={{ height: '100vh' }} />
-        <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
+        {navActive ? (
+            themeToggle
+        ) : (
+            <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
+        )}
     </>
 })

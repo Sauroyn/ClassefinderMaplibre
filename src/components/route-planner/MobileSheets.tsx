@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-function BottomSheetBase({
+export function BottomSheetBase({
     open,
     header,
     children,

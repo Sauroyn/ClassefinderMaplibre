@@ -35,6 +35,7 @@ export default function App() {
   const [plannerStart, setPlannerStart] = useState<{ id: string, name: string } | null>(null)
   const [plannerEnd, setPlannerEnd] = useState<{ id: string, name: string } | null>(null)
   const { theme, setTheme } = useTheme()
+  const [navActive, setNavActive] = useState(false)
 
   // Settings modal draft states to avoid partial saves and allow cancel
   const { draftTheme, setDraftTheme, draftIcalUrl, setDraftIcalUrl, draftBufferMin, setDraftBufferMin, draftEventsEnabled, setDraftEventsEnabled, resetDraft } = useSettingsDraft({ theme, icalUrl, bufferMin, eventsEnabled })
@@ -49,11 +50,25 @@ export default function App() {
   // theme application handled in useTheme hook
 
   // Events now handled by EventBar; this state is kept to reset when disabling
+  useEffect(() => {
+    function onNav(e: any) {
+      try {
+        const active = !!(e?.detail)
+        setNavActive(active)
+        if (!active) {
+          // On sortie de navigation, fermer le planner pour réafficher la barre de recherche
+          setShowPlanner(false)
+        }
+      } catch { }
+    }
+    window.addEventListener('navigation:active', onNav as any)
+    return () => window.removeEventListener('navigation:active', onNav as any)
+  }, [])
 
   return (
     <>
       <LevelSelector levels={levels} level={level} loading={loading} onChange={setLevel} />
-      {!showPlanner && <SearchBar data={dataRef.current} onSelect={(id, lvl) => {
+      {!navActive && !showPlanner && <SearchBar data={dataRef.current} onSelect={(id, lvl) => {
         if (!mapRef.current) return
         // save camera before changing
         try { prevCameraRef.current = mapRef.current.getCamera() } catch { }
@@ -86,7 +101,7 @@ export default function App() {
       <SettingsButton onClick={openSettings} />
 
       {/* Event selector at bottom center (desktop); CSS positions; keep always mounted if events exist */}
-      {eventsEnabled && (
+      {!navActive && eventsEnabled && (
         <EventBar
           icalUrl={icalUrl}
           bufferMin={bufferMin}

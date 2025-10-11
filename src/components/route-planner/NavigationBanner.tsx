@@ -1,4 +1,3 @@
-import React from 'react'
 import type { NavigationState } from './NavigationController'
 
 export default function NavigationBanner({ nav, onExit }: { nav: NavigationState, onExit: () => void }) {

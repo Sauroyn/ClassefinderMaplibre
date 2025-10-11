@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react'
+import ConfirmStartModal from './route-planner/ConfirmStartModal'
+
+import { getUserStartDistance } from './route-planner/getStartProximity'
 import { computeAndDrawRoute } from '../map/computeRoute'
 import { parseGeoJSON } from './route-planner/utils'
 import type { Graph } from './route-planner/utils'
@@ -7,6 +10,7 @@ import RoutesList from './route-planner/RoutesList'
 import { isMobileViewport, RouteDetailsBottomSheet, RoutesBottomSheet } from './route-planner/MobileSheets'
 import { useNavigationController } from './route-planner/NavigationController'
 import NavigationBanner from './route-planner/NavigationBanner'
+import NavigationBottomSheet from './route-planner/NavigationBottomSheet'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 
@@ -135,6 +139,9 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
     const [detailsOpen, setDetailsOpen] = useState(false)
     const [navigationActive, setNavigationActive] = useState(false)
+    const [confirmOpen, setConfirmOpen] = useState(false)
+    const [confirmDistance, setConfirmDistance] = useState(0)
+    const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
     // Contrôleur de navigation (mobile)
     const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false))
 
@@ -278,13 +285,19 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         })
     }
 
-    // En mode navigation mobile, on masque tout sauf la bannière navigation
-    if (isMobile && navigationActive && nav.active && nav.route) {
-        return <NavigationBanner nav={nav} onExit={() => { setNavigationActive(false); }} />
+    // En mode navigation, on masque le planner et on affiche la bannière + le panneau bas d'info
+    if (navigationActive) {
+        const navProxy: any = { ...nav, active: true, route: (nav.route || selectedRoute || null) }
+        return (
+            <>
+                <NavigationBanner nav={navProxy} onExit={() => { try { const m = mapRef?.current; m?.clearRoute?.() } catch {} setNavigationActive(false); try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { } }} />
+                <NavigationBottomSheet nav={navProxy} onFinish={() => { try { const m = mapRef?.current; m?.clearRoute?.() } catch {} setNavigationActive(false); try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { } }} />
+            </>
+        )
     }
     // Sinon, toujours afficher le planner classique
     return (
-        <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }}>
+    <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)', display: (navigationActive ? 'none' : 'block') }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
                 {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
@@ -367,35 +380,92 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 <RouteDetailsBottomSheet
                     open={detailsOpen}
                     route={selectedRoute}
-                    onStart={() => {
-                        setDetailsOpen(false)
-                        setNavigationActive(true)
+                    onStart={async () => {
+                        // Avant de démarrer, vérifier la distance utilisateur -> départ de l'itinéraire
                         try {
-                            const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
-                            // Stylise la route sélectionnée en bleu et masque les autres
-                            routes.forEach((r) => {
-                                if (selectedRoute && r.layerId === selectedRoute.layerId) {
-                                    try { map?.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
-                                    try { map?.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
-                                    try { map?.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
-                                } else {
-                                    try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
-                                }
-                            })
-                            // Connecteur utilisateur -> graphe aussi en bleu
-                            try { map?.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
-                            // Recentre sur l'utilisateur si possible
+                            const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 20000, timeout: 8000 }))
+                            const user: [number, number] = [pos.coords.longitude, pos.coords.latitude]
+                            if (selectedRoute && graph) {
+                                try {
+                                    const d = getUserStartDistance(selectedRoute, graph, user)
+                                    if (d != null && d > 20) {
+                                        setConfirmDistance(d)
+                                        setConfirmUserCoord(user)
+                                        setConfirmOpen(true)
+                                        return
+                                    }
+                                } catch { }
+                            }
+                            // démarrer navigation
+                            setDetailsOpen(false)
+                            setNavigationActive(true)
+                            try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: true })) } catch { }
                             try {
-                                navigator.geolocation.getCurrentPosition((pos) => {
-                                    try { map?.flyTo?.({ center: { lng: pos.coords.longitude, lat: pos.coords.latitude }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                                const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                                routes.forEach((r) => {
+                                    if (selectedRoute && r.layerId === selectedRoute.layerId) {
+                                        try { map?.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
+                                        try { map?.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
+                                        try { map?.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                    } else {
+                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                    }
                                 })
+                                try { map?.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
+                                try { map?.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
                             } catch { }
-                        } catch { }
+                        } catch {
+                            // pas de géoloc: démarrer sans vérif
+                            setDetailsOpen(false)
+                            setNavigationActive(true)
+                            try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: true })) } catch { }
+                        }
                     }}
                     arrivalTime={(() => {
                         if (!selectedRoute) return null
                         try { const now = new Date(); return new Date(now.getTime() + Math.round((selectedRoute.time || 0) * 1000)) } catch { return null }
                     })()}
+                />
+            )}
+            {/* Modal de confirmation si départ trop éloigné */}
+            {isMobile && (
+                <ConfirmStartModal
+                    open={confirmOpen}
+                    distance={confirmDistance}
+                    onCancel={() => { setConfirmOpen(false); setNavigationActive(false); setDetailsOpen(true) }}
+                    onAdjust={async () => {
+                        try {
+                            const user = confirmUserCoord
+                            setConfirmOpen(false)
+                            if (graph && selectedRoute && user) {
+                                // recalcul en ancrant le départ sur la position utilisateur (le moteur forcera le niveau 1)
+                                const res = await computeAndDrawRoute({ graph, start: String(selectedRoute.path?.[0] ?? start), end: end, excludeStairs, coveredOnly, mapRef, k: 3, userOriginLngLat: user })
+                                if (res && res.routes && res.routes.length) {
+                                    const primary = res.routes[0]
+                                    setRoutes(res.routes)
+                                    setSelectedRoute(primary)
+                                    // démarrage immédiat
+                                    setDetailsOpen(false)
+                                    setNavigationActive(true)
+                                    try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: true })) } catch { }
+                                    const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                                    res.routes.forEach((r: any) => {
+                                        if (r.layerId === primary.layerId) {
+                                            try { map?.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
+                                            try { map?.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
+                                            try { map?.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                        } else {
+                                            try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                        }
+                                    })
+                                    try { map?.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
+                                    try { map?.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                                }
+                            }
+                        } catch {
+                            setConfirmOpen(false)
+                        }
+                    }}
                 />
             )}
         </div>
