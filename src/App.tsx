@@ -51,6 +51,18 @@ export default function App() {
 
   // Events now handled by EventBar; this state is kept to reset when disabling
 
+  // Keep LevelSelector in sync when navigation auto-switches floors
+  useEffect(() => {
+    const onAutoLevel = (e: any) => {
+      try {
+        const next = Number(e?.detail)
+        if (Number.isFinite(next) && next !== level) setLevel(next)
+      } catch { }
+    }
+    try { window.addEventListener('level:auto', onAutoLevel as any) } catch { }
+    return () => { try { window.removeEventListener('level:auto', onAutoLevel as any) } catch { } }
+  }, [level, setLevel])
+
   return (
     <>
       <LevelSelector levels={levels} level={level} loading={loading} onChange={setLevel} />

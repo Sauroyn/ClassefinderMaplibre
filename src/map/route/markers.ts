@@ -1,7 +1,8 @@
 import maplibre from 'maplibre-gl'
 import { haversine } from '../measure'
 
-export const USER_CONNECTOR_LEVEL = 1
+// Connector should inherit the current map level when drawn
+export const USER_CONNECTOR_LEVEL = 1 // default/fallback; overridden at runtime by current level
 export const USER_CONNECTOR_COLOR = '#ff8888ff'
 export const USER_CONNECTOR_OPACITY = 0.55
 export const USER_CONNECTOR_WIDTH = 8
@@ -10,10 +11,12 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
     if (!userOriginLngLat) return
     const nb = nodeById || new Map<string, any>(graph.nodes.map((n: any) => [String(n.id), n]))
     let targetCoord: [number, number] | null = null
+    let startNodeLevel: number | null = null
     if (ks && ks.length > 0) {
         const startNodeId = String(ks[0].path[0])
         const startNode = nb.get(startNodeId)
         if (startNode && Array.isArray(startNode.coord)) targetCoord = startNode.coord as [number, number]
+        try { if (startNode && (startNode.level !== undefined && startNode.level !== null)) startNodeLevel = Number(startNode.level) } catch { startNodeLevel = null }
     }
     // Fallback: no route available -> connect to nearest graph node
     if (!targetCoord) {
@@ -30,9 +33,13 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
     }
     if (!targetCoord) return
     const connId = 'route-planner-user-connector'
+    // Use current map level if present; else the start node level; else fallback
+    let connectorLevel = USER_CONNECTOR_LEVEL
+    try { const cur = (map as any).__currentLevel; if (Number.isFinite(cur)) connectorLevel = Number(cur) } catch { }
+    if (!Number.isFinite(connectorLevel) && Number.isFinite(startNodeLevel as any)) connectorLevel = Number(startNodeLevel)
     const fc = {
         type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, targetCoord] }, properties: { level: USER_CONNECTOR_LEVEL } }]
+        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, targetCoord] }, properties: { level: connectorLevel } }]
     }
     if (map.getSource && map.getSource(connId)) (map.getSource(connId) as any).setData(fc as any)
     else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc, lineMetrics: true as any })

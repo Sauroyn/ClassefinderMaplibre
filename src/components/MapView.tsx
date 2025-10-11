@@ -282,8 +282,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     const routeFilter = [
                         'any',
                         ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
-                        ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]],
-                        ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+                        ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
                     ]
                     for (const lyr of layers) {
                         if (lyr && typeof lyr.id === 'string' && lyr.id.startsWith('route-planner-')) {
@@ -293,6 +292,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 } catch (e) { }
             }
             applyRouteFilterToAll()
+            // Notify listeners (e.g., navigation overlays) of manual level change
+            try { window.dispatchEvent(new CustomEvent('level:change', { detail: level })) } catch (e) { }
             // show/hide DOM markers for start/end based on current level
             try {
                 const m = (map as any).__routePlannerMarkers
@@ -610,8 +611,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         const routeFilter: any = [
                             'any',
                             ['all', ['has', 'level'], ['==', ['get', 'level'], levelNow]],
-                            ['all', ['has', 'levels'], ['in', levelNow, ['get', 'levels']]],
-                            ['all', ['!', ['has', 'level']], ['!', ['has', 'levels']]]
+                            ['all', ['has', 'levels'], ['in', levelNow, ['get', 'levels']]]
                         ]
                         for (const saved of savedRouteSources) {
                             try {
