@@ -5,19 +5,24 @@ export function BottomSheetBase({
     header,
     children,
     initialSnap = 0.5,
-    snapPercents = [0.05, 0.2, 0.5, 0.9]
+    snapPercents = [0.05, 0.2, 0.5, 0.9],
+    reduceOnOutsideClick = true,
+    apiRef,
 }: {
     open: boolean,
     header?: any,
     children: any,
     initialSnap?: number,
-    snapPercents?: number[]
+    snapPercents?: number[],
+    reduceOnOutsideClick?: boolean,
+    apiRef?: { current: null | { snapTo: (index: number) => void, snapToMin: () => void } }
 }) {
     const ref = useRef<HTMLDivElement | null>(null)
     const [height, setHeight] = useState(0)
     const snapPixels = useRef<number[]>([])
     const [activeIndex, setActiveIndex] = useState<number>(2)
     const currentHeightRef = useRef<number>(0)
+    const initialized = useRef<boolean>(false)
 
     const computeSnaps = useCallback(() => {
         const vh = typeof window !== 'undefined' ? window.innerHeight : 800
@@ -25,13 +30,16 @@ export function BottomSheetBase({
             .map(p => Math.round(vh * Math.max(0.02, Math.min(0.98, p))))
             .sort((a, b) => a - b)
         snapPixels.current = snaps
-        // find closest to initialSnap
-        const target = Math.round(vh * initialSnap)
+        // find closest to current height if initialized; else use initialSnap
+        const target = (initialized.current && currentHeightRef.current > 0)
+            ? currentHeightRef.current
+            : Math.round(vh * initialSnap)
         let idx = 0, best = Infinity
         snaps.forEach((v, i) => { const d = Math.abs(v - target); if (d < best) { best = d; idx = i } })
         setActiveIndex(idx)
         currentHeightRef.current = snaps[idx]
         setHeight(snaps[idx])
+        initialized.current = true
     }, [initialSnap, snapPercents])
 
     useEffect(() => { computeSnaps() }, [computeSnaps])
@@ -40,11 +48,46 @@ export function BottomSheetBase({
         window.addEventListener('resize', onR)
         return () => window.removeEventListener('resize', onR)
     }, [computeSnaps])
+    // expose API to parent via ref
     useEffect(() => {
+        if (!apiRef) return
+        apiRef.current = {
+            snapTo: (index: number) => {
+                const snaps = snapPixels.current
+                const idx = Math.max(0, Math.min(snaps.length - 1, index))
+                setActiveIndex(idx)
+                currentHeightRef.current = snaps[idx]
+                setHeight(snaps[idx])
+            },
+            snapToMin: () => {
+                const snaps = snapPixels.current
+                const idx = 0
+                setActiveIndex(idx)
+                currentHeightRef.current = snaps[idx]
+                setHeight(snaps[idx])
+            }
+        }
+        return () => { if (apiRef) apiRef.current = null }
+    }, [apiRef])
+    useEffect(() => {
+        let dragging = false
+        let startY = 0
+        let startHeight = 0
+        const threshold = 5 // px before we consider it a drag
+
         function onMove(e: TouchEvent | MouseEvent) {
             const clientY = (e as TouchEvent).touches ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY
-            const vh = window.innerHeight
-            const h = Math.max(snapPixels.current[0] ?? 40, Math.min(snapPixels.current[snapPixels.current.length - 1] ?? vh * 0.9, vh - clientY))
+            if (!dragging) {
+                const dy = Math.abs(clientY - startY)
+                if (dy < threshold) return
+                dragging = true
+            }
+            // Delta-based height change so the sheet top doesn't jump to the finger
+            const dy = clientY - startY
+            const target = startHeight - dy
+            const minH = snapPixels.current[0] ?? 40
+            const maxH = snapPixels.current[snapPixels.current.length - 1] ?? (typeof window !== 'undefined' ? window.innerHeight * 0.9 : 800)
+            const h = Math.max(minH, Math.min(maxH, target))
             currentHeightRef.current = h
             setHeight(h)
         }
@@ -59,23 +102,51 @@ export function BottomSheetBase({
             setActiveIndex(idx)
             currentHeightRef.current = snaps[idx]
             setHeight(snaps[idx])
+            dragging = false
         }
-        const handle = ref.current?.querySelector('.grab-area') as HTMLElement | null
-        function start(ev: Event) {
+        const root = ref.current as HTMLElement | null
+        const handle = root?.querySelector('.grab-handle') as HTMLElement | null
+        const startDrag = (ev: Event) => {
+            // If the initial target is an interactive control, do not start drag to preserve single-click
+            const target = ev.target as HTMLElement | null
+            if (target && (target.closest('button, a, input, select, textarea, [role="button"], [role="link"]'))) return
+            // If starting inside scrollable content that can scroll further, let it scroll instead of dragging the sheet
+            const contentEl = target?.closest('.sheet-content') as HTMLElement | null
+            if (contentEl) {
+                const canScroll = contentEl.scrollHeight > contentEl.clientHeight
+                if (canScroll) {
+                    // Determine if at extremes; only start dragging if user pulls beyond extremes (overscroll intent is tricky to detect without dy)
+                    const atTop = contentEl.scrollTop <= 0
+                    const atBottom = Math.ceil(contentEl.scrollTop + contentEl.clientHeight) >= contentEl.scrollHeight
+                    // For initial start, we don't know direction yet; allow scroll by default
+                    if (!atTop && !atBottom) return
+                }
+            }
             ev.preventDefault?.()
+            const clientY = (ev as any).touches ? (ev as any).touches[0].clientY : (ev as MouseEvent).clientY
+            startY = clientY
+            startHeight = currentHeightRef.current || height
             document.addEventListener('touchmove', onMove as any, { passive: false })
             document.addEventListener('mousemove', onMove as any)
             document.addEventListener('touchend', onEnd as any, { once: true })
             document.addEventListener('mouseup', onEnd as any, { once: true })
         }
-        handle?.addEventListener('mousedown', start)
-        handle?.addEventListener('touchstart', start, { passive: false })
-        return () => { handle?.removeEventListener('mousedown', start); handle?.removeEventListener('touchstart', start as any) }
+        // drag from the handle OR anywhere in the sheet background
+        handle?.addEventListener('mousedown', startDrag)
+        handle?.addEventListener('touchstart', startDrag, { passive: false })
+        root?.addEventListener('mousedown', startDrag)
+        root?.addEventListener('touchstart', startDrag, { passive: false })
+        return () => {
+            handle?.removeEventListener('mousedown', startDrag)
+            handle?.removeEventListener('touchstart', startDrag as any)
+            root?.removeEventListener('mousedown', startDrag)
+            root?.removeEventListener('touchstart', startDrag as any)
+        }
     }, [height])
 
     // Reduce to bottom snap on outside click, but let the click pass to the app (no overlay)
     useEffect(() => {
-        if (!open) return
+        if (!open || !reduceOnOutsideClick) return
         const onOutside = (e: Event) => {
             const root = ref.current
             const target = e.target as Node | null
@@ -91,7 +162,7 @@ export function BottomSheetBase({
         }
         document.addEventListener('pointerdown', onOutside, { capture: true })
         return () => document.removeEventListener('pointerdown', onOutside, { capture: true } as any)
-    }, [open])
+    }, [open, reduceOnOutsideClick])
 
     const cycleSnap = useCallback(() => {
         const snaps = snapPixels.current
@@ -127,11 +198,15 @@ export function BottomSheetBase({
                     overflow: 'hidden',
                 }}
             >
-                <div className="grab-area" onDoubleClick={cycleSnap} style={{ height: 48, paddingTop: 8, cursor: 'grab', pointerEvents: 'auto' }}>
-                    <div className="grab" style={{ width: 48, height: 8, borderRadius: 4, background: grabBg, margin: '0 auto' }} />
-                    {header && <div style={{ padding: '8px 12px 0', fontWeight: 700 }}>{header}</div>}
+                <div className="grab-area" style={{ height: 24, paddingTop: 8, pointerEvents: 'auto' }}>
+                    <div
+                        className="grab-handle"
+                        onClick={cycleSnap}
+                        style={{ width: 48, height: 8, borderRadius: 4, background: grabBg, margin: '0 auto', cursor: 'grab' }}
+                    />
                 </div>
-                <div style={{ padding: 12, overflow: 'auto', height: Math.max(0, height - 64), pointerEvents: 'auto' }}>{children}</div>
+                {header && <div style={{ padding: '4px 12px 0', fontWeight: 700, pointerEvents: 'auto' }}>{header}</div>}
+                <div className="sheet-content" style={{ padding: 12, overflow: 'auto', height: Math.max(0, height - 64), pointerEvents: 'auto' }}>{children}</div>
             </div>
         </div>
     )
@@ -170,7 +245,7 @@ export function RoutesBottomSheet({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {routes.map((r, i) => {
                     const primary = i === 0
-                    const color = primary ? (isDark ? '#4da6ff' : '#ff0000') : (i === 1 ? (isDark ? '#888' : '#999') : (isDark ? '#444' : '#ccc'))
+                    const color = primary ? '#007bff' : (i === 1 ? (isDark ? '#888' : '#999') : (isDark ? '#444' : '#ccc'))
                     return (
                         <button key={r.id} onClick={() => onSelect(r)} style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 12,
@@ -208,14 +283,16 @@ export function RouteDetailsBottomSheet({
     // Detect dark mode
     const isDark = typeof document !== 'undefined' && (document.documentElement.getAttribute('data-theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches)
     return (
-        <BottomSheetBase open={open} header={
-            <div style={{ display: 'flex', alignItems: 'center' }}>
+        <BottomSheetBase open={open} reduceOnOutsideClick={false} header={
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
                 {/* Bouton retour */}
-                <button aria-label="Retour" title="Retour" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('route-details-back')) }}
-                    style={{ marginRight: 8, background: 'none', border: 'none', color: isDark ? '#f5f7fb' : '#111', fontSize: 20, cursor: 'pointer', padding: 0, width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontWeight: 700 }}>&larr;</span>
-                </button>
-                <div style={{ fontWeight: 700 }}>Trajet sélectionné</div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <button aria-label="Retour" title="Retour" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('route-details-back')) }}
+                        style={{ marginRight: 8, background: 'none', border: 'none', color: isDark ? '#f5f7fb' : '#111', fontSize: 20, cursor: 'pointer', padding: 0, width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontWeight: 700 }}>&larr;</span>
+                    </button>
+                    <div style={{ fontWeight: 700 }}>Trajet sélectionné</div>
+                </div>
             </div>
         } initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -241,8 +318,34 @@ export function RouteDetailsBottomSheet({
                         <div style={{ fontWeight: 700, marginBottom: 6 }}>Étapes</div>
                         <ol style={{ listStyle: 'decimal', paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {route.steps.slice(0, 12).map((s, i) => (
-                                <li key={i} style={{ fontSize: 13, color: isDark ? '#eee' : '#333' }}>
-                                    Avancez {formatDistance(s.distance)}
+                                <li key={i} style={{ fontSize: 13, color: isDark ? '#eee' : '#333', cursor: 'pointer' }} onClick={() => {
+                                    try {
+                                        if (s && s.coords && Array.isArray(s.coords) && s.coords.length === 2) {
+                                            const a = s.coords[0]
+                                            const b = s.coords[1]
+                                            const minX = Math.min(a[0], b[0])
+                                            const minY = Math.min(a[1], b[1])
+                                            const maxX = Math.max(a[0], b[0])
+                                            const maxY = Math.max(a[1], b[1])
+                                            const bounds: [[number, number], [number, number]] = [[minX, minY], [maxX, maxY]]
+                                            window.dispatchEvent(new CustomEvent('nav:focus-step-bounds', { detail: bounds }))
+                                        }
+                                        const lvl = (s as any).level
+                                        if (lvl != null) {
+                                            const n = typeof lvl === 'string' ? parseInt(lvl, 10) : lvl
+                                            if (!Number.isNaN(n)) window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n }))
+                                        }
+                                    } catch { }
+                                }}>
+                                    {(() => {
+                                        if ((s as any).type === 'floor-change') {
+                                            const dir = (s as any).direction
+                                            const toL = (s as any).toLevel
+                                            if (dir === 'up') return `Monter un étage (Niveau ${toL})`
+                                            if (dir === 'down') return `Descendre un étage (Niveau ${toL})`
+                                        }
+                                        return `Avancez ${formatDistance(s.distance)}`
+                                    })()}
                                 </li>
                             ))}
                             {route.steps.length > 12 && (

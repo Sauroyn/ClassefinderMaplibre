@@ -62,7 +62,15 @@ export default function App() {
       } catch { }
     }
     window.addEventListener('navigation:active', onNav as any)
-    return () => window.removeEventListener('navigation:active', onNav as any)
+    const onOpenSettings = () => openSettings()
+    const onSetLevel = (e: any) => { try { const n = Number(e?.detail); if (!Number.isNaN(n)) setLevel(n) } catch { } }
+    window.addEventListener('ui:open-settings', onOpenSettings as any)
+    window.addEventListener('ui:set-level', onSetLevel as any)
+    return () => {
+      window.removeEventListener('navigation:active', onNav as any)
+      window.removeEventListener('ui:open-settings', onOpenSettings as any)
+      window.removeEventListener('ui:set-level', onSetLevel as any)
+    }
   }, [])
 
   return (

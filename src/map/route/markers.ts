@@ -1,7 +1,7 @@
 import maplibre from 'maplibre-gl'
 
 export const USER_CONNECTOR_LEVEL = 1
-export const USER_CONNECTOR_COLOR = '#ff0000'
+export const USER_CONNECTOR_COLOR = '#007bff'
 export const USER_CONNECTOR_OPACITY = 1
 export const USER_CONNECTOR_WIDTH = 18
 

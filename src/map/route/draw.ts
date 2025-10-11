@@ -61,7 +61,8 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
             else if (map.addSource) map.addSource(id, { type: 'geojson', data: geo })
         } catch { }
         const layerId = `${id}-line`
-        const color = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
+        // Keep primary route in stable blue, alternatives in neutral grays
+        const color = idx === 0 ? '#007bff' : (idx === 1 ? '#999999' : '#cccccc')
         const width = idx === 0 ? 18 : 12
         const opacity = idx === 0 ? 1 : 0.6
         try {

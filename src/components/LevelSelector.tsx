@@ -59,6 +59,7 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
             }
             const search = document.querySelector('.searchbar') as HTMLElement | null
             const planner = document.querySelector('.route-planner') as HTMLElement | null
+            const navBanner = document.querySelector('.nav-banner') as HTMLElement | null
             let bottom = 10
             const consider = (el: HTMLElement | null) => {
                 if (!el) return
@@ -74,6 +75,7 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
             }
             consider(search)
             consider(planner)
+            consider(navBanner)
             // add margin below the element
             setMobileTop(Math.ceil(bottom + 14))
         }

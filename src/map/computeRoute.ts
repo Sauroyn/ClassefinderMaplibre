@@ -67,13 +67,24 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
             const ids = r.path as string[]
             let dist = 0
             const steps: any[] = []
+            let prevLevel: number | null = null
             for (let i = 1; i < ids.length; i++) {
                 const a = nodeById.get(String(ids[i - 1]))
                 const b = nodeById.get(String(ids[i]))
                 if (a && b) {
                     const d = haversine(a.coord as [number, number], b.coord as [number, number])
                     dist += d
-                    steps.push({ fromId: String(ids[i - 1]), toId: String(ids[i]), distance: d, coords: [a.coord, b.coord] })
+                    // try to infer level for this segment
+                    const lvlA = (a.level != null ? Number(a.level) : (Array.isArray(a.levels) && a.levels.length ? Number(a.levels[0]) : (a.raw?.properties?.level != null ? Number(a.raw.properties.level) : null)))
+                    const lvlB = (b.level != null ? Number(b.level) : (Array.isArray(b.levels) && b.levels.length ? Number(b.levels[0]) : (b.raw?.properties?.level != null ? Number(b.raw.properties.level) : null)))
+                    const segLevel = (lvlA != null && !Number.isNaN(lvlA)) ? lvlA : (lvlB != null && !Number.isNaN(lvlB) ? lvlB : null)
+                    // add explicit floor change step if level changed from previous
+                    if (prevLevel != null && segLevel != null && segLevel !== prevLevel) {
+                        const dir = segLevel > prevLevel ? 'up' : 'down'
+                        steps.push({ type: 'floor-change', direction: dir, fromLevel: prevLevel, toLevel: segLevel, level: segLevel, distance: 0 })
+                    }
+                    if (segLevel != null) prevLevel = segLevel
+                    steps.push({ fromId: String(ids[i - 1]), toId: String(ids[i]), distance: d, coords: [a.coord, b.coord], level: segLevel ?? undefined })
                 }
             }
             const speed = 1.4
@@ -99,14 +110,22 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         const featCollection = map.getSource && map.getSource(gid) ? (map.getSource(gid) as any)._data : null
         let dist = 0
         const steps: any[] = []
+        let prevLevel: number | null = null
         if (featCollection && featCollection.features) {
             for (const f of featCollection.features) {
                 if (f.geometry && f.geometry.type === 'LineString') {
                     const coords = f.geometry.coordinates
+                    const segLevel = (f.properties && f.properties.level != null) ? (typeof f.properties.level === 'string' ? Number(f.properties.level) : f.properties.level) : null
+                    // add explicit floor-change step if level changed
+                    if (prevLevel != null && segLevel != null && segLevel !== prevLevel) {
+                        const dir = segLevel > prevLevel ? 'up' : 'down'
+                        steps.push({ type: 'floor-change', direction: dir, fromLevel: prevLevel, toLevel: segLevel, level: segLevel, distance: 0 })
+                    }
+                    if (segLevel != null) prevLevel = segLevel
                     for (let j = 1; j < coords.length; j++) {
                         const d = haversine(coords[j - 1] as [number, number], coords[j] as [number, number])
                         dist += d
-                        steps.push({ distance: d, coords: [coords[j - 1], coords[j]] })
+                        steps.push({ distance: d, coords: [coords[j - 1], coords[j]], level: segLevel ?? undefined })
                     }
                 }
             }

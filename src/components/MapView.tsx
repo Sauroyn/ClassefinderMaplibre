@@ -612,7 +612,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             } else {
                                 let idx = -1
                                 try { const m = /route-planner-(\d+)/.exec(saved.id); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
-                                const color = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
+                                const color = idx === 0 ? '#007bff' : (idx === 1 ? '#999999' : '#cccccc')
                                 const width = idx === 0 ? 18 : 12
                                 const opacity = idx === 0 ? 1 : 0.6
                                 paint = { 'line-color': color, 'line-width': width, 'line-opacity': opacity }
@@ -638,7 +638,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
-            style={{ position: 'fixed', right: 10, top: 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+            style={{ position: 'fixed', right: 10, top: 110, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
         >{theme === 'dark' ? '☀️' : '🌙'}</button>
     )
     return <>

@@ -1,7 +1,7 @@
 export default function RouteOption({ route, primary, highlighted, onHover, onLeave, onGo }: any) {
     const minutes = Math.round((route.time || 0) / 60)
     const meters = Math.round(route.distance || 0)
-    const color = primary ? '#ff0000' : (route.index === 1 ? '#999999' : '#cccccc')
+    const color = primary ? '#007bff' : (route.index === 1 ? '#999999' : '#cccccc')
     return (
         <div onMouseEnter={() => onHover(route)} onMouseLeave={() => onLeave(route)} onClick={() => onGo(route)} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderRadius: 6, cursor: 'pointer',

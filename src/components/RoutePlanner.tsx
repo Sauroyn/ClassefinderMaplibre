@@ -13,6 +13,7 @@ import NavigationBanner from './route-planner/NavigationBanner'
 import NavigationBottomSheet from './route-planner/NavigationBottomSheet'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
+import { fitBoundsSmart } from '../map/viewport'
 
 export default function RoutePlanner({ mapRef, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
     // Gestion du bouton retour sur le menu de détails mobile
@@ -144,6 +145,20 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
     // Contrôleur de navigation (mobile)
     const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false))
+
+    // Focus a step bounds when requested from NavigationBottomSheet
+    useEffect(() => {
+        const onFocus = (e: any) => {
+            try {
+                const bounds = e?.detail as [[number, number], [number, number]]
+                if (!bounds || !Array.isArray(bounds[0]) || !Array.isArray(bounds[1])) return
+                const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                if (map) fitBoundsSmart(map, bounds)
+            } catch { }
+        }
+        window.addEventListener('nav:focus-step-bounds', onFocus as any)
+        return () => window.removeEventListener('nav:focus-step-bounds', onFocus as any)
+    }, [mapRef])
 
     // When planner closes from parent, also close sheets
     useEffect(() => {
@@ -290,7 +305,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         const navProxy: any = { ...nav, active: true, route: (nav.route || selectedRoute || null) }
         return (
             <>
-                <NavigationBanner nav={navProxy} onExit={() => { try { const m = mapRef?.current; m?.clearRoute?.() } catch { } setNavigationActive(false); try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { } }} />
+                <NavigationBanner nav={navProxy} />
                 <NavigationBottomSheet nav={navProxy} onFinish={() => { try { const m = mapRef?.current; m?.clearRoute?.() } catch { } setNavigationActive(false); try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { } }} />
             </>
         )
