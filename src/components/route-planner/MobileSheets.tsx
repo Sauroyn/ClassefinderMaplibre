@@ -100,11 +100,35 @@ function BottomSheetBase({
         setHeight(snaps[next])
     }, [activeIndex])
     if (!open) return null
+    // Detect dark mode
+    const isDark = typeof document !== 'undefined' && (document.documentElement.getAttribute('data-theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches)
+    const bg = isDark ? '#181a20' : '#fff'
+    const fg = isDark ? '#f5f7fb' : '#111'
+    const border = isDark ? '#333' : '#e3e3e3'
+    const grabBg = isDark ? '#444' : '#ccc'
     return (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1000, pointerEvents: 'none' }}>
-            <div ref={ref} style={{ position: 'relative', margin: '0 auto', maxWidth: 720, height, background: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, boxShadow: '0 -6px 18px rgba(0,0,0,0.18)', touchAction: 'none' }}>
+            <div
+                ref={ref}
+                style={{
+                    position: 'relative',
+                    margin: '0 auto',
+                    maxWidth: 720,
+                    height,
+                    background: bg,
+                    color: fg,
+                    borderTopLeftRadius: 16,
+                    borderTopRightRadius: 16,
+                    boxShadow: isDark ? '0 -6px 18px rgba(0,0,0,0.38)' : '0 -6px 18px rgba(0,0,0,0.18)',
+                    border: `1px solid ${border}`,
+                    touchAction: 'none',
+                    transition: 'height 0.35s cubic-bezier(.4,1.2,.4,1)',
+                    willChange: 'height',
+                    overflow: 'hidden',
+                }}
+            >
                 <div className="grab-area" onDoubleClick={cycleSnap} style={{ height: 48, paddingTop: 8, cursor: 'grab', pointerEvents: 'auto' }}>
-                    <div className="grab" style={{ width: 48, height: 8, borderRadius: 4, background: '#ccc', margin: '0 auto' }} />
+                    <div className="grab" style={{ width: 48, height: 8, borderRadius: 4, background: grabBg, margin: '0 auto' }} />
                     {header && <div style={{ padding: '8px 12px 0', fontWeight: 700 }}>{header}</div>}
                 </div>
                 <div style={{ padding: 12, overflow: 'auto', height: Math.max(0, height - 64), pointerEvents: 'auto' }}>{children}</div>
@@ -139,20 +163,23 @@ export function RoutesBottomSheet({
     open: boolean
     onSelect: (rt: RouteItem) => void
 }) {
+    // Detect dark mode
+    const isDark = typeof document !== 'undefined' && (document.documentElement.getAttribute('data-theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches)
     return (
         <BottomSheetBase open={open} header={<div style={{ fontWeight: 700 }}>Itinéraires</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {routes.map((r, i) => {
                     const primary = i === 0
-                    const color = primary ? '#ff0000' : (i === 1 ? '#999' : '#ccc')
+                    const color = primary ? (isDark ? '#4da6ff' : '#ff0000') : (i === 1 ? (isDark ? '#888' : '#999') : (isDark ? '#444' : '#ccc'))
                     return (
                         <button key={r.id} onClick={() => onSelect(r)} style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 12,
-                            border: '1px solid #e3e3e3', background: '#fff'
+                            border: `1px solid ${isDark ? '#333' : '#e3e3e3'}`,
+                            background: isDark ? '#23242a' : '#fff', color: isDark ? '#f5f7fb' : '#111'
                         }}>
                             <div style={{ textAlign: 'left' }}>
                                 <div style={{ fontWeight: 700 }}>{primary ? 'Plus court' : `Alternative ${i}`}</div>
-                                <div style={{ fontSize: 12, color: '#666' }}>{formatDistance(r.distance)} • {formatEta(r.time)}</div>
+                                <div style={{ fontSize: 12, color: isDark ? '#aaa' : '#666' }}>{formatDistance(r.distance)} • {formatEta(r.time)}</div>
                             </div>
                             <div style={{ width: 14, height: 14, borderRadius: 7, background: color }} />
                         </button>
@@ -178,37 +205,48 @@ export function RouteDetailsBottomSheet({
     const eta = formatEta(route.time)
     const dist = formatDistance(route.distance)
     const arrStr = useMemo(() => arrivalTime ? arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null, [arrivalTime])
+    // Detect dark mode
+    const isDark = typeof document !== 'undefined' && (document.documentElement.getAttribute('data-theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches)
     return (
-        <BottomSheetBase open={open} header={<div style={{ fontWeight: 700 }}>Trajet sélectionné</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]}>
+        <BottomSheetBase open={open} header={
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+                {/* Bouton retour */}
+                <button aria-label="Retour" title="Retour" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('route-details-back')) }}
+                    style={{ marginRight: 8, background: 'none', border: 'none', color: isDark ? '#f5f7fb' : '#111', fontSize: 20, cursor: 'pointer', padding: 0, width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontWeight: 700 }}>&larr;</span>
+                </button>
+                <div style={{ fontWeight: 700 }}>Trajet sélectionné</div>
+            </div>
+        } initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'flex', gap: 12 }}>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: '#666' }}>Durée</div>
+                        <div style={{ fontSize: 12, color: isDark ? '#aaa' : '#666' }}>Durée</div>
                         <div style={{ fontWeight: 700 }}>{eta}</div>
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: '#666' }}>Distance</div>
+                        <div style={{ fontSize: 12, color: isDark ? '#aaa' : '#666' }}>Distance</div>
                         <div style={{ fontWeight: 700 }}>{dist}</div>
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: '#666' }}>Arrivée</div>
+                        <div style={{ fontSize: 12, color: isDark ? '#aaa' : '#666' }}>Arrivée</div>
                         <div style={{ fontWeight: 700 }}>{arrStr ?? '-'}</div>
                     </div>
                 </div>
 
-                <button onClick={() => onStart(route)} style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: '#111', color: '#fff', fontWeight: 700 }}>Démarrer</button>
+                <button onClick={() => onStart(route)} style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: isDark ? '#4da6ff' : '#111', color: isDark ? '#181a20' : '#fff', fontWeight: 700 }}>Démarrer</button>
 
                 {route.steps && route.steps.length > 0 && (
                     <div>
                         <div style={{ fontWeight: 700, marginBottom: 6 }}>Étapes</div>
                         <ol style={{ listStyle: 'decimal', paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
                             {route.steps.slice(0, 12).map((s, i) => (
-                                <li key={i} style={{ fontSize: 13, color: '#333' }}>
+                                <li key={i} style={{ fontSize: 13, color: isDark ? '#eee' : '#333' }}>
                                     Avancez {formatDistance(s.distance)}
                                 </li>
                             ))}
                             {route.steps.length > 12 && (
-                                <li style={{ fontSize: 12, color: '#666' }}>… {route.steps.length - 12} étapes supplémentaires</li>
+                                <li style={{ fontSize: 12, color: isDark ? '#aaa' : '#666' }}>… {route.steps.length - 12} étapes supplémentaires</li>
                             )}
                         </ol>
                     </div>

@@ -5,10 +5,21 @@ import type { Graph } from './route-planner/utils'
 import Suggestions from './route-planner/Suggestions'
 import RoutesList from './route-planner/RoutesList'
 import { isMobileViewport, RouteDetailsBottomSheet, RoutesBottomSheet } from './route-planner/MobileSheets'
+import { useNavigationController } from './route-planner/NavigationController'
+import NavigationBanner from './route-planner/NavigationBanner'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 
 export default function RoutePlanner({ mapRef, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
+    // Gestion du bouton retour sur le menu de détails mobile
+    useEffect(() => {
+        function onBack() {
+            setDetailsOpen(false)
+            setMobileRoutesOpen(true)
+        }
+        window.addEventListener('route-details-back', onBack)
+        return () => window.removeEventListener('route-details-back', onBack)
+    }, [])
     const [graph, setGraph] = useState<Graph | null>(null)
     const [start, setStart] = useState<string>('')
     const [end, setEnd] = useState<string>('')
@@ -123,6 +134,9 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false)
     const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
     const [detailsOpen, setDetailsOpen] = useState(false)
+    const [navigationActive, setNavigationActive] = useState(false)
+    // Contrôleur de navigation (mobile)
+    const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false))
 
     // When planner closes from parent, also close sheets
     useEffect(() => {
@@ -264,6 +278,11 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         })
     }
 
+    // En mode navigation mobile, on masque tout sauf la bannière navigation
+    if (isMobile && navigationActive && nav.active && nav.route) {
+        return <NavigationBanner nav={nav} onExit={() => { setNavigationActive(false); }} />
+    }
+    // Sinon, toujours afficher le planner classique
     return (
         <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
@@ -284,7 +303,6 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null) }}
                     onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null) }}
                 />
-
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>
                 </div>
@@ -300,7 +318,6 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     />
                 )}
             </div>
-
             {/* Bottom suggestion panel inside planner container (full width under inputs) */}
             <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
                 <div style={{ marginBottom: 8 }}>
@@ -346,14 +363,34 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     }}
                 />
             )}
-
-            {isMobile && (
+            {isMobile && !navigationActive && (
                 <RouteDetailsBottomSheet
                     open={detailsOpen}
                     route={selectedRoute}
                     onStart={() => {
-                        // starting: keep only the selected route visible already done above; future work: step-by-step
                         setDetailsOpen(false)
+                        setNavigationActive(true)
+                        try {
+                            const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                            // Stylise la route sélectionnée en bleu et masque les autres
+                            routes.forEach((r) => {
+                                if (selectedRoute && r.layerId === selectedRoute.layerId) {
+                                    try { map?.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
+                                    try { map?.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
+                                    try { map?.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                } else {
+                                    try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                }
+                            })
+                            // Connecteur utilisateur -> graphe aussi en bleu
+                            try { map?.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
+                            // Recentre sur l'utilisateur si possible
+                            try {
+                                navigator.geolocation.getCurrentPosition((pos) => {
+                                    try { map?.flyTo?.({ center: { lng: pos.coords.longitude, lat: pos.coords.latitude }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                                })
+                            } catch { }
+                        } catch { }
                     }}
                     arrivalTime={(() => {
                         if (!selectedRoute) return null

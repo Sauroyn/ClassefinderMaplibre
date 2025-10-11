@@ -1,9 +1,9 @@
 import maplibre from 'maplibre-gl'
 
-export const USER_CONNECTOR_LEVEL = 0
-export const USER_CONNECTOR_COLOR = '#ff8888ff'
-export const USER_CONNECTOR_OPACITY = 0.55
-export const USER_CONNECTOR_WIDTH = 8
+export const USER_CONNECTOR_LEVEL = 1
+export const USER_CONNECTOR_COLOR = '#ff0000'
+export const USER_CONNECTOR_OPACITY = 1
+export const USER_CONNECTOR_WIDTH = 18
 
 export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLngLat?: [number, number], nodeById?: Map<string, any>, combinedCoords?: number[][]) {
     if (!userOriginLngLat || !ks || ks.length === 0) return
@@ -11,21 +11,7 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
     const startNodeId = String(ks[0].path[0])
     const startNode = nb.get(startNodeId)
     if (!startNode || !Array.isArray(startNode.coord)) return
-    // only draw connector if user is not already near the start node
-    try {
-        const toRad = (v: number) => v * Math.PI / 180
-        const haversine = (a: [number, number], b: [number, number]) => {
-            const R = 6371000
-            const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
-            const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
-            const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
-            const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
-            return R * c
-        }
-        const d = haversine(userOriginLngLat as [number, number], startNode.coord as [number, number])
-        // threshold 15m: do not draw if very close
-        if (d <= 15) return
-    } catch { }
+    // toujours dessiner le connecteur utilisateur -> graphe
     const connId = 'route-planner-user-connector'
     const fc = {
         type: 'FeatureCollection',
@@ -42,7 +28,7 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
         map.setPaintProperty(layerId, 'line-opacity', USER_CONNECTOR_OPACITY)
     }
     try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
-    try { combinedCoords && combinedCoords.push(userOriginLngLat as any) } catch { }
+    try { if (combinedCoords) { combinedCoords.push(userOriginLngLat as any); combinedCoords.push(startNode.coord as any) } } catch { }
 }
 
 export function placeMarkers(map: any, graph: any, start: string, end: string, ks: any[], userOriginLngLat?: [number, number]) {
@@ -111,9 +97,14 @@ export function placeMarkers(map: any, graph: any, start: string, end: string, k
             const current = (map as any).__currentLevel
             if (marker && (marker as any).getElement) {
                 const mEl = (marker as any).getElement()
-                if (metaLevel !== null && metaLevel !== undefined) mEl.style.display = (metaLevel === current) ? 'block' : 'none'
-                else if (metaLevels && Array.isArray(metaLevels)) mEl.style.display = (metaLevels.indexOf(current) !== -1) ? 'block' : 'none'
-                else mEl.style.display = 'block'
+                // Si on utilise la position utilisateur pour le départ, toujours afficher le marqueur de départ
+                if (role === 'start' && userOriginLngLat) {
+                    mEl.style.display = 'block'
+                } else {
+                    if (metaLevel !== null && metaLevel !== undefined) mEl.style.display = (metaLevel === current) ? 'block' : 'none'
+                    else if (metaLevels && Array.isArray(metaLevels)) mEl.style.display = (metaLevels.indexOf(current) !== -1) ? 'block' : 'none'
+                    else mEl.style.display = 'block'
+                }
             }
         } catch { }
         return { marker, level: metaLevel, levels: metaLevels }
