@@ -4,6 +4,7 @@ import { parseGeoJSON } from './route-planner/utils'
 import type { Graph } from './route-planner/utils'
 import Suggestions from './route-planner/Suggestions'
 import RoutesList from './route-planner/RoutesList'
+import { isMobileViewport, RouteDetailsBottomSheet, RoutesBottomSheet } from './route-planner/MobileSheets'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 
@@ -112,6 +113,25 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [coveredOnly, setCoveredOnly] = useState<boolean>(false)
     const [showSecondary, setShowSecondary] = useState<boolean>(true)
     const [showSettings, setShowSettings] = useState<boolean>(false)
+    const [isMobile, setIsMobile] = useState<boolean>(() => isMobileViewport())
+    useEffect(() => {
+        const onResize = () => setIsMobile(isMobileViewport())
+        window.addEventListener('resize', onResize)
+        return () => window.removeEventListener('resize', onResize)
+    }, [])
+
+    const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false)
+    const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
+    const [detailsOpen, setDetailsOpen] = useState(false)
+
+    // When planner closes from parent, also close sheets
+    useEffect(() => {
+        return () => {
+            setMobileRoutesOpen(false)
+            setDetailsOpen(false)
+            setSelectedRoute(null)
+        }
+    }, [])
     async function compute() {
         if (!graph) { console.warn('[RoutePlanner] no graph loaded'); return }
         // clear previous routes while computing
@@ -148,7 +168,12 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
             const k = showSecondary ? 3 : 1
             const res = await computeAndDrawRoute({ graph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k, userOriginLngLat: userCoord || undefined })
-            if (res && res.routes) setRoutes(res.routes)
+            if (res && res.routes) {
+                setRoutes(res.routes)
+                if (isMobile) {
+                    setMobileRoutesOpen(true)
+                }
+            }
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
     }
 
@@ -279,19 +304,63 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             {/* Bottom suggestion panel inside planner container (full width under inputs) */}
             <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
                 <div style={{ marginBottom: 8 }}>
-                    {/* Always show existing routes first (if any), then suggestions beneath when a field is focused */}
-                    {routes && routes.length > 0 && (
+                    {/* On desktop show routes list inline; on mobile use bottom sheet */}
+                    {!isMobile && routes && routes.length > 0 && (
                         <RoutesList
                             routes={routes}
                             highlightedRoute={highlightedRoute}
                             onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
                             onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
-                            onGo={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
+                            onGo={(rt: any) => {
+                                setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId)
+                                if (isMobile) {
+                                    setSelectedRoute(rt)
+                                    setDetailsOpen(true)
+                                }
+                            }}
                         />
                     )}
                     <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
                 </div>
             </div>
+            {isMobile && (
+                <RoutesBottomSheet
+                    routes={routes}
+                    open={mobileRoutesOpen}
+                    onSelect={(rt) => {
+                        setSelectedRoute(rt)
+                        setMobileRoutesOpen(false)
+                        setDetailsOpen(true)
+                        // hide other routes on map leaving only selected
+                        try {
+                            const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                            routes.forEach((r) => {
+                                if (r.layerId !== rt.layerId) {
+                                    try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                } else {
+                                    try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
+                                }
+                            })
+                            // also hide the alternative sources if needed
+                        } catch { }
+                    }}
+                />
+            )}
+
+            {isMobile && (
+                <RouteDetailsBottomSheet
+                    open={detailsOpen}
+                    route={selectedRoute}
+                    onStart={() => {
+                        // starting: keep only the selected route visible already done above; future work: step-by-step
+                        setDetailsOpen(false)
+                    }}
+                    arrivalTime={(() => {
+                        if (!selectedRoute) return null
+                        try { const now = new Date(); return new Date(now.getTime() + Math.round((selectedRoute.time || 0) * 1000)) } catch { return null }
+                    })()}
+                />
+            )}
         </div>
     )
 }

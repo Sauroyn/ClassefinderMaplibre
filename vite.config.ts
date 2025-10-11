@@ -3,6 +3,11 @@ import { defineConfig, type Plugin, type PreviewServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+// __dirname in ESM
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 function publicConfigsVirtual(): Plugin {
   const VIRTUAL_ID = 'virtual:public-configs'
@@ -79,5 +84,14 @@ function icsProxy(): Plugin {
 
 export default defineConfig({
   plugins: [react(), publicConfigsVirtual(), icsProxy()],
+  optimizeDeps: {
+    include: ['warning']
+  },
+  resolve: {
+    alias: [
+      { find: 'warning', replacement: path.resolve(__dirname, 'src/shims/warning.ts') },
+      { find: /^warning\/.+$/, replacement: path.resolve(__dirname, 'src/shims/warning.ts') },
+    ]
+  },
   //base: '/preview/', // <== IMPORTANT
 })

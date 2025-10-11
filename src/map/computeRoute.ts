@@ -17,15 +17,20 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
             const r = ks[idx]
             const ids = r.path as string[]
             let dist = 0
+            const steps: any[] = []
             for (let i = 1; i < ids.length; i++) {
                 const a = nodeById.get(String(ids[i - 1]))
                 const b = nodeById.get(String(ids[i]))
-                if (a && b) dist += haversine(a.coord as [number, number], b.coord as [number, number])
+                if (a && b) {
+                    const d = haversine(a.coord as [number, number], b.coord as [number, number])
+                    dist += d
+                    steps.push({ fromId: String(ids[i - 1]), toId: String(ids[i]), distance: d, coords: [a.coord, b.coord] })
+                }
             }
             const speed = 1.4
             const timeSec = dist / speed
             const gid = `route-planner-${idx}`
-            routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line` })
+            routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps })
         }
         return { routes: routesOut }
     }
@@ -41,17 +46,22 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         const gid = `route-planner-${idx}`
         const featCollection = map.getSource && map.getSource(gid) ? (map.getSource(gid) as any)._data : null
         let dist = 0
+        const steps: any[] = []
         if (featCollection && featCollection.features) {
             for (const f of featCollection.features) {
                 if (f.geometry && f.geometry.type === 'LineString') {
                     const coords = f.geometry.coordinates
-                    for (let j = 1; j < coords.length; j++) dist += haversine(coords[j - 1] as [number, number], coords[j] as [number, number])
+                    for (let j = 1; j < coords.length; j++) {
+                        const d = haversine(coords[j - 1] as [number, number], coords[j] as [number, number])
+                        dist += d
+                        steps.push({ distance: d, coords: [coords[j - 1], coords[j]] })
+                    }
                 }
             }
         }
         const speed = 1.4
         const timeSec = dist / speed
-        routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line` })
+        routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps })
     }
     return { routes: routesOut }
 }

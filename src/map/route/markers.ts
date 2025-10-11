@@ -1,6 +1,6 @@
 import maplibre from 'maplibre-gl'
 
-export const USER_CONNECTOR_LEVEL = 1
+export const USER_CONNECTOR_LEVEL = 0
 export const USER_CONNECTOR_COLOR = '#ff8888ff'
 export const USER_CONNECTOR_OPACITY = 0.55
 export const USER_CONNECTOR_WIDTH = 8
@@ -11,6 +11,21 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
     const startNodeId = String(ks[0].path[0])
     const startNode = nb.get(startNodeId)
     if (!startNode || !Array.isArray(startNode.coord)) return
+    // only draw connector if user is not already near the start node
+    try {
+        const toRad = (v: number) => v * Math.PI / 180
+        const haversine = (a: [number, number], b: [number, number]) => {
+            const R = 6371000
+            const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
+            const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
+            const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
+            const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
+            return R * c
+        }
+        const d = haversine(userOriginLngLat as [number, number], startNode.coord as [number, number])
+        // threshold 15m: do not draw if very close
+        if (d <= 15) return
+    } catch { }
     const connId = 'route-planner-user-connector'
     const fc = {
         type: 'FeatureCollection',
