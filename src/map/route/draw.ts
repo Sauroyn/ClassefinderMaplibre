@@ -61,8 +61,10 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
             else if (map.addSource) map.addSource(id, { type: 'geojson', data: geo })
         } catch { }
         const layerId = `${id}-line`
-        // Keep primary route in stable blue, alternatives in neutral grays
-        const color = idx === 0 ? '#007bff' : (idx === 1 ? '#999999' : '#cccccc')
+        // Primary route uses a data-driven color to reflect progress (__covered flag per feature)
+        const primaryColorExpr: any = ['case', ['==', ['get', '__covered'], true], '#9aa0a6', '#007bff']
+        // Alternatives remain neutral grays
+        const color = idx === 0 ? primaryColorExpr : (idx === 1 ? '#999999' : '#cccccc')
         const width = idx === 0 ? 18 : 12
         const opacity = idx === 0 ? 1 : 0.6
         try {

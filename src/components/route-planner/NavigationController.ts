@@ -34,6 +34,8 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
     const lastSnappedRef = useRef<[number, number] | null>(null)
     const animReqRef = useRef<number | null>(null)
     const lastRecalcAtRef = useRef<number>(0)
+    // Track last real user position to avoid re-animating when unchanged (e.g., map panning)
+    const lastUserRealRef = useRef<[number, number] | null>(null)
 
     useEffect(() => {
         mapRefCached.current = mapRef && mapRef.current ? (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ?? mapRef.current)) : null
@@ -98,47 +100,26 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         return mk
     }
 
-    function updateProgressLayer(map: any, route: RouteItem, along: number, segIndex: number, segT: number) {
+    function updateProgressOnBaseLayer(map: any, route: RouteItem, along: number) {
         try {
-            const id = 'route-planner-progress-0'
-            const layerId = id + '-line'
-            // construire les features jusqu'au point courant
-            const feats: any[] = []
-            let remaining = along
-            if (route.steps && route.steps.length) {
-                for (let i = 0; i < route.steps.length; i++) {
-                    const st: any = route.steps[i]
-                    const a = st.coords[0]
-                    const b = st.coords[1]
-                    if (remaining <= 0) break
-                    if (i < segIndex) {
-                        feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [a, b] }, properties: { level: st.level } })
-                        remaining -= (st.distance || 0)
-                    } else if (i === segIndex) {
-                        // ajouter segment partiel [a -> p]
-                        // calcule point p par interpolation linéaire en WGS (approx)
-                        const p: [number, number] = [
-                            (a[0] as number) + ((b[0] as number) - (a[0] as number)) * segT,
-                            (a[1] as number) + ((b[1] as number) - (a[1] as number)) * segT,
-                        ]
-                        feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [a, p] }, properties: { level: st.level } })
-                        remaining = 0
-                        break
-                    }
-                }
+            const sourceId = (route.id || 'route-planner-0') as string
+            const src: any = map.getSource && map.getSource(sourceId)
+            if (!src || !src._data) return
+            const data = JSON.parse(JSON.stringify(src._data)) // cheap clone to avoid mutating in place
+            // Build cumulative distances per feature
+            let cum = 0
+            const feats = data.features || []
+            for (const f of feats) {
+                if (!f || !f.geometry || f.geometry.type !== 'LineString') { f.properties = { ...(f.properties || {}), __covered: false }; continue }
+                const coords = f.geometry.coordinates || []
+                let len = 0
+                for (let i = 1; i < coords.length; i++) len += haversine(coords[i - 1], coords[i])
+                const covered = cum + len <= along
+                f.properties = { ...(f.properties || {}), __covered: covered }
+                cum += len
             }
-            const fc = { type: 'FeatureCollection', features: feats }
-            if (map.getSource && map.getSource(id)) (map.getSource(id) as any).setData(fc)
-            else map.addSource(id, { type: 'geojson', data: fc })
-            const paint = { 'line-color': '#9aa0a6', 'line-width': 18, 'line-opacity': 1 }
-            if (!map.getLayer || !map.getLayer(layerId)) {
-                map.addLayer({ id: layerId, type: 'line', source: id, paint, layout: { 'line-cap': 'round', 'line-join': 'round' } })
-                try { map.moveLayer(layerId) } catch { }
-            } else {
-                map.setPaintProperty(layerId, 'line-color', '#9aa0a6')
-                map.setPaintProperty(layerId, 'line-width', 18)
-                map.setPaintProperty(layerId, 'line-opacity', 1)
-            }
+            // partial feature (the one straddling along) is not marked covered; we keep it blue to avoid reverse direction glitches across multi-vertex lines
+            src.setData(data)
         } catch { }
     }
 
@@ -200,6 +181,13 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         function onPos(pos: GeolocationPosition) {
             if (manualOverride.current) return
             const real: [number, number] = [pos.coords.longitude, pos.coords.latitude]
+            // Only propagate if moved more than a tiny threshold (meters)
+            try {
+                const prev = lastUserRealRef.current
+                const moved = prev ? haversine(prev, real) : Infinity
+                if (moved < 0.2) return
+            } catch { /* ignore */ }
+            lastUserRealRef.current = real
             setState(s => ({ ...s, userPosition: real }))
         }
         function onErr() { }
@@ -213,7 +201,10 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
                 if (watchId.current != null) { try { navigator.geolocation.clearWatch(watchId.current) } catch { } watchId.current = null }
                 manualOverride.current = true
                 const p = e?.detail as [number, number]
-                if (Array.isArray(p) && p.length === 2) setState(s => ({ ...s, userPosition: [p[0], p[1]] }))
+                if (Array.isArray(p) && p.length === 2) {
+                    lastUserRealRef.current = [p[0], p[1]]
+                    setState(s => ({ ...s, userPosition: [p[0], p[1]] }))
+                }
             } catch { }
         }
         window.addEventListener('navigation:dev-set-user-position', onDevSet as any)
@@ -229,12 +220,20 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         const map = mapRefCached.current
         const steps = Array.isArray(route.steps) ? route.steps : []
         if (!steps.length || !map) return
-        const { snapped, along, segIndex, segT, realToSnapDist } = snapToRoute(state.userPosition, steps as any)
+        const { snapped, along, segIndex, realToSnapDist } = snapToRoute(state.userPosition, steps as any)
         if (!snapped) return
-        // animer le marqueur jusqu'au point snap
-        animateMarkerTo(map, snapped)
-        // progression grisée
-        updateProgressLayer(map, route, along, segIndex, segT)
+        // animer le marqueur jusqu'au point snap si le point a réellement changé (éviter l'animation lors d'un pan de carte)
+        try {
+            const prevSnap = lastSnappedRef.current
+            const delta = prevSnap ? haversine(prevSnap, snapped) : Infinity
+            if (!prevSnap || delta >= 0.1) {
+                animateMarkerTo(map, snapped)
+            }
+        } catch {
+            animateMarkerTo(map, snapped)
+        }
+        // progression grisée sur le trait de base
+        updateProgressOnBaseLayer(map, route, along)
         // étape courante approx
         try { setState(s => ({ ...s, currentStep: Math.max(0, segIndex) })) } catch { }
         // recalc si trop loin

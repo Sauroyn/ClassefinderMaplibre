@@ -453,7 +453,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 />
             )}
             {isMobile && !navigationActive && (
-                    <RouteDetailsBottomSheet
+                <RouteDetailsBottomSheet
                     open={detailsOpen}
                     route={selectedRoute}
                     onStart={async () => {

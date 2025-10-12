@@ -131,10 +131,15 @@ export function BottomSheetBase({
             document.addEventListener('touchend', onEnd as any, { once: true })
             document.addEventListener('mouseup', onEnd as any, { once: true })
         }
-        // drag only from the handle to avoid intercepting clicks inside the content
+        // Allow drag from anywhere on the sheet container (tap-anywhere to drag)
+        root?.addEventListener('mousedown', startDrag)
+        root?.addEventListener('touchstart', startDrag, { passive: false })
+        // Keep handle listeners as well; clicking handle still cycles via onClick
         handle?.addEventListener('mousedown', startDrag)
         handle?.addEventListener('touchstart', startDrag, { passive: false })
         return () => {
+            root?.removeEventListener('mousedown', startDrag)
+            root?.removeEventListener('touchstart', startDrag as any)
             handle?.removeEventListener('mousedown', startDrag)
             handle?.removeEventListener('touchstart', startDrag as any)
         }
