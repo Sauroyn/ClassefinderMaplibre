@@ -1,6 +1,7 @@
 import maplibre from 'maplibre-gl'
 
 export const USER_CONNECTOR_LEVEL = 1
+// Compat: ces constantes restent exportées pour MapView, mais ne sont plus utilisées pour dessiner la couche séparée
 export const USER_CONNECTOR_COLOR = '#007bff'
 export const USER_CONNECTOR_OPACITY = 1
 export const USER_CONNECTOR_WIDTH = 18
@@ -15,19 +16,26 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
     const connId = 'route-planner-user-connector'
     const fc = {
         type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, startNode.coord] }, properties: { level: USER_CONNECTOR_LEVEL } }]
+        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, startNode.coord] }, properties: { level: USER_CONNECTOR_LEVEL, __cutoff: 0, __isConnector: true } }]
     }
     if (map.getSource && map.getSource(connId)) (map.getSource(connId) as any).setData(fc as any)
-    else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc })
+    else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc } as any)
+    // Ne pas ajouter de couche visible séparée: la progression combinée s'en charge
     const layerId = connId + '-line'
-    if (!map.getLayer || !map.getLayer(layerId)) {
-        map.addLayer({ id: layerId, type: 'line', source: connId, paint: { 'line-color': USER_CONNECTOR_COLOR, 'line-width': USER_CONNECTOR_WIDTH, 'line-opacity': USER_CONNECTOR_OPACITY }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
-    } else {
-        map.setPaintProperty(layerId, 'line-color', USER_CONNECTOR_COLOR)
-        map.setPaintProperty(layerId, 'line-width', USER_CONNECTOR_WIDTH)
-        map.setPaintProperty(layerId, 'line-opacity', USER_CONNECTOR_OPACITY)
-    }
-    try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
+    try { if (map.getLayer && map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'none') } catch { }
+    try { if (map.moveLayer) map.moveLayer('route-planner-0-remaining-line') } catch { }
+    // Injecter le connecteur dans la source "route-planner-0-remaining" pour qu'il soit visible AVANT le démarrage de la navigation
+    try {
+        const remSrc: any = map.getSource && map.getSource('route-planner-0-remaining')
+        if (remSrc && remSrc._data) {
+            const data = remSrc._data
+            const feats = Array.isArray(data.features) ? data.features.slice() : []
+            // Retirer d'éventuels anciens connecteurs
+            const filtered = feats.filter((f: any) => !(f && f.properties && f.properties.__isConnector))
+            filtered.push(fc.features[0])
+            remSrc.setData({ type: 'FeatureCollection', features: filtered })
+        }
+    } catch { }
     try { if (combinedCoords) { combinedCoords.push(userOriginLngLat as any); combinedCoords.push(startNode.coord as any) } } catch { }
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import maplibre from 'maplibre-gl'
 import type { RouteItem } from './MobileSheets'
 import { haversine } from '../../map/measure'
+import { updateRouteProgress } from '../../map/route/draw'
 
 // Constantes configurables
 // Distance max (en mètres) entre la position réelle et la ligne du trajet pour garder le suivi
@@ -100,27 +101,28 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         return mk
     }
 
-    function updateProgressOnBaseLayer(map: any, route: RouteItem, along: number) {
+    function updateProgress(map: any, route: RouteItem, along: number) {
         try {
-            const sourceId = (route.id || 'route-planner-0') as string
-            const src: any = map.getSource && map.getSource(sourceId)
-            if (!src || !src._data) return
-            const data = JSON.parse(JSON.stringify(src._data)) // cheap clone to avoid mutating in place
-            // Build cumulative distances per feature
-            let cum = 0
-            const feats = data.features || []
-            for (const f of feats) {
-                if (!f || !f.geometry || f.geometry.type !== 'LineString') { f.properties = { ...(f.properties || {}), __covered: false }; continue }
-                const coords = f.geometry.coordinates || []
-                let len = 0
-                for (let i = 1; i < coords.length; i++) len += haversine(coords[i - 1], coords[i])
-                const covered = cum + len <= along
-                f.properties = { ...(f.properties || {}), __covered: covered }
-                cum += len
-            }
-            // partial feature (the one straddling along) is not marked covered; we keep it blue to avoid reverse direction glitches across multi-vertex lines
-            src.setData(data)
-        } catch { }
+            const routeSourceId = (route.id || 'route-planner-0') as string
+            // Passer la distance cumulée complète: la fonction draw.ts combine connecteur + route
+            const user = lastUserRealRef.current || undefined
+            // Construire un polyline continu à partir des steps (ordre garanti du départ vers l'arrivée)
+            let stepsPolyline: number[][] | undefined
+            try {
+                const coords: number[][] = []
+                const stepsArr = (route.steps || []) as Array<{ coords: [number[], number[]] }>
+                for (let i = 0; i < stepsArr.length; i++) {
+                    const a = stepsArr[i].coords[0] as number[]
+                    const b = stepsArr[i].coords[1] as number[]
+                    if (i === 0) coords.push(a)
+                    coords.push(b)
+                }
+                if (coords.length >= 2) stepsPolyline = coords
+            } catch { }
+            updateRouteProgress(map, routeSourceId, along, user as any, stepsPolyline)
+        } catch (e) {
+            console.warn('Error in updateProgress:', e)
+        }
     }
 
     function animateMarkerTo(map: any, target: [number, number]) {
@@ -232,8 +234,8 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         } catch {
             animateMarkerTo(map, snapped)
         }
-        // progression grisée sur le trait de base
-        updateProgressOnBaseLayer(map, route, along)
+        // progression sur le trait de base et le connecteur (line-gradient avec __cutoff)
+        updateProgress(map, route, along)
         // étape courante approx
         try { setState(s => ({ ...s, currentStep: Math.max(0, segIndex) })) } catch { }
         // recalc si trop loin

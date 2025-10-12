@@ -355,9 +355,20 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
         if (!map) return
         // reset all route layers to default opacity and width
+        const primaryCovered = 'route-planner-0-covered-line'
+        const primaryRemaining = 'route-planner-0-remaining-line'
         routes.forEach((r) => {
-            try { map.setPaintProperty(r.layerId, 'line-width', r.layerId === layerId ? 22 : (r.layerId === 'route-planner-0-line' ? 18 : 12)) } catch (e) { }
-            try { map.setPaintProperty(r.layerId, 'line-opacity', r.layerId === layerId ? 1 : 0.6) } catch (e) { }
+            const isPrimary = r.layerId === 'route-planner-0-line'
+            const isSelected = r.layerId === layerId
+            if (isPrimary) {
+                try { map.setPaintProperty(primaryCovered, 'line-width', isSelected ? 22 : 18) } catch { }
+                try { map.setPaintProperty(primaryRemaining, 'line-width', isSelected ? 18 : 18) } catch { }
+                try { map.setPaintProperty(primaryCovered, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
+                try { map.setPaintProperty(primaryRemaining, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
+            } else {
+                try { map.setPaintProperty(r.layerId, 'line-width', isSelected ? 22 : 12) } catch { }
+                try { map.setPaintProperty(r.layerId, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
+            }
         })
     }
 
@@ -440,11 +451,24 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                         // hide other routes on map leaving only selected
                         try {
                             const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                            const primaryCovered = 'route-planner-0-covered-line'
+                            const primaryRemaining = 'route-planner-0-remaining-line'
                             routes.forEach((r) => {
+                                const isPrimary = r.layerId === 'route-planner-0-line'
                                 if (r.layerId !== rt.layerId) {
-                                    try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                    if (isPrimary) {
+                                        try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'none') } catch { }
+                                        try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'none') } catch { }
+                                    } else {
+                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                    }
                                 } else {
-                                    try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
+                                    if (isPrimary) {
+                                        try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'visible') } catch { }
+                                        try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'visible') } catch { }
+                                    } else {
+                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
+                                    }
                                 }
                             })
                             // also hide the alternative sources if needed
@@ -479,16 +503,30 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                             try {
                                 const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
                                 if (map) {
+                                    const primaryCovered = 'route-planner-0-covered-line'
+                                    const primaryRemaining = 'route-planner-0-remaining-line'
                                     routes.forEach((r) => {
+                                        const isPrimary = r.layerId === 'route-planner-0-line'
                                         if (selectedRoute && r.layerId === selectedRoute.layerId) {
-                                            try { map.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
-                                            try { map.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
-                                            try { map.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                            if (isPrimary) {
+                                                try { map.setPaintProperty?.(primaryCovered, 'line-width', 20) } catch { }
+                                                try { map.setPaintProperty?.(primaryRemaining, 'line-width', 18) } catch { }
+                                                try { map.setLayoutProperty?.(primaryCovered, 'visibility', 'visible') } catch { }
+                                                try { map.setLayoutProperty?.(primaryRemaining, 'visibility', 'visible') } catch { }
+                                            } else {
+                                                try { map.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
+                                                try { map.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                                try { map.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
+                                            }
                                         } else {
-                                            try { map.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                            if (isPrimary) {
+                                                try { map.setLayoutProperty?.(primaryCovered, 'visibility', 'none') } catch { }
+                                                try { map.setLayoutProperty?.(primaryRemaining, 'visibility', 'none') } catch { }
+                                            } else {
+                                                try { map.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                            }
                                         }
                                     })
-                                    try { map.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
                                     if (user && Number.isFinite(user[0]) && Number.isFinite(user[1])) {
                                         try { map.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
                                     }
@@ -529,16 +567,30 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                                     setNavigationActive(true)
                                     try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: true })) } catch { }
                                     const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                                    const primaryCovered = 'route-planner-0-covered-line'
+                                    const primaryRemaining = 'route-planner-0-remaining-line'
                                     res.routes.forEach((r: any) => {
+                                        const isPrimary = r.layerId === 'route-planner-0-line'
                                         if (r.layerId === primary.layerId) {
-                                            try { map?.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
-                                            try { map?.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
-                                            try { map?.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                            if (isPrimary) {
+                                                try { map?.setPaintProperty?.(primaryCovered, 'line-width', 20) } catch { }
+                                                try { map?.setPaintProperty?.(primaryRemaining, 'line-width', 18) } catch { }
+                                                try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'visible') } catch { }
+                                                try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'visible') } catch { }
+                                            } else {
+                                                try { map?.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
+                                                try { map?.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                                try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
+                                            }
                                         } else {
-                                            try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                            if (isPrimary) {
+                                                try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'none') } catch { }
+                                                try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'none') } catch { }
+                                            } else {
+                                                try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                            }
                                         }
                                     })
-                                    try { map?.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
                                     if (user && Number.isFinite(user[0]) && Number.isFinite(user[1])) {
                                         try { map?.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
                                     }
