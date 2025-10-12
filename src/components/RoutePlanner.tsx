@@ -144,7 +144,68 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [confirmDistance, setConfirmDistance] = useState(0)
     const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
     // Contrôleur de navigation (mobile)
-    const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false))
+    const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false), mapRef)
+
+    // Dev-only override: click on map sets user position when navigating
+    useEffect(() => {
+        if (!navigationActive) return
+        // hide geolocate UI while navigating
+        try { window.dispatchEvent(new CustomEvent('ui:hide-geolocate')) } catch { }
+        const onMapClick = (e: any) => {
+            if (import.meta.env && import.meta.env.DEV !== true) return
+            const lngLat = e?.detail?.lngLat || e?.detail || null
+            if (!lngLat) return
+            const p: [number, number] = Array.isArray(lngLat) ? [lngLat[0], lngLat[1]] : [lngLat.lng, lngLat.lat]
+            window.dispatchEvent(new CustomEvent('navigation:dev-set-user-position', { detail: p }))
+        }
+        // Option 1: listen to maplibre click
+        const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+        const onNativeClick = (ev: any) => {
+            if (import.meta.env && import.meta.env.DEV !== true) return
+            try {
+                const p = ev?.lngLat; if (p) window.dispatchEvent(new CustomEvent('navigation:dev-set-user-position', { detail: [p.lng, p.lat] }))
+            } catch { }
+        }
+        try { map?.on?.('click', onNativeClick) } catch { }
+        window.addEventListener('map:click', onMapClick as any)
+        return () => {
+            try { map?.off?.('click', onNativeClick) } catch { }
+            window.removeEventListener('map:click', onMapClick as any)
+            try { window.dispatchEvent(new CustomEvent('ui:show-geolocate')) } catch { }
+        }
+    }, [navigationActive, mapRef])
+
+    // Handle recalc and finish
+    useEffect(() => {
+        const onRecalc = async (e: any) => {
+            try {
+                const p = e?.detail
+                if (!p || !graph || !end) return
+                const user: [number, number] = [p.lng, p.lat]
+                const res = await computeAndDrawRoute({ graph, start: String(selectedRoute?.path?.[0] ?? start), end, excludeStairs, coveredOnly, mapRef, k: 3, userOriginLngLat: user })
+                if (res && res.routes && res.routes.length) {
+                    const primary = res.routes[0]
+                    setRoutes(res.routes)
+                    setSelectedRoute(primary)
+                }
+            } catch { }
+        }
+        const onFinish = () => {
+            // Show toast/message and exit
+            try { alert('Trajet terminé. Bravo !') } catch { }
+            try { const m = mapRef?.current; m?.clearRoute?.() } catch { }
+            setNavigationActive(false)
+            try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { }
+            try { window.dispatchEvent(new CustomEvent('ui:show-geolocate')) } catch { }
+            try { window.dispatchEvent(new CustomEvent('ui:trigger-geolocate')) } catch { }
+        }
+        window.addEventListener('navigation:recalc-from', onRecalc as any)
+        window.addEventListener('navigation:finish', onFinish as any)
+        return () => {
+            window.removeEventListener('navigation:recalc-from', onRecalc as any)
+            window.removeEventListener('navigation:finish', onFinish as any)
+        }
+    }, [graph, end, excludeStairs, coveredOnly, mapRef, selectedRoute, start])
 
     // Focus a step bounds when requested from NavigationBottomSheet
     useEffect(() => {
@@ -392,7 +453,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                 />
             )}
             {isMobile && !navigationActive && (
-                <RouteDetailsBottomSheet
+                    <RouteDetailsBottomSheet
                     open={detailsOpen}
                     route={selectedRoute}
                     onStart={async () => {
@@ -417,17 +478,21 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                             try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: true })) } catch { }
                             try {
                                 const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
-                                routes.forEach((r) => {
-                                    if (selectedRoute && r.layerId === selectedRoute.layerId) {
-                                        try { map?.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
-                                        try { map?.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
-                                        try { map?.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
-                                    } else {
-                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                if (map) {
+                                    routes.forEach((r) => {
+                                        if (selectedRoute && r.layerId === selectedRoute.layerId) {
+                                            try { map.setPaintProperty?.(r.layerId, 'line-color', '#007bff') } catch { }
+                                            try { map.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
+                                            try { map.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
+                                        } else {
+                                            try { map.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                        }
+                                    })
+                                    try { map.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
+                                    if (user && Number.isFinite(user[0]) && Number.isFinite(user[1])) {
+                                        try { map.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
                                     }
-                                })
-                                try { map?.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
-                                try { map?.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                                }
                             } catch { }
                         } catch {
                             // pas de géoloc: démarrer sans vérif
@@ -474,7 +539,9 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                                         }
                                     })
                                     try { map?.setPaintProperty?.('route-planner-user-connector-line', 'line-color', '#007bff') } catch { }
-                                    try { map?.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                                    if (user && Number.isFinite(user[0]) && Number.isFinite(user[1])) {
+                                        try { map?.flyTo?.({ center: { lng: user[0], lat: user[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                                    }
                                 }
                             }
                         } catch {

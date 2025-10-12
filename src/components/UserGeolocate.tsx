@@ -6,6 +6,7 @@ type Props = { map?: maplibre.Map | null, theme?: 'light' | 'dark', onToggleThem
 const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme }) => {
     const controlRef = useRef<maplibre.GeolocateControl | null>(null)
     const [top, setTop] = useState<number | null>(null)
+    const [visible, setVisible] = useState<boolean>(true)
 
     // install control (hidden)
     useEffect(() => {
@@ -78,6 +79,30 @@ const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme })
         }
     }, [])
 
+    // React to UI show/hide events (navigation mode). Also hide the native geolocate dot/accuracy circle.
+    useEffect(() => {
+        const hide = () => {
+            setVisible(false)
+            try {
+                const container = (map as any)?.getContainer?.() as HTMLElement | null
+                if (container) container.setAttribute('data-hide-geolocate', '1')
+            } catch { }
+        }
+        const show = () => {
+            setVisible(true)
+            try {
+                const container = (map as any)?.getContainer?.() as HTMLElement | null
+                if (container) container.removeAttribute('data-hide-geolocate')
+            } catch { }
+        }
+        window.addEventListener('ui:hide-geolocate', hide as any)
+        window.addEventListener('ui:show-geolocate', show as any)
+        return () => {
+            window.removeEventListener('ui:hide-geolocate', hide as any)
+            window.removeEventListener('ui:show-geolocate', show as any)
+        }
+    }, [])
+
     const trigger = () => {
         try { (controlRef.current as any)?.trigger?.() } catch { }
         // fallback: click hidden control button
@@ -88,6 +113,12 @@ const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme })
         } catch { }
     }
 
+    useEffect(() => {
+        const onTrigger = () => trigger()
+        window.addEventListener('ui:trigger-geolocate', onTrigger as any)
+        return () => window.removeEventListener('ui:trigger-geolocate', onTrigger as any)
+    }, [])
+
     return (
         <>
             <button
@@ -95,7 +126,7 @@ const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme })
                 aria-label="Me localiser"
                 onClick={trigger}
                 className="geolocate-button"
-                style={{ position: 'fixed', right: 10, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+                style={{ position: 'fixed', right: 10, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: visible ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
             >📍</button>
             <button
                 title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}

@@ -642,7 +642,22 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         >{theme === 'dark' ? '☀️' : '🌙'}</button>
     )
     return <>
-        <div id="map" ref={container} style={{ height: '100vh' }} />
+        <div id="map" ref={container} style={{ height: '100vh' }} onClick={(e) => {
+            // Also relay click as custom event with lngLat if possible (dev aid)
+            try {
+                const map = mapRef.current
+                if (map) {
+                    const m = map as any
+                    const rect = (m.getContainer && m.getContainer()) ? m.getContainer().getBoundingClientRect() : (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    const x = (e as any).clientX - rect.left
+                    const y = (e as any).clientY - rect.top
+                    if (m.unproject) {
+                        const ll = m.unproject([x, y])
+                        window.dispatchEvent(new CustomEvent('map:click', { detail: { lngLat: { lng: ll.lng, lat: ll.lat } } }))
+                    }
+                }
+            } catch { }
+        }} />
         {navActive ? (
             themeToggle
         ) : (
