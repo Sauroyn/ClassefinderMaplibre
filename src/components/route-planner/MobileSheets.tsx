@@ -26,18 +26,18 @@ export function BottomSheetBase({
     const dragRafRef = useRef<number | null>(null)
     const prevTransitionRef = useRef<string | null>(null)
     const isDraggingRef = useRef<boolean>(false)
+    const dragSessionActiveRef = useRef<boolean>(false)
 
     const applyDragHeight = useCallback((h: number) => {
         const root = ref.current as HTMLElement | null
         if (!root) return
         try {
-            // Direct style updates during drag to avoid React re-render jank
-            root.style.height = `${Math.round(h)}px`
-            const contentEl = root.querySelector('.sheet-content') as HTMLElement | null
-            if (contentEl) {
-                const ch = Math.max(0, Math.round(h) - 64)
-                contentEl.style.height = `${ch}px`
-            }
+            // Transform-only movement: translateY from bottom based on max snap
+            const snaps = snapPixels.current
+            const maxSnap = snaps.length ? snaps[snaps.length - 1] : Math.round(h)
+            const offset = Math.max(0, Math.round(maxSnap - h))
+            root.style.transform = `translateY(${offset}px)`
+            // Avoid layout writes during drag; commit real height on snap only
         } catch { }
     }, [])
 
@@ -127,14 +127,18 @@ export function BottomSheetBase({
             const root = ref.current as HTMLElement | null
             try {
                 if (root && prevTransitionRef.current != null) root.style.transition = prevTransitionRef.current
+                if (root) root.style.transform = 'translateY(0px)'
+                if (root) root.style.willChange = ''
             } catch { }
             setHeight(snaps[idx])
             dragging = false
             isDraggingRef.current = false
+            dragSessionActiveRef.current = false
         }
         const root = ref.current as HTMLElement | null
         const handle = root?.querySelector('.grab-handle') as HTMLElement | null
         const startDrag = (ev: Event) => {
+            if (dragSessionActiveRef.current) return
             const targetEl = ev.target as HTMLElement | null
             if (targetEl && (targetEl.closest('button, a, input, select, textarea, [role="button"], [role="link"]'))) return
             const contentEl = targetEl?.closest('.sheet-content') as HTMLElement | null
@@ -155,8 +159,10 @@ export function BottomSheetBase({
                 if (root) {
                     prevTransitionRef.current = root.style.transition || ''
                     root.style.transition = 'none'
+                    root.style.willChange = 'transform'
                 }
             } catch { }
+            dragSessionActiveRef.current = true
             document.addEventListener('touchmove', onMove as any, { passive: false })
             document.addEventListener('mousemove', onMove as any)
             document.addEventListener('touchend', onEnd as any, { once: true })
