@@ -23,19 +23,36 @@ export function BottomSheetBase({
     const [activeIndex, setActiveIndex] = useState<number>(2)
     const currentHeightRef = useRef<number>(0)
     const initialized = useRef<boolean>(false)
+    const dragRafRef = useRef<number | null>(null)
+    const prevTransitionRef = useRef<string | null>(null)
+    const isDraggingRef = useRef<boolean>(false)
+
+    const applyDragHeight = useCallback((h: number) => {
+        const root = ref.current as HTMLElement | null
+        if (!root) return
+        try {
+            // Direct style updates during drag to avoid React re-render jank
+            root.style.height = `${Math.round(h)}px`
+            const contentEl = root.querySelector('.sheet-content') as HTMLElement | null
+            if (contentEl) {
+                const ch = Math.max(0, Math.round(h) - 64)
+                contentEl.style.height = `${ch}px`
+            }
+        } catch { }
+    }, [])
 
     const computeSnaps = useCallback(() => {
         const vh = typeof window !== 'undefined' ? window.innerHeight : 800
         const snaps = snapPercents
-            .map(p => Math.round(vh * Math.max(0.02, Math.min(0.98, p))))
-            .sort((a, b) => a - b)
+            .map((p: number) => Math.round(vh * Math.max(0.02, Math.min(0.98, p))))
+            .sort((a: number, b: number) => a - b)
         snapPixels.current = snaps
         // find closest to current height if initialized; else use initialSnap
         const target = (initialized.current && currentHeightRef.current > 0)
             ? currentHeightRef.current
             : Math.round(vh * initialSnap)
         let idx = 0, best = Infinity
-        snaps.forEach((v, i) => { const d = Math.abs(v - target); if (d < best) { best = d; idx = i } })
+        snaps.forEach((v: number, i: number) => { const d = Math.abs(v - target); if (d < best) { best = d; idx = i } })
         setActiveIndex(idx)
         currentHeightRef.current = snaps[idx]
         setHeight(snaps[idx])
@@ -78,47 +95,54 @@ export function BottomSheetBase({
         function onMove(e: TouchEvent | MouseEvent) {
             const clientY = (e as TouchEvent).touches ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY
             if (!dragging) {
-                const dy = Math.abs(clientY - startY)
-                if (dy < threshold) return
+                const dy0 = Math.abs(clientY - startY)
+                if (dy0 < threshold) return
                 dragging = true
+                isDraggingRef.current = true
             }
-            // Delta-based height change so the sheet top doesn't jump to the finger
             const dy = clientY - startY
             const target = startHeight - dy
             const minH = snapPixels.current[0] ?? 40
             const maxH = snapPixels.current[snapPixels.current.length - 1] ?? (typeof window !== 'undefined' ? window.innerHeight * 0.9 : 800)
             const h = Math.max(minH, Math.min(maxH, target))
             currentHeightRef.current = h
-            setHeight(h)
+            if (dragRafRef.current == null) {
+                dragRafRef.current = requestAnimationFrame(() => {
+                    dragRafRef.current = null
+                    applyDragHeight(currentHeightRef.current)
+                })
+            }
         }
         function onEnd() {
             document.removeEventListener('touchmove', onMove as any)
             document.removeEventListener('mousemove', onMove as any)
-            // snap to nearest
+            document.removeEventListener('touchcancel', onEnd as any)
             const snaps = snapPixels.current
             let idx = 0, best = Infinity
             const h = currentHeightRef.current || height
-            snaps.forEach((v, i) => { const d = Math.abs(v - h); if (d < best) { best = d; idx = i } })
+            snaps.forEach((v: number, i: number) => { const d = Math.abs(v - h); if (d < best) { best = d; idx = i } })
             setActiveIndex(idx)
             currentHeightRef.current = snaps[idx]
+            // Restore transition and commit final height via React state (snap animation allowed)
+            const root = ref.current as HTMLElement | null
+            try {
+                if (root && prevTransitionRef.current != null) root.style.transition = prevTransitionRef.current
+            } catch { }
             setHeight(snaps[idx])
             dragging = false
+            isDraggingRef.current = false
         }
         const root = ref.current as HTMLElement | null
         const handle = root?.querySelector('.grab-handle') as HTMLElement | null
         const startDrag = (ev: Event) => {
-            // If the initial target is an interactive control, do not start drag to preserve single-click
-            const target = ev.target as HTMLElement | null
-            if (target && (target.closest('button, a, input, select, textarea, [role="button"], [role="link"]'))) return
-            // If starting inside scrollable content that can scroll further, let it scroll instead of dragging the sheet
-            const contentEl = target?.closest('.sheet-content') as HTMLElement | null
+            const targetEl = ev.target as HTMLElement | null
+            if (targetEl && (targetEl.closest('button, a, input, select, textarea, [role="button"], [role="link"]'))) return
+            const contentEl = targetEl?.closest('.sheet-content') as HTMLElement | null
             if (contentEl) {
                 const canScroll = contentEl.scrollHeight > contentEl.clientHeight
                 if (canScroll) {
-                    // Determine if at extremes; only start dragging if user pulls beyond extremes (overscroll intent is tricky to detect without dy)
                     const atTop = contentEl.scrollTop <= 0
                     const atBottom = Math.ceil(contentEl.scrollTop + contentEl.clientHeight) >= contentEl.scrollHeight
-                    // For initial start, we don't know direction yet; allow scroll by default
                     if (!atTop && !atBottom) return
                 }
             }
@@ -126,10 +150,18 @@ export function BottomSheetBase({
             const clientY = (ev as any).touches ? (ev as any).touches[0].clientY : (ev as MouseEvent).clientY
             startY = clientY
             startHeight = currentHeightRef.current || height
+            // Disable CSS transition during drag to prevent jank
+            try {
+                if (root) {
+                    prevTransitionRef.current = root.style.transition || ''
+                    root.style.transition = 'none'
+                }
+            } catch { }
             document.addEventListener('touchmove', onMove as any, { passive: false })
             document.addEventListener('mousemove', onMove as any)
             document.addEventListener('touchend', onEnd as any, { once: true })
             document.addEventListener('mouseup', onEnd as any, { once: true })
+            document.addEventListener('touchcancel', onEnd as any, { once: true })
         }
         // Allow drag from anywhere on the sheet container (tap-anywhere to drag)
         root?.addEventListener('mousedown', startDrag)
@@ -142,8 +174,9 @@ export function BottomSheetBase({
             root?.removeEventListener('touchstart', startDrag as any)
             handle?.removeEventListener('mousedown', startDrag)
             handle?.removeEventListener('touchstart', startDrag as any)
+            try { if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current) } catch { }
         }
-    }, [height])
+    }, [height, applyDragHeight])
 
     // Reduce to bottom snap on outside click, but let the click pass to the app (no overlay)
     useEffect(() => {
