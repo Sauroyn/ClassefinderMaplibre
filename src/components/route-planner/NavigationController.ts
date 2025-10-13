@@ -38,6 +38,8 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
     const lastRecalcAtRef = useRef<number>(0)
     // Track last real user position to avoid re-animating when unchanged (e.g., map panning)
     const lastUserRealRef = useRef<[number, number] | null>(null)
+    // Track current marker logical level
+    const navMarkerLevelRef = useRef<number | null>(null)
 
     useEffect(() => {
         mapRefCached.current = mapRef && mapRef.current ? (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ?? mapRef.current)) : null
@@ -115,6 +117,7 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         const mk = new maplibre.Marker({ element: el, rotationAlignment: 'map' as any, pitchAlignment: 'map' as any })
         try { mk.setLngLat(initialLngLat) } catch { }
         try { navMarkerRef.current = mk.addTo(map) } catch { navMarkerRef.current = mk }
+        try { (map as any).__navMarkerEl = el } catch { }
         return mk
     }
 
@@ -226,6 +229,20 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         if (near(snapped, target)) return lastHeadingRef.current
         const geoBearing = bearingDegrees(snapped, target)
         return geoBearing
+    }
+
+    function updateMarkerLevelVisibility(map: any, lvl: number | null) {
+        try {
+            const mk = navMarkerRef.current
+            const el = mk && (mk as any).getElement ? (mk as any).getElement() as HTMLElement : ((map as any).__navMarkerEl as HTMLElement | null)
+            if (!el) return
+            const current = (map as any)?.__currentLevel
+            if (lvl == null) {
+                el.style.display = 'block'
+            } else {
+                el.style.display = (current === lvl) ? 'block' : 'none'
+            }
+        } catch { }
     }
 
     function updateProgress(map: any, route: RouteItem, along: number) {
@@ -363,6 +380,19 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         }
         // progression sur le trait de base et le connecteur (compute ordered chain cache early)
         updateProgress(map, route, along)
+        // publier la position/étage du marqueur et appliquer visibilité par niveau
+        try {
+            const mkLevel: number | null = (() => {
+                const s: any = (route.steps && segIndex >= 0 && segIndex < (route.steps as any).length) ? (route.steps as any)[segIndex] : null
+                const lv = s && s.level != null ? Number(s.level) : null
+                return Number.isFinite(lv as any) ? (lv as number) : null
+            })()
+            navMarkerLevelRef.current = mkLevel
+            try { (map as any).__navMarkerLevel = mkLevel } catch { }
+            try { (map as any).__navMarkerCenter = snapped } catch { }
+            try { window.dispatchEvent(new CustomEvent('nav:marker-center', { detail: { center: snapped, level: mkLevel } })) } catch { }
+            updateMarkerLevelVisibility(map, mkLevel)
+        } catch { }
         // orienter la flèche en utilisant la même logique que la coloration (ordered chain)
         try {
             const heading = computeRouteHeading(route, snapped, segIndex, segT)
@@ -391,6 +421,12 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         const toEnd = distanceToEndFrom(route, snapped)
         if (toEnd <= FINISH_DISTANCE_METERS) {
             try { window.dispatchEvent(new CustomEvent('navigation:finish')) } catch { }
+            // Cleanup marker immediately so it doesn't linger
+            try { if (navMarkerRef.current) { navMarkerRef.current.remove(); navMarkerRef.current = null } } catch { }
+            lastSnappedRef.current = null
+            lastHeadingRef.current = null
+            navMarkerLevelRef.current = null
+            try { delete (map as any).__navMarkerEl; delete (map as any).__navMarkerLevel; delete (map as any).__navMarkerCenter } catch { }
         }
     }, [route, state.userPosition])
 
@@ -407,6 +443,10 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         } catch { }
         try { if (navMarkerRef.current) { navMarkerRef.current.remove(); navMarkerRef.current = null } } catch { }
         if (animReqRef.current) { cancelAnimationFrame(animReqRef.current); animReqRef.current = null }
+        lastSnappedRef.current = null
+        lastHeadingRef.current = null
+        navMarkerLevelRef.current = null
+        try { const map = mapRefCached.current; if (map) { delete (map as any).__navMarkerEl; delete (map as any).__navMarkerLevel; delete (map as any).__navMarkerCenter } } catch { }
         onExit()
     }
 

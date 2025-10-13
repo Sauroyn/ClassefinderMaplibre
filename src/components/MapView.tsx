@@ -21,6 +21,43 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
     const initialCamera = useRef<any>(null)
     const parsedConfigRef = useRef<any | null>(null)
     const navActive = useNavigationActive()
+    const followNavMarkerRef = useRef<boolean>(false)
+    // Follow mode: stop following on user interactions with the map
+    useEffect(() => {
+        const map = mapRef.current
+        if (!map) return
+        const stopFollow = () => { followNavMarkerRef.current = false }
+        try {
+            map.on('dragstart', stopFollow)
+            map.on('zoomstart', stopFollow)
+            map.on('rotate', stopFollow)
+            map.on('pitch', stopFollow)
+        } catch { }
+        return () => {
+            try {
+                map.off('dragstart', stopFollow)
+                map.off('zoomstart', stopFollow)
+                map.off('rotate', stopFollow)
+                map.off('pitch', stopFollow)
+            } catch { }
+        }
+    }, [])
+    // Follow mode: when enabled, recenter on marker updates
+    useEffect(() => {
+        const onMarker = (e: any) => {
+            if (!followNavMarkerRef.current) return
+            try {
+                const center = e?.detail?.center as [number, number]
+                const lvl = e?.detail?.level as number | null
+                if (!center) return
+                if (lvl != null) { try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { } }
+                const m: any = mapRef.current
+                if (m) m.jumpTo?.({ center: { lng: center[0], lat: center[1] } })
+            } catch { }
+        }
+        window.addEventListener('nav:marker-center', onMarker as any)
+        return () => window.removeEventListener('nav:marker-center', onMarker as any)
+    }, [])
     useEffect(() => {
         if (!container.current) return
 
@@ -312,8 +349,31 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             // ensure that if the route layer/source is added later (by compute), we re-apply the filter
             const onData = () => { applyRouteFilterToAll() }
             map.on('sourcedata', onData)
+            // also update nav marker visibility when level changes
+            try {
+                const syncMarkerVis = () => {
+                    try {
+                        const el = (map as any).__navMarkerEl as HTMLElement | null
+                        const mkLvl = (map as any).__navMarkerLevel as number | null
+                        if (el) {
+                            if (mkLvl == null) el.style.display = 'block'
+                            else el.style.display = (mkLvl === (map as any).__currentLevel) ? 'block' : 'none'
+                        }
+                    } catch { }
+                }
+                syncMarkerVis()
+                const handler = syncMarkerVis as any
+                window.addEventListener('ui:set-level', handler)
+                // attach cleanup to remove the same handler
+                ;(map as any).__removeLevelSyncHandler = () => {
+                    try { window.removeEventListener('ui:set-level', handler) } catch { }
+                }
+            } catch { }
             // remove listener on cleanup
-            return () => { try { map.off('sourcedata', onData) } catch (e) { } }
+            return () => {
+                try { map.off('sourcedata', onData) } catch (e) { }
+                try { const fn = (map as any).__removeLevelSyncHandler; if (fn) fn() } catch { }
+            }
         } catch (e) { }
     }, [level])
     useImperativeHandle(ref, () => ({
@@ -644,6 +704,29 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             style={{ position: 'fixed', right: 10, top: 110, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
         >{theme === 'dark' ? '☀️' : '🌙'}</button>
     )
+    const recenterToMarker = (
+        <button
+            title={'Recentrer sur le marqueur'}
+            aria-label={'Recentrer sur le marqueur'}
+            onClick={() => {
+                try {
+                    const map = mapRef.current
+                    if (!map) return
+                    const m: any = map
+                    const lvl: number | null | undefined = m.__navMarkerLevel
+                    const center: [number, number] | undefined = m.__navMarkerCenter
+                    if (lvl != null) {
+                        try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { }
+                    }
+                    if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
+                        try { m.flyTo?.({ center: { lng: center[0], lat: center[1] }, zoom: Math.max(16, m.getZoom ? m.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                        followNavMarkerRef.current = true
+                    }
+                } catch { }
+            }}
+            style={{ position: 'fixed', right: 10, top: 160, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+        >🎯</button>
+    )
     return <>
         <div id="map" ref={container} style={{ height: '100vh' }} onClick={(e) => {
             // Also relay click as custom event with lngLat if possible (dev aid)
@@ -661,8 +744,12 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 }
             } catch { }
         }} />
+        {/* Follow mode handled via top-level effects */}
         {navActive ? (
-            themeToggle
+            <>
+                {themeToggle}
+                {recenterToMarker}
+            </>
         ) : (
             <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
         )}
