@@ -243,28 +243,27 @@ export function updateRouteProgress(map: any, routeSourceId: string, alongDistan
                     })
                     segWithS.sort((a, b) => a._s - b._s)
                     segments = segWithS.map(({ _s, ...rest }) => rest)
-                    // Sens global: si le connecteur est plus proche de la FIN des steps, inverser l'ordre
-                    if (connectorCoords && connectorCoords.length >= 2) {
-                        const connEnd = connectorCoords[connectorCoords.length - 1]
-                        const stepsStart = stepsPolyline[0] as [number, number]
-                        const stepsEnd = stepsPolyline[stepsPolyline.length - 1] as [number, number]
-                        const dToStart = distance(connEnd, stepsStart)
-                        const dToEnd = distance(connEnd, stepsEnd)
-                        if (dToEnd + 0.01 < dToStart) {
-                            segments = segments.reverse().map(seg => ({ ...seg, coords: seg.coords.slice().reverse() }))
-                        }
-                    }
                 }
-                // orienter chaque segment pour assurer la continuité locale quand on va les empiler
+                // Orienter le 1er segment pour qu'il démarre côté stepsStart, puis assurer la continuité
                 let prevEnd: number[] | null = null
-                for (let i = 0; i < segments.length; i++) {
-                    let coords = segments[i].coords
-                    if (prevEnd) {
-                        const [s, e] = getEnds(coords)
-                        const dS = distance(prevEnd, s)
-                        const dE = distance(prevEnd, e)
-                        if (dE < dS) coords = coords.slice().reverse()
+                if (segments.length) {
+                    let c0 = segments[0].coords
+                    if (stepsPolyline && stepsPolyline.length >= 2) {
+                        const stepsStart = stepsPolyline[0] as [number, number]
+                        const [s0, e0] = getEnds(c0)
+                        const dS0 = distance(stepsStart, s0)
+                        const dE0 = distance(stepsStart, e0)
+                        if (dE0 < dS0) c0 = c0.slice().reverse()
                     }
+                    segments[0].coords = c0
+                    prevEnd = c0[c0.length - 1]
+                }
+                for (let i = 1; i < segments.length; i++) {
+                    let coords = segments[i].coords
+                    const [s, e] = getEnds(coords)
+                    const dS = distance(prevEnd as number[], s)
+                    const dE = distance(prevEnd as number[], e)
+                    if (dE < dS) coords = coords.slice().reverse()
                     segments[i].coords = coords
                     prevEnd = coords[coords.length - 1]
                 }
