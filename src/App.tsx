@@ -75,7 +75,7 @@ export default function App() {
 
   return (
     <>
-  <LevelSelector levels={levels} level={level} loading={loading} onChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }} />
+      <LevelSelector levels={levels} level={level} loading={loading} onChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }} />
       {!navActive && !showPlanner && <SearchBar data={dataRef.current} onSelect={(id, lvl) => {
         if (!mapRef.current) return
         // save camera before changing

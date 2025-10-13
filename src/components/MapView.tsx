@@ -364,10 +364,10 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 syncMarkerVis()
                 const handler = syncMarkerVis as any
                 window.addEventListener('ui:set-level', handler)
-                // attach cleanup to remove the same handler
-                ;(map as any).__removeLevelSyncHandler = () => {
-                    try { window.removeEventListener('ui:set-level', handler) } catch { }
-                }
+                    // attach cleanup to remove the same handler
+                    ; (map as any).__removeLevelSyncHandler = () => {
+                        try { window.removeEventListener('ui:set-level', handler) } catch { }
+                    }
             } catch { }
             // remove listener on cleanup
             return () => {
