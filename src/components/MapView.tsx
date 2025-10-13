@@ -8,6 +8,7 @@ import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
 // Connector styling is now handled by combined covered/remaining layers; no direct import needed
 import { fitBoundsSmart } from '../map/viewport'
+import { haversine } from '../map/measure'
 
 type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
 
@@ -42,7 +43,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             } catch { }
         }
     }, [])
-    // Follow mode: when enabled, recenter on marker updates
+    // Follow mode: when enabled, smoothly recenter on marker updates
     useEffect(() => {
         const onMarker = (e: any) => {
             if (!followNavMarkerRef.current) return
@@ -52,11 +53,29 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 if (!center) return
                 if (lvl != null) { try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { } }
                 const m: any = mapRef.current
-                if (m) m.jumpTo?.({ center: { lng: center[0], lat: center[1] } })
+                if (m) {
+                    // Smooth follow: ease duration proportional to distance, clamped
+                    const curr = m.getCenter ? m.getCenter() : null
+                    const currLL: [number, number] | null = curr ? [curr.lng, curr.lat] : null
+                    const dist = currLL ? haversine(currLL, center) : 0
+                    const duration = Math.max(150, Math.min(500, dist * 8))
+                    const easeOut = (t: number) => 1 - Math.pow(1 - t, 2)
+                    try {
+                        m.easeTo?.({ center: { lng: center[0], lat: center[1] }, duration, easing: easeOut })
+                    } catch {
+                        // Fallback
+                        m.jumpTo?.({ center: { lng: center[0], lat: center[1] } })
+                    }
+                }
             } catch { }
         }
         window.addEventListener('nav:marker-center', onMarker as any)
-        return () => window.removeEventListener('nav:marker-center', onMarker as any)
+        const onFinish = () => { followNavMarkerRef.current = false }
+        window.addEventListener('navigation:finish', onFinish as any)
+        return () => {
+            window.removeEventListener('nav:marker-center', onMarker as any)
+            window.removeEventListener('navigation:finish', onFinish as any)
+        }
     }, [])
     useEffect(() => {
         if (!container.current) return

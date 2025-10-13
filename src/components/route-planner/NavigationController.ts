@@ -39,6 +39,7 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
     // Track last real user position to avoid re-animating when unchanged (e.g., map panning)
     const lastUserRealRef = useRef<[number, number] | null>(null)
     // Track current marker logical level
+    const finishedRef = useRef<boolean>(false)
     const navMarkerLevelRef = useRef<number | null>(null)
 
     useEffect(() => {
@@ -323,6 +324,7 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
     // Start/stop geolocation + dev override
     useEffect(() => {
         if (!route) return
+        finishedRef.current = false
         manualOverride.current = false
         function onPos(pos: GeolocationPosition) {
             if (manualOverride.current) return
@@ -363,11 +365,27 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
     // Suivi: snap, animation, progression, recalc et fin
     useEffect(() => {
         if (!route || !state.userPosition) return
+        if (finishedRef.current) return
         const map = mapRefCached.current
         const steps = Array.isArray(route.steps) ? route.steps : []
         if (!steps.length || !map) return
         const { snapped, along, segIndex, segT, realToSnapDist } = snapToRoute(state.userPosition, steps as any)
         if (!snapped) return
+        // Check finish before animating/creating marker to prevent reappearance
+        const toEndPre = distanceToEndFrom(route, snapped)
+        if (toEndPre <= FINISH_DISTANCE_METERS) {
+            finishedRef.current = true
+            try { window.dispatchEvent(new CustomEvent('navigation:finish')) } catch { }
+            try { if (navMarkerRef.current) { navMarkerRef.current.remove(); navMarkerRef.current = null } } catch { }
+            lastSnappedRef.current = null
+            lastHeadingRef.current = null
+            navMarkerLevelRef.current = null
+            try {
+                const mapAny: any = map
+                delete mapAny.__navMarkerEl; delete mapAny.__navMarkerLevel; delete mapAny.__navMarkerCenter
+            } catch { }
+            return
+        }
         // animer le marqueur jusqu'au point snap si le point a réellement changé (éviter l'animation lors d'un pan de carte)
         try {
             const prevSnap = lastSnappedRef.current
@@ -420,6 +438,7 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         // fin si proche de l'arrivée
         const toEnd = distanceToEndFrom(route, snapped)
         if (toEnd <= FINISH_DISTANCE_METERS) {
+            finishedRef.current = true
             try { window.dispatchEvent(new CustomEvent('navigation:finish')) } catch { }
             // Cleanup marker immediately so it doesn't linger
             try { if (navMarkerRef.current) { navMarkerRef.current.remove(); navMarkerRef.current = null } } catch { }
@@ -441,12 +460,14 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
                 try { if (map.getSource && map.getSource(id)) map.removeSource(id) } catch { }
             }
         } catch { }
+        try { window.dispatchEvent(new CustomEvent('navigation:finish')) } catch { }
         try { if (navMarkerRef.current) { navMarkerRef.current.remove(); navMarkerRef.current = null } } catch { }
         if (animReqRef.current) { cancelAnimationFrame(animReqRef.current); animReqRef.current = null }
         lastSnappedRef.current = null
         lastHeadingRef.current = null
         navMarkerLevelRef.current = null
         try { const map = mapRefCached.current; if (map) { delete (map as any).__navMarkerEl; delete (map as any).__navMarkerLevel; delete (map as any).__navMarkerCenter } } catch { }
+        finishedRef.current = true
         onExit()
     }
 

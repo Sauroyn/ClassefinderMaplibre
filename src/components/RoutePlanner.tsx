@@ -191,8 +191,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             } catch { }
         }
         const onFinish = () => {
-            // Show toast/message and exit
-            try { alert('Trajet terminé. Bravo !') } catch { }
+            // Exit navigation mode silently (no popup)
             try { const m = mapRef?.current; m?.clearRoute?.() } catch { }
             setNavigationActive(false)
             try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { }
@@ -378,7 +377,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         return (
             <>
                 <NavigationBanner nav={navProxy} />
-                <NavigationBottomSheet nav={navProxy} onFinish={() => { try { const m = mapRef?.current; m?.clearRoute?.() } catch { } setNavigationActive(false); try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { } }} />
+                <NavigationBottomSheet nav={navProxy} onFinish={() => { try { (nav as any)?.exit?.() } catch { } try { const m = mapRef?.current; m?.clearRoute?.() } catch { } setNavigationActive(false); try { window.dispatchEvent(new CustomEvent('navigation:active', { detail: false })) } catch { } }} />
             </>
         )
     }
