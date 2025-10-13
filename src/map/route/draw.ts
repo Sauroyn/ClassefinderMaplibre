@@ -71,7 +71,7 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
         // - parcourue (bleu) pendant la navigation
         // - restante (rouge par défaut avant navigation, puis gris dès que la navigation progresse)
         if (idx === 0) {
-            // Source pour la partie parcourue (BLEU en navigation)
+            // Source pour la partie parcourue (GRIS en navigation après inversion des couleurs)
             const coveredId = `${id}-covered`
             const coveredLayerId = `${coveredId}-line`
             try {
@@ -83,7 +83,8 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
                         id: coveredLayerId,
                         type: 'line',
                         source: coveredId,
-                        paint: { 'line-color': '#007bff', 'line-width': 18, 'line-opacity': 1 },
+                        // Couleur inversée: le parcouru devient GRIS
+                        paint: { 'line-color': '#9aa0a6', 'line-width': 18, 'line-opacity': 1 },
                         layout: { 'line-cap': 'round', 'line-join': 'round' }
                     })
                 }
@@ -456,11 +457,11 @@ export function updateRouteProgress(map: any, routeSourceId: string, alongDistan
         }
 
         // 3) Mettre à jour les sources
-        // Dès que la progression démarre, basculer la couleur de la partie restante en GRIS
+        // Dès que la progression démarre, basculer la couleur de la partie restante en BLEU (inversion)
         try {
             const remainingLayerId = `${routeSourceId}-remaining-line`
             if ((coveredFeatures.length > 0) && map.getLayer && map.getLayer(remainingLayerId)) {
-                map.setPaintProperty(remainingLayerId, 'line-color', '#9aa0a6')
+                map.setPaintProperty(remainingLayerId, 'line-color', '#007bff')
             }
         } catch { }
         try {
