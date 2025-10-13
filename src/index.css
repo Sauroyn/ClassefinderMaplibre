@@ -40,13 +40,60 @@ button {
   touch-action: none;
 }
 
-/* Ensure bottom sheets appear above all other UI, but allow interacting with background */
-.rsbs-container {
-  z-index: 9999 !important;
+/* Bottom sheet: ensure it's above everything */
+[data-rsbs-root] {
+  /* z-index only applies on positioned elements */
+  position: relative !important;
+  z-index: 2147483000 !important;
+  /* near INT32 max, but below devtools */
 }
 
-.rsbs-overlay,
-.rsbs-backdrop {
-  background: transparent !important;
-  pointer-events: none !important;
+[data-rsbs-overlay],
+[data-rsbs-backdrop],
+[data-rsbs-sibling] {
+  z-index: 2147483002 !important;
+}
+
+/* Backdrop just below overlay */
+[data-rsbs-backdrop] {
+  z-index: 2147483001 !important;
+  pointer-events: auto !important;
+}
+
+/* Theme the bottom sheet using app theme */
+/* Light theme */
+html[data-theme='light'] {
+  --rsbs-bg: #ffffff;
+  --rsbs-color: #111111;
+  --rsbs-backdrop-bg: rgba(0, 0, 0, 0.35);
+  --rsbs-handle-bg: rgba(0, 0, 0, 0.14);
+  --rsbs-overlay-rounded: 16px;
+  --rsbs-content-padding: 12px;
+  --rsbs-ml: env(safe-area-inset-left);
+  --rsbs-mr: env(safe-area-inset-right);
+}
+
+/* Dark theme */
+html[data-theme='dark'] {
+  --rsbs-bg: #1b1f26;
+  --rsbs-color: #f5f7fb;
+  --rsbs-backdrop-bg: rgba(0, 0, 0, 0.6);
+  --rsbs-handle-bg: rgba(255, 255, 255, 0.18);
+  --rsbs-overlay-rounded: 16px;
+  --rsbs-content-padding: 12px;
+  --rsbs-ml: env(safe-area-inset-left);
+  --rsbs-mr: env(safe-area-inset-right);
+}
+
+/* Round overlay and improve contrast of header area */
+[data-rsbs-overlay] {
+  border-top-left-radius: var(--rsbs-overlay-rounded);
+  border-top-right-radius: var(--rsbs-overlay-rounded);
+}
+
+/* Ensure text and background use our variables */
+[data-rsbs-overlay] .rsbs-content,
+[data-rsbs-overlay] .rsbs-header,
+[data-rsbs-overlay] .rsbs-footer {
+  color: var(--rsbs-color);
 }

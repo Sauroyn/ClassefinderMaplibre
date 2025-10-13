@@ -85,13 +85,14 @@ function icsProxy(): Plugin {
 export default defineConfig({
   plugins: [react(), publicConfigsVirtual(), icsProxy()],
   optimizeDeps: {
-    include: ['warning']
+    include: ['warning', '@react-spring/web']
   },
   resolve: {
     alias: [
       { find: 'warning', replacement: path.resolve(__dirname, 'src/shims/warning.ts') },
       { find: /^warning\/.+$/, replacement: path.resolve(__dirname, 'src/shims/warning.ts') },
-    ]
+    ],
+    dedupe: ['react', 'react-dom', '@react-spring/web', 'react-spring']
   },
   //base: '/preview/', // <== IMPORTANT
 })

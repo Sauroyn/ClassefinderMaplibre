@@ -535,6 +535,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         const map = mapRef.current
         if (!map) return
         try {
+            // prevent concurrent swaps
+            const swappingKey = '__swappingStyle'
+            if ((map as any)[swappingKey]) return
+                ; (map as any)[swappingKey] = true
+
             const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
             const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
             const target = theme === 'dark' ? darkStyle : lightStyle
@@ -554,8 +559,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     }
                 }
             } catch { }
-            ; (map as any).setStyle(target, { diff: true })
-            map.once('styledata', () => {
+            try { (map as any).stop?.() } catch { }
+            ; (map as any).setStyle(target, { diff: false })
+            map.once('style.load', () => {
                 try {
                     // re-add our custom sources/layers if needed
                     const d = latestDataRef.current || data
@@ -711,6 +717,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 } catch (e) { }
                 // restore camera
                 try { map.jumpTo(cam as any) } catch { }
+                try { (map as any)[swappingKey] = false } catch { }
             })
         } catch { }
     }, [theme])
