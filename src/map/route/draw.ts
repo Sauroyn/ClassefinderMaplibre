@@ -57,7 +57,7 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
     // Réinitialiser le cache d'ordre quand on dessine de nouvelles routes
     _cachedOrdering = null
     _cachedRouteId = null
-    
+
     for (let idx = 0; idx < routes.length; idx++) {
         const { id, geo } = routes[idx]
 
@@ -286,7 +286,7 @@ export function updateRouteProgress(map: any, routeSourceId: string, alongDistan
             _cachedRouteId = routeSourceId
         }
 
-    // 2) Calcul de la progression GLOBALE (connecteur inclus) et découpe UNE SEULE FOIS
+        // 2) Calcul de la progression GLOBALE (connecteur inclus) et découpe UNE SEULE FOIS
         const coveredFeatures: any[] = []
         const remainingFeatures: any[] = []
 
