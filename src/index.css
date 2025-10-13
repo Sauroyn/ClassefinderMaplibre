@@ -60,6 +60,32 @@ button {
   pointer-events: auto !important;
 }
 
+/* Mobile stacking context fixes (WebGL/canvas overdraw) */
+@media (max-width: 768px) {
+  [data-rsbs-root],
+  [data-rsbs-overlay],
+  [data-rsbs-backdrop] {
+    -webkit-transform: translateZ(0) !important;
+    transform: translateZ(0) !important;
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+  /* Ensure overlay receives clicks/touches */
+  [data-rsbs-overlay] {
+    pointer-events: auto !important;
+  }
+}
+
+/* iOS-specific hint */
+@supports (-webkit-touch-callout: none) {
+  [data-rsbs-root],
+  [data-rsbs-overlay],
+  [data-rsbs-backdrop] {
+    -webkit-transform: translateZ(0) !important;
+    transform: translateZ(0) !important;
+  }
+}
+
 /* Theme the bottom sheet using app theme */
 /* Light theme */
 html[data-theme='light'] {
