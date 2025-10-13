@@ -408,7 +408,14 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
             navMarkerLevelRef.current = mkLevel
             try { (map as any).__navMarkerLevel = mkLevel } catch { }
             try { (map as any).__navMarkerCenter = snapped } catch { }
-            try { window.dispatchEvent(new CustomEvent('nav:marker-center', { detail: { center: snapped, level: mkLevel } })) } catch { }
+            // Compute heading early so we can publish it with the event (used by follow-mode camera)
+            let headingForEvent: number | null = null
+            try {
+                const h = computeRouteHeading(route, snapped, segIndex, segT)
+                if (h != null) headingForEvent = h
+            } catch { }
+            try { (map as any).__navMarkerHeading = headingForEvent } catch { }
+            try { window.dispatchEvent(new CustomEvent('nav:marker-center', { detail: { center: snapped, level: mkLevel, heading: headingForEvent } })) } catch { }
             updateMarkerLevelVisibility(map, mkLevel)
         } catch { }
         // orienter la flèche en utilisant la même logique que la coloration (ordered chain)
@@ -416,6 +423,7 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
             const heading = computeRouteHeading(route, snapped, segIndex, segT)
             if (heading != null) {
                 lastHeadingRef.current = heading
+                try { (map as any).__navMarkerHeading = heading } catch { }
                 const mk = navMarkerRef.current
                 if (mk && (mk as any).setRotation) {
                     try { (mk as any).setRotation(heading) } catch { }

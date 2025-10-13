@@ -43,13 +43,14 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             } catch { }
         }
     }, [])
-    // Follow mode: when enabled, smoothly recenter on marker updates
+    // Follow mode: when enabled, smoothly recenter on marker updates and orient camera forward in 3D
     useEffect(() => {
         const onMarker = (e: any) => {
             if (!followNavMarkerRef.current) return
             try {
                 const center = e?.detail?.center as [number, number]
                 const lvl = e?.detail?.level as number | null
+                const heading = e?.detail?.heading as number | null | undefined
                 if (!center) return
                 if (lvl != null) { try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { } }
                 const m: any = mapRef.current
@@ -60,10 +61,15 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     const dist = currLL ? haversine(currLL, center) : 0
                     const duration = Math.max(150, Math.min(500, dist * 8))
                     const easeOut = (t: number) => 1 - Math.pow(1 - t, 2)
+                    // Target 3D forward looking camera when following
+                    const targetPitch = Math.max(45, Math.min(65, m.getPitch ? m.getPitch() : 60))
+                    const targetBearing = (typeof heading === 'number' && isFinite(heading)) ? heading : (m.getBearing ? m.getBearing() : 0)
                     try {
-                        m.easeTo?.({ center: { lng: center[0], lat: center[1] }, duration, easing: easeOut })
+                        m.easeTo?.({ center: { lng: center[0], lat: center[1] }, bearing: targetBearing, pitch: targetPitch, duration, easing: easeOut })
                     } catch {
-                        // Fallback
+                        // Fallback without easing extras
+                        try { m.setBearing?.(targetBearing) } catch { }
+                        try { m.setPitch?.(targetPitch) } catch { }
                         m.jumpTo?.({ center: { lng: center[0], lat: center[1] } })
                     }
                 }
@@ -108,6 +114,34 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
             const map = new maplibre.Map({ container: container.current!, style: theme === 'dark' ? darkStyle : lightStyle, center, zoom })
             mapRef.current = map
+
+            // Attach follow-stop handlers on user interactions (not programmatic easeTo)
+            const attachFollowStopHandlers = () => {
+                const stopFollow = (e?: any) => {
+                    try {
+                        // Only stop on user-initiated interactions
+                        if (e && !e.originalEvent) return
+                    } catch { }
+                    followNavMarkerRef.current = false
+                }
+                try {
+                    map.on('movestart', stopFollow)
+                    map.on('dragstart', stopFollow)
+                    map.on('zoomstart', stopFollow)
+                    map.on('rotatestart', stopFollow)
+                    map.on('pitchstart', stopFollow)
+                } catch { }
+                // Save a cleanup to remove the same handlers if needed later
+                ; (map as any).__removeFollowHandlers = () => {
+                    try {
+                        map.off('movestart', stopFollow)
+                        map.off('dragstart', stopFollow)
+                        map.off('zoomstart', stopFollow)
+                        map.off('rotatestart', stopFollow)
+                        map.off('pitchstart', stopFollow)
+                    } catch { }
+                }
+            }
 
             const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
 
@@ -179,8 +213,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 ensureImage('marker-end', '#e74c3c')
             }
 
-            if (map.loaded()) { saveInit(); loadRouteIcons() } else map.on('load', () => { saveInit(); loadRouteIcons() })
-            return () => { map.remove(); mapRef.current = null }
+            if (map.loaded()) { saveInit(); loadRouteIcons(); attachFollowStopHandlers() } else map.on('load', () => { saveInit(); loadRouteIcons(); attachFollowStopHandlers() })
+            return () => {
+                try { const fn = (map as any).__removeFollowHandlers; if (fn) fn() } catch { }
+                map.remove(); mapRef.current = null
+            }
         })()
     }, [])
 
@@ -741,11 +778,14 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     const m: any = map
                     const lvl: number | null | undefined = m.__navMarkerLevel
                     const center: [number, number] | undefined = m.__navMarkerCenter
+                    const heading: number | null | undefined = m.__navMarkerHeading
                     if (lvl != null) {
                         try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { }
                     }
                     if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
-                        try { m.flyTo?.({ center: { lng: center[0], lat: center[1] }, zoom: Math.max(16, m.getZoom ? m.getZoom() : 16), speed: 0.8, curve: 1.4 }) } catch { }
+                        const pitch = Math.max(45, Math.min(65, m.getPitch ? m.getPitch() : 60))
+                        const bearing = (typeof heading === 'number' && isFinite(heading)) ? heading : (m.getBearing ? m.getBearing() : 0)
+                        try { m.flyTo?.({ center: { lng: center[0], lat: center[1] }, zoom: Math.max(16, m.getZoom ? m.getZoom() : 16), bearing, pitch, speed: 0.8, curve: 1.4 }) } catch { }
                         followNavMarkerRef.current = true
                     }
                 } catch { }
