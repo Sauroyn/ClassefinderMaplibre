@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { BottomSheet } from 'react-spring-bottom-sheet'
 
 export function BottomSheetBase({
     open,
@@ -17,238 +18,78 @@ export function BottomSheetBase({
     reduceOnOutsideClick?: boolean,
     apiRef?: { current: null | { snapTo: (index: number) => void, snapToMin: () => void } }
 }) {
-    const ref = useRef<HTMLDivElement | null>(null)
-    const [height, setHeight] = useState(0)
-    const snapPixels = useRef<number[]>([])
-    const [activeIndex, setActiveIndex] = useState<number>(2)
-    const currentHeightRef = useRef<number>(0)
-    const initialized = useRef<boolean>(false)
-    const dragRafRef = useRef<number | null>(null)
-    const prevTransitionRef = useRef<string | null>(null)
-    const isDraggingRef = useRef<boolean>(false)
-    const dragSessionActiveRef = useRef<boolean>(false)
+    // Clamp and sort snap percentages once
+    const sortedPercents = useRef<number[]>([])
+    const snapsPxRef = useRef<number[]>([])
+    const sheetRef = useRef<any>(null)
 
-    const applyDragHeight = useCallback((h: number) => {
-        const root = ref.current as HTMLElement | null
-        if (!root) return
-        try {
-            // Transform-only movement: translateY from bottom based on max snap
-            const snaps = snapPixels.current
-            const maxSnap = snaps.length ? snaps[snaps.length - 1] : Math.round(h)
-            const offset = Math.max(0, Math.round(maxSnap - h))
-            root.style.transform = `translateY(${offset}px)`
-            // Avoid layout writes during drag; commit real height on snap only
-        } catch { }
-    }, [])
-
-    const computeSnaps = useCallback(() => {
-        const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-        const snaps = snapPercents
-            .map((p: number) => Math.round(vh * Math.max(0.02, Math.min(0.98, p))))
-            .sort((a: number, b: number) => a - b)
-        snapPixels.current = snaps
-        // find closest to current height if initialized; else use initialSnap
-        const target = (initialized.current && currentHeightRef.current > 0)
-            ? currentHeightRef.current
-            : Math.round(vh * initialSnap)
-        let idx = 0, best = Infinity
-        snaps.forEach((v: number, i: number) => { const d = Math.abs(v - target); if (d < best) { best = d; idx = i } })
-        setActiveIndex(idx)
-        currentHeightRef.current = snaps[idx]
-        setHeight(snaps[idx])
-        initialized.current = true
-    }, [initialSnap, snapPercents])
-
-    useEffect(() => { computeSnaps() }, [computeSnaps])
     useEffect(() => {
-        const onR = () => computeSnaps()
-        window.addEventListener('resize', onR)
-        return () => window.removeEventListener('resize', onR)
-    }, [computeSnaps])
-    // expose API to parent via ref
+        const clamped = (snapPercents || [0.05, 0.2, 0.5, 0.9])
+            .map((p) => Math.max(0.02, Math.min(0.98, p)))
+            .sort((a, b) => a - b)
+        sortedPercents.current = clamped
+    }, [snapPercents])
+
+    // expose API using the computed pixel snap points
     useEffect(() => {
         if (!apiRef) return
         apiRef.current = {
             snapTo: (index: number) => {
-                const snaps = snapPixels.current
-                const idx = Math.max(0, Math.min(snaps.length - 1, index))
-                setActiveIndex(idx)
-                currentHeightRef.current = snaps[idx]
-                setHeight(snaps[idx])
+                const snaps = snapsPxRef.current
+                if (!snaps.length) return
+                const i = Math.max(0, Math.min(snaps.length - 1, index))
+                sheetRef.current?.snapTo(snaps[i])
             },
             snapToMin: () => {
-                const snaps = snapPixels.current
-                const idx = 0
-                setActiveIndex(idx)
-                currentHeightRef.current = snaps[idx]
-                setHeight(snaps[idx])
-            }
+                const snaps = snapsPxRef.current
+                if (!snaps.length) return
+                sheetRef.current?.snapTo(snaps[0])
+            },
         }
         return () => { if (apiRef) apiRef.current = null }
     }, [apiRef])
-    useEffect(() => {
-        let dragging = false
-        let startY = 0
-        let startHeight = 0
-        const threshold = 5 // px before we consider it a drag
 
-        function onMove(e: TouchEvent | MouseEvent) {
-            const clientY = (e as TouchEvent).touches ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY
-            if (!dragging) {
-                const dy0 = Math.abs(clientY - startY)
-                if (dy0 < threshold) return
-                dragging = true
-                isDraggingRef.current = true
-            }
-            const dy = clientY - startY
-            const target = startHeight - dy
-            const minH = snapPixels.current[0] ?? 40
-            const maxH = snapPixels.current[snapPixels.current.length - 1] ?? (typeof window !== 'undefined' ? window.innerHeight * 0.9 : 800)
-            const h = Math.max(minH, Math.min(maxH, target))
-            currentHeightRef.current = h
-            if (dragRafRef.current == null) {
-                dragRafRef.current = requestAnimationFrame(() => {
-                    dragRafRef.current = null
-                    applyDragHeight(currentHeightRef.current)
-                })
-            }
-        }
-        function onEnd() {
-            document.removeEventListener('touchmove', onMove as any)
-            document.removeEventListener('mousemove', onMove as any)
-            document.removeEventListener('touchcancel', onEnd as any)
-            const snaps = snapPixels.current
-            let idx = 0, best = Infinity
-            const h = currentHeightRef.current || height
-            snaps.forEach((v: number, i: number) => { const d = Math.abs(v - h); if (d < best) { best = d; idx = i } })
-            setActiveIndex(idx)
-            currentHeightRef.current = snaps[idx]
-            // Restore transition and commit final height via React state (snap animation allowed)
-            const root = ref.current as HTMLElement | null
-            try {
-                if (root && prevTransitionRef.current != null) root.style.transition = prevTransitionRef.current
-                if (root) root.style.transform = 'translateY(0px)'
-                if (root) root.style.willChange = ''
-            } catch { }
-            setHeight(snaps[idx])
-            dragging = false
-            isDraggingRef.current = false
-            dragSessionActiveRef.current = false
-        }
-        const root = ref.current as HTMLElement | null
-        const handle = root?.querySelector('.grab-handle') as HTMLElement | null
-        const startDrag = (ev: Event) => {
-            if (dragSessionActiveRef.current) return
-            const targetEl = ev.target as HTMLElement | null
-            if (targetEl && (targetEl.closest('button, a, input, select, textarea, [role="button"], [role="link"]'))) return
-            const contentEl = targetEl?.closest('.sheet-content') as HTMLElement | null
-            if (contentEl) {
-                const canScroll = contentEl.scrollHeight > contentEl.clientHeight
-                if (canScroll) {
-                    const atTop = contentEl.scrollTop <= 0
-                    const atBottom = Math.ceil(contentEl.scrollTop + contentEl.clientHeight) >= contentEl.scrollHeight
-                    if (!atTop && !atBottom) return
-                }
-            }
-            ev.preventDefault?.()
-            const clientY = (ev as any).touches ? (ev as any).touches[0].clientY : (ev as MouseEvent).clientY
-            startY = clientY
-            startHeight = currentHeightRef.current || height
-            // Disable CSS transition during drag to prevent jank
-            try {
-                if (root) {
-                    prevTransitionRef.current = root.style.transition || ''
-                    root.style.transition = 'none'
-                    root.style.willChange = 'transform'
-                }
-            } catch { }
-            dragSessionActiveRef.current = true
-            document.addEventListener('touchmove', onMove as any, { passive: false })
-            document.addEventListener('mousemove', onMove as any)
-            document.addEventListener('touchend', onEnd as any, { once: true })
-            document.addEventListener('mouseup', onEnd as any, { once: true })
-            document.addEventListener('touchcancel', onEnd as any, { once: true })
-        }
-        // Allow drag from anywhere on the sheet container (tap-anywhere to drag)
-        root?.addEventListener('mousedown', startDrag)
-        root?.addEventListener('touchstart', startDrag, { passive: false })
-        // Keep handle listeners as well; clicking handle still cycles via onClick
-        handle?.addEventListener('mousedown', startDrag)
-        handle?.addEventListener('touchstart', startDrag, { passive: false })
-        return () => {
-            root?.removeEventListener('mousedown', startDrag)
-            root?.removeEventListener('touchstart', startDrag as any)
-            handle?.removeEventListener('mousedown', startDrag)
-            handle?.removeEventListener('touchstart', startDrag as any)
-            try { if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current) } catch { }
-        }
-    }, [height, applyDragHeight])
-
-    // Reduce to bottom snap on outside click, but let the click pass to the app (no overlay)
-    useEffect(() => {
-        if (!open || !reduceOnOutsideClick) return
-        const onOutside = (e: Event) => {
-            const root = ref.current
-            const target = e.target as Node | null
-            if (!root || !target) return
-            if (!root.contains(target)) {
-                const snaps = snapPixels.current
-                const idx = 0 // bottom-most
-                setActiveIndex(idx)
-                currentHeightRef.current = snaps[idx]
-                setHeight(snaps[idx])
-                // do not stop propagation; allow underlying app interaction
-            }
-        }
-        document.addEventListener('pointerdown', onOutside, { capture: true })
-        return () => document.removeEventListener('pointerdown', onOutside, { capture: true } as any)
-    }, [open, reduceOnOutsideClick])
-
-    const cycleSnap = useCallback(() => {
-        const snaps = snapPixels.current
-        const next = Math.min(snaps.length - 1, activeIndex + 1)
-        setActiveIndex(next)
-        setHeight(snaps[next])
-    }, [activeIndex])
-    if (!open) return null
-    // Detect dark mode
+    // Dark mode styling for header text only (library provides base styles)
     const isDark = typeof document !== 'undefined' && (document.documentElement.getAttribute('data-theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches)
-    const bg = isDark ? '#181a20' : '#fff'
-    const fg = isDark ? '#f5f7fb' : '#111'
-    const border = isDark ? '#333' : '#e3e3e3'
-    const grabBg = isDark ? '#444' : '#ccc'
+
+    // Map percents to library snap points and default snap
+    const defaultSnap = ({ maxHeight }: { maxHeight: number }) => {
+        const p = Math.max(0.02, Math.min(0.98, initialSnap))
+        return Math.round(maxHeight * p)
+    }
+    const snapPoints = ({ maxHeight, minHeight }: { maxHeight: number, minHeight: number }) => {
+        // Ensure we always have at least the minHeight as first snap
+        const snaps = sortedPercents.current.length
+            ? sortedPercents.current.map((p) => Math.round(maxHeight * p))
+            : [minHeight, Math.round(maxHeight * 0.5), Math.round(maxHeight * 0.9)]
+        snapsPxRef.current = snaps
+        return snaps
+    }
+
+    if (!open) return null
     return (
-        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1000, pointerEvents: 'none' }}>
-            <div
-                ref={ref}
-                style={{
-                    position: 'relative',
-                    margin: '0 auto',
-                    maxWidth: 720,
-                    height,
-                    background: bg,
-                    color: fg,
-                    borderTopLeftRadius: 16,
-                    borderTopRightRadius: 16,
-                    boxShadow: isDark ? '0 -6px 18px rgba(0,0,0,0.38)' : '0 -6px 18px rgba(0,0,0,0.18)',
-                    border: `1px solid ${border}`,
-                    touchAction: 'none',
-                    transition: 'height 0.35s cubic-bezier(.4,1.2,.4,1)',
-                    willChange: 'height',
-                    overflow: 'hidden',
-                }}
-            >
-                <div className="grab-area" style={{ height: 24, paddingTop: 8, pointerEvents: 'auto' }}>
-                    <div
-                        className="grab-handle"
-                        onClick={cycleSnap}
-                        style={{ width: 48, height: 8, borderRadius: 4, background: grabBg, margin: '0 auto', cursor: 'grab' }}
-                    />
+        <BottomSheet
+            ref={sheetRef}
+            open={open}
+            blocking={!reduceOnOutsideClick}
+            onDismiss={() => {
+                // Reduce instead of closing when clicking outside, if allowed
+                if (reduceOnOutsideClick) {
+                    const snaps = snapsPxRef.current
+                    if (snaps.length) sheetRef.current?.snapTo(snaps[0])
+                }
+            }}
+            header={header ? (
+                <div style={{ fontWeight: 700, color: isDark ? '#f5f7fb' : '#111' }}>
+                    {header}
                 </div>
-                {header && <div style={{ padding: '4px 12px 0', fontWeight: 700, pointerEvents: 'auto' }}>{header}</div>}
-                <div className="sheet-content" style={{ padding: 12, overflow: 'auto', height: Math.max(0, height - 64), pointerEvents: 'auto' }}>{children}</div>
-            </div>
-        </div>
+            ) : undefined}
+            defaultSnap={defaultSnap}
+            snapPoints={snapPoints}
+            expandOnContentDrag
+        >
+            <div style={{ padding: 12 }}>{children}</div>
+        </BottomSheet>
     )
 }
 
