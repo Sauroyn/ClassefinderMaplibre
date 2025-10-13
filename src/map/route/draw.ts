@@ -54,6 +54,10 @@ export function buildFeatureCollections(graph: any, ks: Array<{ path: any[], cos
 }
 
 export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
+    // Réinitialiser le cache d'ordre quand on dessine de nouvelles routes
+    _cachedOrdering = null
+    _cachedRouteId = null
+    
     for (let idx = 0; idx < routes.length; idx++) {
         const { id, geo } = routes[idx]
 
@@ -151,6 +155,10 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
     } catch { }
 }
 
+// Mémorisation du sens global pour éviter les inversions en cours de navigation
+let _cachedOrdering: Array<{ coords: number[][], props: any }> | null = null
+let _cachedRouteId: string | null = null
+
 // Fonction pour mettre à jour la progression : divise l'itinéraire en partie parcourue (bleu) et restante (gris)
 export function updateRouteProgress(map: any, routeSourceId: string, alongDistance: number, userLngLat?: [number, number], stepsPolyline?: number[][]) {
     try {
@@ -173,62 +181,112 @@ export function updateRouteProgress(map: any, routeSourceId: string, alongDistan
             }
         } catch { }
 
-        // Choisir premier segment de la route, proche de l'extrémité graphe du connecteur
-        const ordered: Array<{ coords: number[][], props: any }> = []
-        let curEnd: number[] | null = null
-        if (connectorCoords) {
-            ordered.push({ coords: connectorCoords, props: { level: 1, __isConnector: true } }) // Connector à l'étage 1 et visible tous étages
-            curEnd = connectorCoords[connectorCoords.length - 1]
-        }
-        // 1) Construire la séquence dans l'ordre source, en assurant la continuité segment par segment
-        let segments = routeFeatures.map(f => ({ coords: (f.geometry.coordinates as number[][]).slice(), props: (f.properties || {}) }))
-        if (segments.length) {
-            // orienter chaque segment pour coller au précédent
-            let prevEnd: number[] | null = null
-            for (let i = 0; i < segments.length; i++) {
-                let coords = segments[i].coords
-                if (i === 0) {
-                    // garder tel quel pour l'instant
-                    prevEnd = coords[coords.length - 1]
-                    continue
+        // Utiliser le cache si disponible pour ce routeId, sinon calculer et mémoriser
+        let ordered: Array<{ coords: number[][], props: any }> = []
+        if (_cachedRouteId === routeSourceId && _cachedOrdering) {
+            // Réutiliser l'ordre mémorisé (y compris le connecteur)
+            ordered = _cachedOrdering.map(seg => ({ coords: seg.coords.slice(), props: { ...seg.props } }))
+        } else {
+            // Premier passage: calculer l'ordre global et le mémoriser
+            let curEnd: number[] | null = null
+            if (connectorCoords) {
+                ordered.push({ coords: connectorCoords, props: { level: 1, __isConnector: true } })
+                curEnd = connectorCoords[connectorCoords.length - 1]
+            }
+            // 1) Ordonner les segments selon leur position le long des steps (départ -> arrivée)
+            let segments = routeFeatures.map(f => ({ coords: (f.geometry.coordinates as number[][]).slice(), props: (f.properties || {}) }))
+            if (segments.length) {
+                if (stepsPolyline && stepsPolyline.length >= 2) {
+                    // Helper local pour projeter un point sur une polyline et obtenir l'along
+                    const projectOnPolylineLocal = (pt: [number, number], coords: number[][]) => {
+                        let bestDist = Infinity
+                        let bestAlong = 0
+                        let total = 0
+                        let run = 0
+                        const toMeters = (a: [number, number], b: [number, number]) => haversine(a, b)
+                        const projectOnSeg = (pt2: [number, number], a: [number, number], b: [number, number]) => {
+                            const lat0 = (a[1] + b[1]) * 0.5 * Math.PI / 180
+                            const kx = Math.cos(lat0) * 111320
+                            const ky = 110540
+                            const ax = a[0] * kx, ay = a[1] * ky
+                            const bx = b[0] * kx, by = b[1] * ky
+                            const px = pt2[0] * kx, py = pt2[1] * ky
+                            const vx = bx - ax, vy = by - ay
+                            const wx = px - ax, wy = py - ay
+                            const vv = vx * vx + vy * vy
+                            const t = vv > 0 ? Math.max(0, Math.min(1, (wx * vx + wy * wy) / vv)) : 0
+                            const sx = ax + vx * t, sy = ay + vy * t
+                            const spt: [number, number] = [sx / kx, sy / ky]
+                            const d = toMeters(pt2, spt)
+                            return { t, d }
+                        }
+                        for (let i = 1; i < coords.length; i++) {
+                            const a = coords[i - 1] as [number, number]
+                            const b = coords[i] as [number, number]
+                            const segLen = toMeters(a, b)
+                            total += segLen
+                            const { t, d } = projectOnSeg(pt, a, b)
+                            if (d < bestDist) {
+                                bestDist = d
+                                bestAlong = run + segLen * t
+                            }
+                            run += segLen
+                        }
+                        return { dist: bestDist, along: bestAlong, total }
+                    }
+                    // Assigner un paramètre s (along) à chaque segment via son point milieu
+                    const segWithS = segments.map(seg => {
+                        const cs = seg.coords
+                        const mid = cs[Math.floor(cs.length / 2)] as [number, number]
+                        const pj = projectOnPolylineLocal(mid, stepsPolyline)
+                        return { ...seg, _s: pj.along }
+                    })
+                    segWithS.sort((a, b) => a._s - b._s)
+                    segments = segWithS.map(({ _s, ...rest }) => rest)
+                    // Sens global: si le connecteur est plus proche de la FIN des steps, inverser l'ordre
+                    if (connectorCoords && connectorCoords.length >= 2) {
+                        const connEnd = connectorCoords[connectorCoords.length - 1]
+                        const stepsStart = stepsPolyline[0] as [number, number]
+                        const stepsEnd = stepsPolyline[stepsPolyline.length - 1] as [number, number]
+                        const dToStart = distance(connEnd, stepsStart)
+                        const dToEnd = distance(connEnd, stepsEnd)
+                        if (dToEnd + 0.01 < dToStart) {
+                            segments = segments.reverse().map(seg => ({ ...seg, coords: seg.coords.slice().reverse() }))
+                        }
+                    }
                 }
-                const [s, e] = getEnds(coords)
-                if (prevEnd) {
-                    const dS = distance(prevEnd, s)
-                    const dE = distance(prevEnd, e)
+                // orienter chaque segment pour assurer la continuité locale quand on va les empiler
+                let prevEnd: number[] | null = null
+                for (let i = 0; i < segments.length; i++) {
+                    let coords = segments[i].coords
+                    if (prevEnd) {
+                        const [s, e] = getEnds(coords)
+                        const dS = distance(prevEnd, s)
+                        const dE = distance(prevEnd, e)
+                        if (dE < dS) coords = coords.slice().reverse()
+                    }
+                    segments[i].coords = coords
+                    prevEnd = coords[coords.length - 1]
+                }
+            }
+            // 3) Empiler le connecteur (déjà orienté utilisateur->graphe), puis les segments, en garantissant la continuité locale
+            for (const seg of segments) {
+                let coords = seg.coords.slice()
+                if (curEnd) {
+                    const [s, e] = getEnds(coords)
+                    const dS = distance(curEnd, s)
+                    const dE = distance(curEnd, e)
                     if (dE < dS) coords = coords.slice().reverse()
                 }
-                segments[i].coords = coords
-                prevEnd = coords[coords.length - 1]
+                ordered.push({ coords, props: seg.props })
+                curEnd = coords[coords.length - 1]
             }
-            // 2) Choisir le sens global en fonction de l'ordre des steps (référence alongDistance)
-            if (stepsPolyline && stepsPolyline.length >= 2) {
-                const stepsStart = stepsPolyline[0]
-                const stepsEnd = stepsPolyline[stepsPolyline.length - 1]
-                const chainStart = segments[0].coords[0]
-                // chainEnd no longer needed; orientation based on chainStart vs steps endpoints
-                const dStartFromStart = distance(chainStart, stepsStart)
-                const dStartFromEnd = distance(chainStart, stepsEnd)
-                // Si le début de chaîne est plus proche de la fin des steps, inverser globalement pour coller à alongDistance
-                if (dStartFromEnd + 0.01 < dStartFromStart) {
-                    segments = segments.reverse().map(seg => ({ props: seg.props, coords: seg.coords.slice().reverse() }))
-                }
-            }
-        }
-        // 3) Empiler le connecteur (déjà orienté utilisateur->graphe), puis les segments, en garantissant la continuité locale
-        for (const seg of segments) {
-            let coords = seg.coords.slice()
-            if (curEnd) {
-                const [s, e] = getEnds(coords)
-                const dS = distance(curEnd, s)
-                const dE = distance(curEnd, e)
-                if (dE < dS) coords = coords.slice().reverse()
-            }
-            ordered.push({ coords, props: seg.props })
-            curEnd = coords[coords.length - 1]
+            // Mémoriser l'ordre calculé pour ce routeId
+            _cachedOrdering = ordered.map(seg => ({ coords: seg.coords.slice(), props: { ...seg.props } }))
+            _cachedRouteId = routeSourceId
         }
 
-        // 2) Calcul de la progression GLOBALE (connecteur inclus) et découpe UNE SEULE FOIS
+    // 2) Calcul de la progression GLOBALE (connecteur inclus) et découpe UNE SEULE FOIS
         const coveredFeatures: any[] = []
         const remainingFeatures: any[] = []
 
@@ -278,36 +336,31 @@ export function updateRouteProgress(map: any, routeSourceId: string, alongDistan
             return { dist: bestDist, along: bestAlong, total: totalLen }
         }
 
-        // Longueur cumulée du connecteur
+        // Longueur cumulée du connecteur (utile pour fallback)
         let connectorLength = 0
         if (connectorCoords) {
             for (let i = 1; i < connectorCoords.length; i++) connectorLength += haversine(connectorCoords[i - 1] as any, connectorCoords[i] as any)
         }
 
-        // Determine whether to cut inside connector (user closer to connector than to route), else use route progress
+        // Calculer la progression en projetant l'utilisateur sur la CHAÎNE COMPLÈTE (connecteur + route)
         let progress = 0
-        if (userLngLat && connectorCoords) {
-            // distance to connector and along on connector
-            const connProj = projectOnPolyline(userLngLat, connectorCoords)
-            // distance to route polylines (min over all)
-            let minRouteDist = Infinity
-            for (const rf of routeFeatures) {
-                const coords = (rf.geometry.coordinates as number[][])
-                if (!coords || coords.length < 2) continue
-                const pj = projectOnPolyline(userLngLat, coords)
-                if (pj.dist < minRouteDist) minRouteDist = pj.dist
+        if (userLngLat) {
+            const chainCoords: number[][] = []
+            for (const seg of ordered) {
+                if (!seg.coords || seg.coords.length < 2) continue
+                if (chainCoords.length === 0) chainCoords.push(seg.coords[0])
+                for (let i = 1; i < seg.coords.length; i++) chainCoords.push(seg.coords[i])
             }
-            if (connProj.dist <= minRouteDist) {
-                // User is closer to connector: split inside connector
-                progress = Math.max(0, Math.min(connectorLength, connProj.along))
+            if (chainCoords.length >= 2) {
+                const pjAll = projectOnPolyline(userLngLat, chainCoords)
+                progress = Math.max(0, pjAll.along)
             } else {
-                // User is closer to route: connector fully covered + along on route
-                // alongDistance inclut déjà le connecteur (dans steps); ne pas le recompter
+                // Fallback, très rare: pas de chaîne exploitable
                 progress = Math.max(0, (alongDistance || 0))
             }
         } else {
-            // Fallback: old behavior
-            progress = Math.max(0, (alongDistance || 0))
+            // Fallback: approx via alongDistance; ajouter la longueur du connecteur si présent
+            progress = Math.max(0, (alongDistance || 0) + (connectorLength || 0))
         }
 
         // Borner la progression pour éviter de recouvrir tout le trajet à cause d'arrondis
