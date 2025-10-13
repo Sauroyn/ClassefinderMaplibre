@@ -85,14 +85,25 @@ function icsProxy(): Plugin {
 export default defineConfig({
   plugins: [react(), publicConfigsVirtual(), icsProxy()],
   optimizeDeps: {
-    include: ['warning', '@react-spring/web']
+    // Only include shims we actually need in dev pre-bundle
+    include: ['warning']
   },
   resolve: {
     alias: [
       { find: 'warning', replacement: path.resolve(__dirname, 'src/shims/warning.ts') },
       { find: /^warning\/.+$/, replacement: path.resolve(__dirname, 'src/shims/warning.ts') },
+      // Force ESM build for bottom sheet (only for bare import, not subpaths like /dist/style.css)
+      // Note: package provides index.es.js (no 'm') as the ESM entry.
+      { find: /^react-spring-bottom-sheet$/, replacement: 'react-spring-bottom-sheet/dist/index.es.js' },
+      // Force react-spring v8 ESM entry to avoid accidental v9/web resolution in dev
+      { find: /^react-spring$/, replacement: 'react-spring/web.js' },
     ],
-    dedupe: ['react', 'react-dom', '@react-spring/web', 'react-spring']
+    dedupe: [
+      'react',
+      'react-dom',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime'
+    ],
   },
   //base: '/preview/', // <== IMPORTANT
 })
