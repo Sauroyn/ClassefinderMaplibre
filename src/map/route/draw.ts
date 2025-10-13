@@ -159,6 +159,23 @@ export function drawRoutes(map: any, routes: Array<{ id: string, geo: any }>) {
 let _cachedOrdering: Array<{ coords: number[][], props: any }> | null = null
 let _cachedRouteId: string | null = null
 
+// Expose the current ordered chain (flattened coordinates) for consumers like the navigation marker heading
+export function getOrderedChainFor(routeSourceId: string): number[][] | null {
+    try {
+        if (_cachedRouteId !== routeSourceId || !_cachedOrdering || !_cachedOrdering.length) return null
+        const chain: number[][] = []
+        for (const seg of _cachedOrdering) {
+            const coords = seg.coords
+            if (!coords || coords.length < 2) continue
+            if (chain.length === 0) chain.push(coords[0])
+            for (let i = 1; i < coords.length; i++) chain.push(coords[i])
+        }
+        return chain.length >= 2 ? chain : null
+    } catch {
+        return null
+    }
+}
+
 // Fonction pour mettre à jour la progression : divise l'itinéraire en partie parcourue (bleu) et restante (gris)
 export function updateRouteProgress(map: any, routeSourceId: string, alongDistance: number, userLngLat?: [number, number], stepsPolyline?: number[][]) {
     try {
@@ -242,13 +259,34 @@ export function updateRouteProgress(map: any, routeSourceId: string, alongDistan
                         return { ...seg, _s: pj.along }
                     })
                     segWithS.sort((a, b) => a._s - b._s)
-                    segments = segWithS.map(({ _s, ...rest }) => rest)
+
+                    // Si un connecteur existe, démarrer la chaîne à l'endroit où il rejoint la route (proche de sConn)
+                    if (connectorCoords) {
+                        const connEnd = connectorCoords[connectorCoords.length - 1] as [number, number]
+                        const sConn = projectOnPolylineLocal(connEnd, stepsPolyline).along
+                        // Choisir l'indice de départ: premier segment avec _s >= sConn (sinon le dernier)
+                        let startIdx = 0
+                        const eps = 1e-6
+                        for (let i = 0; i < segWithS.length; i++) {
+                            if (segWithS[i]._s + eps >= sConn) { startIdx = i; break }
+                            if (i === segWithS.length - 1) startIdx = i
+                        }
+                        const rotated = segWithS.slice(startIdx) // on ne garde que la queue vers la destination
+                        segments = rotated.map(({ _s, ...rest }) => rest)
+                    } else {
+                        segments = segWithS.map(({ _s, ...rest }) => rest)
+                    }
                 }
-                // Orienter le 1er segment pour qu'il démarre côté stepsStart, puis assurer la continuité
+                // Orienter le 1er segment pour qu'il parte du connecteur s'il existe, sinon vers le début du steps
                 let prevEnd: number[] | null = null
                 if (segments.length) {
                     let c0 = segments[0].coords
-                    if (stepsPolyline && stepsPolyline.length >= 2) {
+                    if (curEnd) {
+                        const [s0, e0] = getEnds(c0)
+                        const dS0 = distance(curEnd, s0)
+                        const dE0 = distance(curEnd, e0)
+                        if (dE0 < dS0) c0 = c0.slice().reverse()
+                    } else if (stepsPolyline && stepsPolyline.length >= 2) {
                         const stepsStart = stepsPolyline[0] as [number, number]
                         const [s0, e0] = getEnds(c0)
                         const dS0 = distance(stepsStart, s0)
