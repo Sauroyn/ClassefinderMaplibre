@@ -71,13 +71,11 @@ export function BottomSheetBase({
         <BottomSheet
             ref={sheetRef}
             open={open}
-            blocking={!reduceOnOutsideClick}
+            blocking={false}
             onDismiss={() => {
-                // Reduce instead of closing when clicking outside, if allowed
-                if (reduceOnOutsideClick) {
-                    const snaps = snapsPxRef.current
-                    if (snaps.length) sheetRef.current?.snapTo(snaps[0])
-                }
+                // Always snap back to the minimum height instead of closing completely
+                const snaps = snapsPxRef.current
+                if (snaps.length) sheetRef.current?.snapTo(snaps[0])
             }}
             header={header ? (
                 <div style={{ fontWeight: 700, color: isDark ? '#f5f7fb' : '#111' }}>

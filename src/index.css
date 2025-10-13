@@ -39,3 +39,10 @@ button {
 .maplibregl-map {
   touch-action: none;
 }
+
+/* Ensure bottom sheets appear above all other UI, but allow interacting with background */
+.rsbs-container { z-index: 9999 !important; }
+.rsbs-overlay, .rsbs-backdrop {
+  background: transparent !important;
+  pointer-events: none !important;
+}
