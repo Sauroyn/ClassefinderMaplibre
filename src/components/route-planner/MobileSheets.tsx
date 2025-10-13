@@ -8,6 +8,7 @@ export function BottomSheetBase({
     initialSnap = 0.5,
     snapPercents = [0.05, 0.2, 0.5, 0.9],
     reduceOnOutsideClick = true,
+    minPeekPx = 48,
     apiRef,
 }: {
     open: boolean,
@@ -16,6 +17,8 @@ export function BottomSheetBase({
     initialSnap?: number,
     snapPercents?: number[],
     reduceOnOutsideClick?: boolean,
+    /** Minimum height when minimized (allows going smaller than content). */
+    minPeekPx?: number,
     apiRef?: { current: null | { snapTo: (index: number) => void, snapToMin: () => void } }
 }) {
     // Clamp and sort snap percentages once
@@ -78,10 +81,12 @@ export function BottomSheetBase({
         const { maxHeight } = coerceDims(a, b)
         const p = Math.max(0.02, Math.min(0.98, initialSnap))
         const target = Math.round(maxHeight * p)
-        const base = sortedPercents.current.length
+        const percBase = sortedPercents.current.length
             ? sortedPercents.current.map((sp) => Math.round(maxHeight * sp))
             : [Math.round(maxHeight * 0.12), Math.round(maxHeight * 0.28), Math.round(maxHeight * 0.5), Math.round(maxHeight * 0.86)]
-        const snaps = Array.from(new Set(base.map(v => Math.max(1, Math.min(maxHeight, v))))).sort((a, b) => a - b)
+        // Always include a small peek snap smaller than content
+        const peek = Math.max(1, Math.min(maxHeight, Math.round(minPeekPx)))
+        const snaps = Array.from(new Set([peek, ...percBase].map(v => Math.max(peek, Math.min(maxHeight, v))))).sort((a, b) => a - b)
         // choose nearest available snap point
         let best = snaps[0]
         let bestD = Math.abs(snaps[0] - target)
@@ -92,12 +97,13 @@ export function BottomSheetBase({
         return best
     }
     const snapPoints = (a: any, b?: any) => {
-        const { maxHeight, minHeight } = coerceDims(a, b)
-        // Map percents to px and clamp to [minHeight, maxHeight]
-        const base = sortedPercents.current.length
+        const { maxHeight } = coerceDims(a, b)
+        // Map percents to px and clamp to [minPeekPx, maxHeight]
+        const percBase = sortedPercents.current.length
             ? sortedPercents.current.map((p) => Math.round(maxHeight * p))
-            : [minHeight, Math.round(maxHeight * 0.5), Math.round(maxHeight * 0.9)]
-        const snaps = Array.from(new Set(base.map(v => Math.max(minHeight, Math.min(maxHeight, v))))).sort((a, b) => a - b)
+            : [Math.round(maxHeight * 0.5), Math.round(maxHeight * 0.9)]
+        const peek = Math.max(1, Math.min(maxHeight, Math.round(minPeekPx)))
+        const snaps = Array.from(new Set([peek, ...percBase].map(v => Math.max(peek, Math.min(maxHeight, v))))).sort((a, b) => a - b)
         snapsPxRef.current = snaps
         return snaps
     }
@@ -163,7 +169,7 @@ export function RoutesBottomSheet({
 }) {
     // Colors via CSS vars
     return (
-        <BottomSheetBase open={open} header={<div style={{ fontWeight: 700 }}>Itinéraires</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]}>
+        <BottomSheetBase open={open} header={<div style={{ fontWeight: 700 }}>Itinéraires</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {routes.map((r, i) => {
                     const primary = i === 0
@@ -215,7 +221,7 @@ export function RouteDetailsBottomSheet({
                     <div style={{ fontWeight: 700 }}>Trajet sélectionné</div>
                 </div>
             </div>
-        } initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]}>
+        } initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={{ display: 'flex', gap: 12 }}>
                     <div style={{ flex: 1 }}>
