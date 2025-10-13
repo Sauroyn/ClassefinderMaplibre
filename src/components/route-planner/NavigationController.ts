@@ -93,8 +93,8 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         el.style.borderRadius = '50%'
         el.style.boxShadow = '0 0 0 3px rgba(255,255,255,0.9), 0 2px 8px rgba(0,0,0,0.3)'
         el.style.background = '#007bff'
-    // Remove transform transition to avoid inertial animation when map pans
-    // el.style.transition = 'transform 0.15s ease-out'
+        // Remove transform transition to avoid inertial animation when map pans
+        // el.style.transition = 'transform 0.15s ease-out'
         // Important: set initial position before adding to the map to avoid internal null lngLat errors
         const mk = new maplibre.Marker({ element: el, rotationAlignment: 'map' as any, pitchAlignment: 'map' as any })
         try { mk.setLngLat(initialLngLat) } catch { }
