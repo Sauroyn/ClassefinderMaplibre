@@ -53,8 +53,9 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
         function onMapFeatureClick(e: any) {
             const feat = e.detail as any
             if (!feat) return
-            const name = feat.properties?.name ?? feat.properties?.title ?? feat.id
-            const id = feat.id ?? feat.properties?.id ?? name
+            // Accept features without name: use id or generate a placeholder
+            const name = feat.properties?.name ?? feat.properties?.title ?? (feat.id != null ? `Zone ${feat.id}` : 'Zone')
+            const id = feat.id ?? feat.properties?.id ?? feat.properties?.name ?? name
             // mimic a user pick
             pick(id, name)
             // do not auto-open route planner here; RoutePlanner listens separately when open
