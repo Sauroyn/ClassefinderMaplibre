@@ -764,7 +764,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         return { ...cfg0b, fillColor: deriveDark(cfg0b.fillColor) }
                     })()
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
-                    const centroids = generateCentroids(themed)
+                    // Generate centroids from the current data (already normalized in latestDataRef or data)
+                    const centroids = generateCentroids(d || data || latestDataRef.current)
                     if (!map.getSource('buildings-centroids')) addCentroidsSource(map, centroids)
                     addNameLayer(map, (map as any).__currentLevel ?? level, theme)
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
