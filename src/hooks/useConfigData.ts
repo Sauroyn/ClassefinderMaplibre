@@ -29,11 +29,20 @@ export function useConfigData() {
                 const r = await fetch(geoUrl)
                 const d = await r.json()
                 dataRef.current = d
-                const found = Array.from(new Set((d.features || []).map((f: any) => f.properties?.level))).filter(Boolean) as number[]
-                found.sort((a, b) => a - b)
-                setLevels(found)
+                // Collect levels, coercing strings to numbers; keep 0; drop non-finite
+                const rawLevels = (d.features || []).map((f: any) => (f && f.properties ? f.properties.level : undefined))
+                const numericLevels = rawLevels
+                    .map((v: any) => {
+                        if (v === null || v === undefined) return null
+                        const n = (typeof v === 'string') ? parseInt(v, 10) : Number(v)
+                        return Number.isFinite(n) ? n : null
+                    })
+                    .filter((v: number | null): v is number => v !== null)
+                const uniq: number[] = Array.from(new Set<number>(numericLevels))
+                uniq.sort((a: number, b: number) => a - b)
+                setLevels(uniq)
                 setLoading(false)
-                if (found.length) setLevel(found[0])
+                if (uniq.length) setLevel(uniq[0] as number)
             } catch (e) {
                 console.warn('failed loading geojson', e)
                 setLoading(false)

@@ -228,10 +228,37 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         if (!map || !data || initialized.current) return
         const init = () => {
             try {
-                // Before adding source, if theme is dark, derive a dark color property from the light one
+                // Normalize incoming data: ensure numeric level and stable ids; then derive dark color if needed
                 let themedData = data
                 try {
                     if (data && data.type === 'FeatureCollection') {
+                        // first normalize
+                        const normalized = {
+                            ...data,
+                            features: data.features.map((f: any, idx: number) => {
+                                try {
+                                    const p = { ...(f.properties || {}) }
+                                    // coerce level: accept string or number; if missing but "levels" array exists, keep as-is
+                                    if (p.level != null) {
+                                        const n = typeof p.level === 'string' ? parseInt(p.level, 10) : p.level
+                                        p.level = Number.isFinite(n) ? n : p.level
+                                    }
+                                    // set a stable id if missing (prefer existing id, then properties.fid/name, else index)
+                                    const fid = (f.id != null ? f.id : (p.fid != null ? p.fid : (p.id != null ? p.id : undefined)))
+                                    let newId: number
+                                    if (fid != null) {
+                                        if (typeof fid === 'number' && Number.isFinite(fid)) newId = fid
+                                        else {
+                                            const n = parseInt(String(fid), 10)
+                                            newId = Number.isFinite(n) ? n : idx
+                                        }
+                                    } else {
+                                        newId = idx
+                                    }
+                                    return { ...f, id: newId, properties: p }
+                                } catch { return { ...f, id: (f.id ?? idx) } }
+                            })
+                        }
                         const deriveDark = (hex: string): string => {
                             // convert to HSL and shift towards darker/desaturated tone
                             const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
@@ -275,8 +302,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             return `#${toHex(R)}${toHex(G)}${toHex(B)}`
                         }
                         const next = {
-                            ...data,
-                            features: data.features.map((f: any) => {
+                            ...normalized,
+                            features: normalized.features.map((f: any) => {
                                 try {
                                     const p = { ...(f.properties || {}) }
                                     if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
@@ -335,7 +362,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     return { ...cfg0, fillColor: deriveDark(cfg0.fillColor) }
                 })()
                 addFillLayers(map, level, cfg, theme)
-                const centroids = generateCentroids(data)
+                const centroids = generateCentroids(themedData)
                 addCentroidsSource(map, centroids)
                 addNameLayer(map, level, theme)
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
@@ -349,7 +376,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         const map = mapRef.current
         if (!map) return
         try { (map as any).__currentLevel = level } catch (e) { }
-        const filter = ['==', ['get', 'level'], level]
+        const filter: any = [
+            'any',
+            ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+            ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
+        ]
         try {
             if (map.getLayer('buildings-extrusion')) map.setFilter('buildings-extrusion', filter as any)
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
@@ -605,10 +636,34 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     if (!d) return
                     // add sources if missing
                     if (!map.getSource('buildings')) {
-                        // regenerate themed data
+                        // regenerate normalized + themed data
                         const themed = (() => {
                             try {
                                 if (d && d.type === 'FeatureCollection') {
+                                    const normalized = {
+                                        ...d,
+                                        features: d.features.map((f: any, idx: number) => {
+                                            try {
+                                                const p = { ...(f.properties || {}) }
+                                                if (p.level != null) {
+                                                    const n = typeof p.level === 'string' ? parseInt(p.level, 10) : p.level
+                                                    p.level = Number.isFinite(n) ? n : p.level
+                                                }
+                                                const fid = (f.id != null ? f.id : (p.fid != null ? p.fid : (p.id != null ? p.id : undefined)))
+                                                let newId: number
+                                                if (fid != null) {
+                                                    if (typeof fid === 'number' && Number.isFinite(fid)) newId = fid
+                                                    else {
+                                                        const n = parseInt(String(fid), 10)
+                                                        newId = Number.isFinite(n) ? n : idx
+                                                    }
+                                                } else {
+                                                    newId = idx
+                                                }
+                                                return { ...f, id: newId, properties: p }
+                                            } catch { return { ...f, id: (f.id ?? idx) } }
+                                        })
+                                    }
                                     const deriveDark = (hex: string): string => {
                                         const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
                                         if (!m) return hex
@@ -649,8 +704,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                         return `#${toHex(R)}${toHex(G)}${toHex(B)}`
                                     }
                                     return {
-                                        ...d,
-                                        features: d.features.map((f: any) => {
+                                        ...normalized,
+                                        features: normalized.features.map((f: any) => {
                                             const p = { ...(f.properties || {}) }
                                             if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
                                             return { ...f, properties: p }
@@ -709,7 +764,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         return { ...cfg0b, fillColor: deriveDark(cfg0b.fillColor) }
                     })()
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
-                    const centroids = generateCentroids(d)
+                    const centroids = generateCentroids(themed)
                     if (!map.getSource('buildings-centroids')) addCentroidsSource(map, centroids)
                     addNameLayer(map, (map as any).__currentLevel ?? level, theme)
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
