@@ -70,16 +70,13 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         let arcStartIdx: number | null = null
         let arcDir: number | null = null
         let arcCount = 0
-        let arcCum = 0
         let arcFirstCum = 0
-        let arcLastIdx = 0
         for (let i = 0; i < steps.length; i++) {
             const s = steps[i]
             // Changement d'étage explicite
             if (s && s.type === 'floor-change') {
-                const t = s.direction === 'up' ? 'floor-up' : 'floor-down'
                 const idx = nextSegIndexFrom(i - 1)
-                mans.push({ at: cum, type: t, idx: idx >= 0 ? idx : undefined })
+                mans.push({ at: cum, type: s.direction === 'up' ? 'floor-up' : 'floor-down', idx: idx >= 0 ? idx : undefined })
                 cum += Number(s?.distance || 0)
                 // On ne saute pas le cum += d plus bas car distance=0
                 continue
@@ -114,12 +111,9 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                                 arcStartIdx = lastSegIdx
                                 arcDir = dir
                                 arcCount = 1
-                                arcCum = 0
                                 arcFirstCum = cum
-                                arcLastIdx = i
                             } else if (arcDir === dir && arcCount < 6) {
                                 arcCount++
-                                arcLastIdx = i
                             } else {
                                 // Changement de sens ou trop long : on termine l'arc
                                 if (arcCount >= 3) {
@@ -130,7 +124,6 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                                 arcDir = dir
                                 arcCount = 1
                                 arcFirstCum = cum
-                                arcLastIdx = i
                             }
                         } else {
                             // Si on sort d'un arc, on le termine
