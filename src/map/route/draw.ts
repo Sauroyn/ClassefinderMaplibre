@@ -208,7 +208,7 @@ export function updateRouteProgress(map: any, routeSourceId: string, alongDistan
             // Premier passage: calculer l'ordre global et le mémoriser
             let curEnd: number[] | null = null
             if (connectorCoords) {
-                ordered.push({ coords: connectorCoords, props: { level: 1, __isConnector: true } })
+                ordered.push({ coords: connectorCoords, props: { level: 0, __isConnector: true } })
                 curEnd = connectorCoords[connectorCoords.length - 1]
             }
             // 1) Ordonner les segments selon leur position le long des steps (départ -> arrivée)

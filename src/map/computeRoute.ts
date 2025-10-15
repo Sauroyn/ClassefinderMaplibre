@@ -44,6 +44,125 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
     if (!ks || ks.length === 0) return null
     const map = (mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current)))
     const nodeById = new Map<string, any>(graph.nodes.map((n: any) => [String(n.id), n]))
+    // --- Maneuver helpers ---
+    function bearingDegrees(a: [number, number], b: [number, number]) {
+        const toRad = (d: number) => d * Math.PI / 180
+        const toDeg = (r: number) => r * 180 / Math.PI
+        const φ1 = toRad(a[1]), φ2 = toRad(b[1])
+        const Δλ = toRad(b[0] - a[0])
+        const y = Math.sin(Δλ) * Math.cos(φ2)
+        const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ)
+        return (toDeg(Math.atan2(y, x)) + 360) % 360
+    }
+    function normalizeDelta(d: number) { return ((d + 540) % 360) - 180 }
+    type Maneuver = { at: number, type: string, idx?: number }
+    function buildManeuvers(steps: Array<any>): Maneuver[] {
+        const mans: Maneuver[] = []
+        if (!Array.isArray(steps) || steps.length === 0) return mans
+        let cum = 0
+        let lastSegBearing: number | null = null
+        let lastSegIdx: number | null = null
+        const nextSegIndexFrom = (from: number) => {
+            for (let j = from + 1; j < steps.length; j++) if (steps[j] && steps[j].coords) return j
+            return -1
+        }
+        // Pour la détection de rond-point
+        let arcStartIdx: number | null = null
+        let arcDir: number | null = null
+        let arcCount = 0
+        let arcCum = 0
+        let arcFirstCum = 0
+        let arcLastIdx = 0
+        for (let i = 0; i < steps.length; i++) {
+            const s = steps[i]
+            // Changement d'étage explicite
+            if (s && s.type === 'floor-change') {
+                const t = s.direction === 'up' ? 'floor-up' : 'floor-down'
+                const idx = nextSegIndexFrom(i - 1)
+                mans.push({ at: cum, type: t, idx: idx >= 0 ? idx : undefined })
+                cum += Number(s?.distance || 0)
+                // On ne saute pas le cum += d plus bas car distance=0
+                continue
+            }
+            const d = Number(s?.distance || 0)
+            // Ignore les très petits segments pour la détection de manœuvre
+            if (d < 2) {
+                cum += d
+                continue
+            }
+            if (s && s.coords && Array.isArray(s.coords) && s.coords.length === 2) {
+                const a = s.coords[0] as [number, number]
+                const b = s.coords[1] as [number, number]
+                const br = bearingDegrees(a, b)
+                if (lastSegBearing != null && lastSegIdx != null) {
+                    let delta = normalizeDelta(br - lastSegBearing)
+                    let abs = Math.abs(delta)
+                    // DEBUG : log toujours actif pour analyse
+                    // eslint-disable-next-line no-console
+                    console.info(`[ManeuverDebug] i=${i} delta=${delta.toFixed(2)} abs=${abs.toFixed(2)} br=${br.toFixed(2)} last=${lastSegBearing.toFixed(2)}`)
+                    // 1. Tolérance "tout droit" : angle faible (<= 80°)
+                    if (abs <= 80) {
+                        // Considérer comme tout droit, pas de manœuvre
+                        // On ne fait rien
+                    } else {
+                        // 2. Détection d'arc de cercle (rond-point)
+                        // Si plusieurs segments consécutifs tournent dans le même sens (delta > 35°), on compte
+                        const arcThreshold = 35
+                        if (Math.abs(delta) > arcThreshold) {
+                            const dir = delta > 0 ? 1 : -1
+                            if (arcStartIdx === null) {
+                                arcStartIdx = lastSegIdx
+                                arcDir = dir
+                                arcCount = 1
+                                arcCum = 0
+                                arcFirstCum = cum
+                                arcLastIdx = i
+                            } else if (arcDir === dir && arcCount < 6) {
+                                arcCount++
+                                arcLastIdx = i
+                            } else {
+                                // Changement de sens ou trop long : on termine l'arc
+                                if (arcCount >= 3) {
+                                    // On considère que c'est un rond-point
+                                    mans.push({ at: arcFirstCum, type: arcDir === 1 ? 'roundabout-left' : 'roundabout-right', idx: arcStartIdx })
+                                }
+                                arcStartIdx = lastSegIdx
+                                arcDir = dir
+                                arcCount = 1
+                                arcFirstCum = cum
+                                arcLastIdx = i
+                            }
+                        } else {
+                            // Si on sort d'un arc, on le termine
+                            if (arcCount >= 3) {
+                                mans.push({ at: arcFirstCum, type: arcDir === 1 ? 'roundabout-left' : 'roundabout-right', idx: arcStartIdx ?? undefined })
+                            }
+                            arcStartIdx = null
+                            arcDir = null
+                            arcCount = 0
+                        }
+                        // 3. Virages classiques
+                        let typ: string | null = null
+                        if (abs >= 90) typ = (delta > 0 ? 'turn-left' : 'turn-right')
+                        else if (abs >= 40) typ = (delta > 0 ? 'turn-slight-left' : 'turn-slight-right')
+                        if (typ) {
+                            mans.push({ at: cum, type: typ, idx: lastSegIdx })
+                        }
+                    }
+                }
+                lastSegBearing = br
+                lastSegIdx = i
+            }
+            cum += d
+        }
+        // Si on termine sur un arc, on le clôture
+        if (arcCount >= 3) {
+            mans.push({ at: arcFirstCum, type: arcDir === 1 ? 'roundabout-left' : 'roundabout-right', idx: arcStartIdx ?? undefined })
+        }
+        // Arrivée
+        mans.push({ at: cum, type: 'arrive', idx: steps.length - 1 })
+        return mans
+    }
     // Correction : toujours inclure le segment utilisateur->graphe dans la distance/temps/étapes
     function addUserConnectorIfNeeded(routeObj: any, userOriginLngLat?: [number, number]) {
         if (!userOriginLngLat) return
@@ -56,7 +175,7 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         routeObj.distance += d
         routeObj.time += d / 1.4
         routeObj.steps = [
-            { fromId: 'user', toId: startNodeId, distance: d, coords: [userOriginLngLat, startNode.coord], level: 1 },
+            { fromId: 'user', toId: startNodeId, distance: d, coords: [userOriginLngLat, startNode.coord], level: 0 },
             ...(routeObj.steps || [])
         ]
     }
@@ -90,7 +209,8 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
             const speed = 1.4
             const timeSec = dist / speed
             const gid = `route-planner-${idx}`
-            const routeObj = { id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps }
+            const maneuvers = buildManeuvers(steps)
+            const routeObj = { id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps, maneuvers }
             addUserConnectorIfNeeded(routeObj, userOriginLngLat)
             routesOut.push(routeObj)
         }
@@ -138,13 +258,14 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 if (startNode && Array.isArray(startNode.coord)) {
                     const d0 = haversine(userOriginLngLat, startNode.coord as [number, number])
                     dist += d0
-                    steps.unshift({ distance: d0, coords: [userOriginLngLat, startNode.coord], level: 1 })
+                    steps.unshift({ distance: d0, coords: [userOriginLngLat, startNode.coord], level: 0 })
                 }
             } catch { }
         }
         const speed = 1.4
         const timeSec = dist / speed
-        routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps })
+        const maneuvers = buildManeuvers(steps)
+        routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps, maneuvers })
     }
     return { routes: routesOut }
 }

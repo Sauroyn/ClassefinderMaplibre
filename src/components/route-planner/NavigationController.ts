@@ -18,6 +18,7 @@ export type NavigationState = {
     currentStep: number
     floor: string | null
     error?: string
+    along?: number
 }
 
 export function useNavigationController(route: RouteItem | null, onExit: () => void, mapRef?: any) {
@@ -27,6 +28,7 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
         userPosition: null,
         currentStep: 0,
         floor: null,
+        along: 0,
     })
     const watchId = useRef<number | null>(null)
     const manualOverride = useRef<boolean>(false)
@@ -434,7 +436,7 @@ export function useNavigationController(route: RouteItem | null, onExit: () => v
             }
         } catch { }
         // étape courante approx
-        try { setState(s => ({ ...s, currentStep: Math.max(0, segIndex) })) } catch { }
+        try { setState(s => ({ ...s, currentStep: Math.max(0, segIndex), along })) } catch { }
         // recalc si trop loin
         if (realToSnapDist > MAX_SNAP_DISTANCE_METERS) {
             const now = Date.now()

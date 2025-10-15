@@ -1,6 +1,6 @@
 import maplibre from 'maplibre-gl'
 
-export const USER_CONNECTOR_LEVEL = 1
+export const USER_CONNECTOR_LEVEL = 0
 // Compat: ces constantes restent exportées pour MapView, mais ne sont plus utilisées pour dessiner la couche séparée
 export const USER_CONNECTOR_COLOR = '#007bff'
 export const USER_CONNECTOR_OPACITY = 1
