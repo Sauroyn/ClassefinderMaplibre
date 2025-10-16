@@ -98,17 +98,17 @@ export default function DesktopRouteSteps({
                             }}
                             onClick={() => {
                                 try {
-                                    if (s && s.coords && Array.isArray(s.coords) && s.coords.length === 2) {
+                                    const bbox = (s as any).bbox as [[number, number], [number, number]] | undefined
+                                    if (bbox && Array.isArray(bbox[0]) && Array.isArray(bbox[1])) {
+                                        window.dispatchEvent(new CustomEvent('nav:focus-step-bounds', { detail: bbox }))
+                                    } else if (s && s.coords && Array.isArray(s.coords) && s.coords.length === 2) {
                                         const a = s.coords[0]
                                         const b = s.coords[1]
                                         const minX = Math.min(a[0], b[0])
                                         const minY = Math.min(a[1], b[1])
                                         const maxX = Math.max(a[0], b[0])
                                         const maxY = Math.max(a[1], b[1])
-                                        const bounds: [[number, number], [number, number]] = [
-                                            [minX, minY],
-                                            [maxX, maxY],
-                                        ]
+                                        const bounds: [[number, number], [number, number]] = [[minX, minY], [maxX, maxY]]
                                         window.dispatchEvent(new CustomEvent('nav:focus-step-bounds', { detail: bounds }))
                                     }
                                     const lvl = (s as any).level

@@ -45,6 +45,12 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
     const map = (mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current)))
     const nodeById = new Map<string, any>(graph.nodes.map((n: any) => [String(n.id), n]))
     // --- Maneuver helpers ---
+    // Thresholds (tuned higher to reduce step/manoeuvre noise)
+    const SMALL_SEG_IGNORE_METERS = 2       // was 2
+    const STRAIGHT_ANGLE_TOL_DEG = 50     // was 80 (consider as straight if change <= this)
+    const ARC_THRESHOLD_DEG = 35            // was 35 (for roundabout-like arcs)
+    const SLIGHT_TURN_MIN_DEG = 20        // effective only when > straight tol; keep just above straight tol
+    const NORMAL_TURN_MIN_DEG = 80         // was 90
     function bearingDegrees(a: [number, number], b: [number, number]) {
         const toRad = (d: number) => d * Math.PI / 180
         const toDeg = (r: number) => r * 180 / Math.PI
@@ -55,6 +61,64 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
         return (toDeg(Math.atan2(y, x)) + 360) % 360
     }
     function normalizeDelta(d: number) { return ((d + 540) % 360) - 180 }
+
+    // Fusionne les segments consécutifs considérés comme "tout droit" (et sur le même niveau) en une seule étape
+    function coalesceSteps(rawSteps: Array<any>): Array<any> {
+        if (!Array.isArray(rawSteps) || rawSteps.length === 0) return []
+        const out: any[] = []
+        let cur: any | null = null
+        let lastBearing: number | null = null
+        const pushCur = () => { if (cur) { out.push(cur); cur = null; lastBearing = null } }
+        for (let i = 0; i < rawSteps.length; i++) {
+            const s = rawSteps[i]
+            // Étapes de changement d'étage: ne pas fusionner; couper le groupe
+            if (s && s.type === 'floor-change') { pushCur(); out.push(s); continue }
+            const d = Number(s?.distance || 0)
+            if (!s || !s.coords || s.coords.length !== 2 || !Number.isFinite(d)) { pushCur(); continue }
+            const a = s.coords[0] as [number, number]
+            const b = s.coords[1] as [number, number]
+            const lvl = s.level
+            const br = bearingDegrees(a, b)
+            if (!cur) {
+                const minX = Math.min(a[0], b[0])
+                const minY = Math.min(a[1], b[1])
+                const maxX = Math.max(a[0], b[0])
+                const maxY = Math.max(a[1], b[1])
+                cur = { distance: d, coords: [a, b], level: lvl, bbox: [[minX, minY], [maxX, maxY]] as [[number, number], [number, number]] }
+                lastBearing = br
+            } else {
+                // Niveau identique requis pour fusionner
+                const sameLevel = (cur.level ?? null) === (lvl ?? null)
+                const delta = lastBearing == null ? 0 : normalizeDelta(br - (lastBearing as number))
+                const abs = Math.abs(delta)
+                if (sameLevel && abs <= STRAIGHT_ANGLE_TOL_DEG) {
+                    // Fusion: prolonger l'étape courante jusqu'à b
+                    cur.distance = (Number(cur.distance) || 0) + d
+                    cur.coords = [cur.coords[0], b]
+                    // Élargir la bbox
+                    try {
+                        const bb = cur.bbox as [[number, number], [number, number]]
+                        const minX = Math.min(bb[0][0], a[0], b[0])
+                        const minY = Math.min(bb[0][1], a[1], b[1])
+                        const maxX = Math.max(bb[1][0], a[0], b[0])
+                        const maxY = Math.max(bb[1][1], a[1], b[1])
+                        cur.bbox = [[minX, minY], [maxX, maxY]] as [[number, number], [number, number]]
+                    } catch { }
+                    lastBearing = br
+                } else {
+                    pushCur()
+                    const minX = Math.min(a[0], b[0])
+                    const minY = Math.min(a[1], b[1])
+                    const maxX = Math.max(a[0], b[0])
+                    const maxY = Math.max(a[1], b[1])
+                    cur = { distance: d, coords: [a, b], level: lvl, bbox: [[minX, minY], [maxX, maxY]] as [[number, number], [number, number]] }
+                    lastBearing = br
+                }
+            }
+        }
+        pushCur()
+        return out
+    }
     type Maneuver = { at: number, type: string, idx?: number }
     function buildManeuvers(steps: Array<any>): Maneuver[] {
         const mans: Maneuver[] = []
@@ -83,7 +147,7 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
             }
             const d = Number(s?.distance || 0)
             // Ignore les très petits segments pour la détection de manœuvre
-            if (d < 2) {
+            if (d < SMALL_SEG_IGNORE_METERS) {
                 cum += d
                 continue
             }
@@ -97,14 +161,14 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                     // DEBUG : log toujours actif pour analyse
                     // eslint-disable-next-line no-console
                     console.info(`[ManeuverDebug] i=${i} delta=${delta.toFixed(2)} abs=${abs.toFixed(2)} br=${br.toFixed(2)} last=${lastSegBearing.toFixed(2)}`)
-                    // 1. Tolérance "tout droit" : angle faible (<= 80°)
-                    if (abs <= 80) {
+                    // 1. Tolérance "tout droit" : angle faible (<= STRAIGHT_ANGLE_TOL_DEG)
+                    if (abs <= STRAIGHT_ANGLE_TOL_DEG) {
                         // Considérer comme tout droit, pas de manœuvre
                         // On ne fait rien
                     } else {
                         // 2. Détection d'arc de cercle (rond-point)
                         // Si plusieurs segments consécutifs tournent dans le même sens (delta > 35°), on compte
-                        const arcThreshold = 35
+                        const arcThreshold = ARC_THRESHOLD_DEG
                         if (Math.abs(delta) > arcThreshold) {
                             const dir = delta > 0 ? 1 : -1
                             if (arcStartIdx === null) {
@@ -136,8 +200,8 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                         }
                         // 3. Virages classiques
                         let typ: string | null = null
-                        if (abs >= 90) typ = (delta > 0 ? 'turn-left' : 'turn-right')
-                        else if (abs >= 40) typ = (delta > 0 ? 'turn-slight-left' : 'turn-slight-right')
+                        if (abs >= NORMAL_TURN_MIN_DEG) typ = (delta > 0 ? 'turn-left' : 'turn-right')
+                        else if (abs >= SLIGHT_TURN_MIN_DEG) typ = (delta > 0 ? 'turn-slight-left' : 'turn-slight-right')
                         if (typ) {
                             mans.push({ at: cum, type: typ, idx: lastSegIdx })
                         }
@@ -199,11 +263,13 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                     steps.push({ fromId: String(ids[i - 1]), toId: String(ids[i]), distance: d, coords: [a.coord, b.coord], level: segLevel ?? undefined })
                 }
             }
+            // Fusion des segments colinéaires avant calcul des manœuvres
+            const mergedSteps = coalesceSteps(steps)
             const speed = 1.4
             const timeSec = dist / speed
             const gid = `route-planner-${idx}`
-            const maneuvers = buildManeuvers(steps)
-            const routeObj = { id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps, maneuvers }
+            const maneuvers = buildManeuvers(mergedSteps)
+            const routeObj = { id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps: mergedSteps, maneuvers }
             addUserConnectorIfNeeded(routeObj, userOriginLngLat)
             routesOut.push(routeObj)
         }
@@ -238,7 +304,12 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                     for (let j = 1; j < coords.length; j++) {
                         const d = haversine(coords[j - 1] as [number, number], coords[j] as [number, number])
                         dist += d
-                        steps.push({ distance: d, coords: [coords[j - 1], coords[j]], level: segLevel ?? undefined })
+                        const a = coords[j - 1] as [number, number]; const b = coords[j] as [number, number]
+                        const minX = Math.min(a[0], b[0])
+                        const minY = Math.min(a[1], b[1])
+                        const maxX = Math.max(a[0], b[0])
+                        const maxY = Math.max(a[1], b[1])
+                        steps.push({ distance: d, coords: [a, b], level: segLevel ?? undefined, bbox: [[minX, minY], [maxX, maxY]] })
                     }
                 }
             }
@@ -251,14 +322,21 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 if (startNode && Array.isArray(startNode.coord)) {
                     const d0 = haversine(userOriginLngLat, startNode.coord as [number, number])
                     dist += d0
-                    steps.unshift({ distance: d0, coords: [userOriginLngLat, startNode.coord], level: 0 })
+                    const a = userOriginLngLat as [number, number]; const b = startNode.coord as [number, number]
+                    const minX = Math.min(a[0], b[0])
+                    const minY = Math.min(a[1], b[1])
+                    const maxX = Math.max(a[0], b[0])
+                    const maxY = Math.max(a[1], b[1])
+                    steps.unshift({ distance: d0, coords: [a, b], level: 0, bbox: [[minX, minY], [maxX, maxY]] })
                 }
             } catch { }
         }
+        // Fusion des segments colinéaires avant calcul des manœuvres
+        const mergedSteps = coalesceSteps(steps)
         const speed = 1.4
         const timeSec = dist / speed
-        const maneuvers = buildManeuvers(steps)
-        routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps, maneuvers })
+        const maneuvers = buildManeuvers(mergedSteps)
+        routesOut.push({ id: gid, path: r.path, cost: r.cost, distance: dist, time: timeSec, layerId: `${gid}-line`, steps: mergedSteps, maneuvers })
     }
     return { routes: routesOut }
 }

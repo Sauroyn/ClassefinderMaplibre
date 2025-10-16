@@ -126,4 +126,50 @@ export function placeMarkers(map: any, graph: any, start: string, end: string, k
     const mkStart = makeDomMarker(startNode, 'start')
     const mkEnd = makeDomMarker(endNode, 'end')
         ; (map as any).__routePlannerMarkers = { start: mkStart ? mkStart.marker : null, end: mkEnd ? mkEnd.marker : null, startLevel: mkStart ? mkStart.level : null, endLevel: mkEnd ? mkEnd.level : null, startLevels: mkStart ? mkStart.levels : null, endLevels: mkEnd ? mkEnd.levels : null }
+
+    // Appliquer immédiatement la visibilité selon l'étage courant sans nécessiter de switch manuel
+    try {
+        const current = (map as any).__currentLevel
+        const applyVis = (mk: any, role: 'start' | 'end', metaLevel: any, metaLevels: any) => {
+            try {
+                const m = mk && mk.marker ? mk.marker : mk
+                if (!m || !m.getElement) return
+                const el = m.getElement() as HTMLElement
+                // Cas: pas de niveau courant défini -> afficher les deux marqueurs
+                if (current == null) { el.style.display = 'block'; return }
+                if (role === 'start' && userOriginLngLat) { el.style.display = 'block'; return }
+                if (metaLevel !== null && metaLevel !== undefined) el.style.display = (metaLevel === current) ? 'block' : 'none'
+                else if (metaLevels && Array.isArray(metaLevels)) el.style.display = (metaLevels.indexOf(current) !== -1) ? 'block' : 'none'
+                else el.style.display = 'block'
+            } catch { }
+        }
+        applyVis(mkStart, 'start', mkStart ? mkStart.level : null, mkStart ? mkStart.levels : null)
+        applyVis(mkEnd, 'end', mkEnd ? mkEnd.level : null, mkEnd ? mkEnd.levels : null)
+    } catch { }
+
+    // Réagir aux changements d'étage publiés par l'UI pour réappliquer la visibilité
+    try {
+        const onLevel = (e: any) => {
+            try {
+                const lvl = e?.detail
+                    ; (map as any).__currentLevel = lvl
+                const prev = (map as any).__routePlannerMarkers
+                if (!prev) return
+                const upd = (mk: any, role: 'start' | 'end', metaLevel: any, metaLevels: any) => {
+                    if (!mk) return
+                    const m = mk.marker ? mk.marker : mk
+                    if (!m || !m.getElement) return
+                    const el = m.getElement() as HTMLElement
+                    if (role === 'start' && userOriginLngLat) { el.style.display = 'block'; return }
+                    if (metaLevel !== null && metaLevel !== undefined) el.style.display = (metaLevel === lvl) ? 'block' : 'none'
+                    else if (metaLevels && Array.isArray(metaLevels)) el.style.display = (metaLevels.indexOf(lvl) !== -1) ? 'block' : 'none'
+                    else el.style.display = 'block'
+                }
+                upd(mkStart, 'start', mkStart ? mkStart.level : null, mkStart ? mkStart.levels : null)
+                upd(mkEnd, 'end', mkEnd ? mkEnd.level : null, mkEnd ? mkEnd.levels : null)
+            } catch { }
+        }
+        // Écoute PERSISTANTE (pas uniquement 'once') pour suivre tous les changements d'étage
+        window.addEventListener('ui:set-level', onLevel as any)
+    } catch { }
 }

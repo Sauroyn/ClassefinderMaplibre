@@ -88,7 +88,10 @@ export function MobileRouteDetailsSheet({
                                 return steps.slice(0, 12).map((s, i) => (
                                     <li key={i} style={{ fontSize: 13, color: 'var(--panel-fg, #333)', cursor: 'pointer' }} onClick={() => {
                                         try {
-                                            if (s && s.coords && Array.isArray(s.coords) && s.coords.length === 2) {
+                                            const bbox = (s as any).bbox as [[number, number], [number, number]] | undefined
+                                            if (bbox && Array.isArray(bbox[0]) && Array.isArray(bbox[1])) {
+                                                window.dispatchEvent(new CustomEvent('nav:focus-step-bounds', { detail: bbox }))
+                                            } else if (s && s.coords && Array.isArray(s.coords) && s.coords.length === 2) {
                                                 const a = s.coords[0]
                                                 const b = s.coords[1]
                                                 const minX = Math.min(a[0], b[0])
