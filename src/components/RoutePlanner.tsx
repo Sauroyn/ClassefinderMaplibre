@@ -349,8 +349,8 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     setFocusedField={setFocusedField}
                     onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
                     onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
-                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null) }}
-                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null) }}
+                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
+                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
                 />
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>

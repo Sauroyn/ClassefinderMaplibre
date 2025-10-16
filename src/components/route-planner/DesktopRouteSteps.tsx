@@ -41,7 +41,7 @@ type RouteStep = {
 export default function DesktopRouteSteps({
     steps,
     maneuvers,
-    maxDisplay = 12,
+    maxDisplay = Number.POSITIVE_INFINITY,
 }: {
     steps: RouteStep[]
     maneuvers?: Array<{ at: number; type: string; idx?: number }>
@@ -127,11 +127,7 @@ export default function DesktopRouteSteps({
                         </li>
                     )
                 })}
-                {steps.length > maxDisplay && (
-                    <li style={{ fontSize: 11, color: 'var(--list-item-muted, #666)' }}>
-                        … {steps.length - maxDisplay} étapes supplémentaires
-                    </li>
-                )}
+                {/* All steps are shown; container is scrollable */}
             </ol>
         </div>
     )
