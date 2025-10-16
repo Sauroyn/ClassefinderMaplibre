@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react'
 import maplibre from 'maplibre-gl'
 import UserGeolocate from './UserGeolocate'
 import { useNavigationActive } from '../hooks/useNavigationActive'
@@ -23,6 +23,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
     const parsedConfigRef = useRef<any | null>(null)
     const navActive = useNavigationActive()
     const followNavMarkerRef = useRef<boolean>(false)
+    // Dynamic top for nav buttons (mobile): keep below level selector to avoid overlap
+    const navBtnsTopRef = useRef<number | null>(null)
+    const [navBtnsTopState, setNavBtnsTopState] = useState<number | null>(null)
     // Follow mode: stop following on user interactions with the map
     useEffect(() => {
         const map = mapRef.current
@@ -41,6 +44,61 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 map.off('rotate', stopFollow)
                 map.off('pitch', stopFollow)
             } catch { }
+        }
+    }, [])
+    // Compute floating nav buttons positions under the level selector on mobile
+    useEffect(() => {
+        const compute = () => {
+            try {
+                if (typeof window === 'undefined') return
+                // Only compute special positioning for narrow/mobile viewports
+                const isMobile = window.innerWidth <= 720
+                if (!isMobile) { navBtnsTopRef.current = null; setNavBtnsTopState(null); return }
+                const sel = document.querySelector('.level-selector') as HTMLElement | null
+                const GAP = 8
+                if (sel) {
+                    const cs = window.getComputedStyle(sel)
+                    const rect = sel.getBoundingClientRect()
+                    const vv = (window as any).visualViewport
+                    const vvOffsetTop = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0
+                    let baseTop: number
+                    if (cs.position === 'fixed') {
+                        const topCss = parseFloat(cs.top || '')
+                        baseTop = Number.isFinite(topCss) ? topCss + sel.offsetHeight : rect.bottom + vvOffsetTop
+                    } else {
+                        baseTop = rect.bottom + vvOffsetTop
+                    }
+                    const top = Math.ceil(baseTop + GAP)
+                    navBtnsTopRef.current = top
+                    setNavBtnsTopState(top)
+                } else {
+                    // fallback to previous static top used (~110)
+                    navBtnsTopRef.current = 110
+                    setNavBtnsTopState(110)
+                }
+            } catch {
+                navBtnsTopRef.current = 110
+                setNavBtnsTopState(110)
+            }
+        }
+        const update = () => { try { requestAnimationFrame(() => compute()) } catch { compute() } }
+        update()
+        const ro = new ResizeObserver(() => update())
+        try { const el = document.querySelector('.level-selector'); if (el) ro.observe(el as Element) } catch { }
+        window.addEventListener('resize', update)
+        window.addEventListener('orientationchange', update)
+        try {
+            const vv = (window as any).visualViewport
+            if (vv && vv.addEventListener) { vv.addEventListener('resize', update); vv.addEventListener('scroll', update) }
+        } catch { }
+        const mo = new MutationObserver(update)
+        mo.observe(document.body, { childList: true, subtree: true })
+        return () => {
+            try { ro.disconnect() } catch { }
+            window.removeEventListener('resize', update)
+            window.removeEventListener('orientationchange', update)
+            try { const vv = (window as any).visualViewport; if (vv && vv.removeEventListener) { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) } } catch { }
+            try { mo.disconnect() } catch { }
         }
     }, [])
     // Follow mode: when enabled, smoothly recenter on marker updates and orient camera forward in 3D
@@ -815,40 +873,52 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         } catch { }
     }, [theme])
 
+    // Action to recenter on nav marker with 3D camera and follow
+    const recenterToNavMarker = () => {
+        try {
+            const map: any = mapRef.current
+            if (!map) return
+            const lvl: number | null | undefined = map.__navMarkerLevel
+            const center: [number, number] | undefined = map.__navMarkerCenter
+            const heading: number | null | undefined = map.__navMarkerHeading
+            if (lvl != null) {
+                try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { }
+            }
+            // enable follow mode so subsequent marker updates keep camera aligned
+            followNavMarkerRef.current = true
+            if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
+                const pitch = Math.max(45, Math.min(65, map.getPitch ? map.getPitch() : 60))
+                const bearing = (typeof heading === 'number' && isFinite(heading)) ? heading : (map.getBearing ? map.getBearing() : 0)
+                try { map.flyTo?.({ center: { lng: center[0], lat: center[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), bearing, pitch, speed: 0.8, curve: 1.4 }) } catch { }
+            }
+        } catch { }
+    }
+
     const themeToggle = (
         <button
             title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
-            style={{ position: 'fixed', right: 10, top: 110, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+            style={{ position: 'fixed', right: 10, top: (navBtnsTopState ?? 110), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
         >{theme === 'dark' ? '☀️' : '🌙'}</button>
     )
     const recenterToMarker = (
         <button
             title={'Recentrer sur le marqueur'}
             aria-label={'Recentrer sur le marqueur'}
-            onClick={() => {
-                try {
-                    const map = mapRef.current
-                    if (!map) return
-                    const m: any = map
-                    const lvl: number | null | undefined = m.__navMarkerLevel
-                    const center: [number, number] | undefined = m.__navMarkerCenter
-                    const heading: number | null | undefined = m.__navMarkerHeading
-                    if (lvl != null) {
-                        try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { }
-                    }
-                    if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
-                        const pitch = Math.max(45, Math.min(65, m.getPitch ? m.getPitch() : 60))
-                        const bearing = (typeof heading === 'number' && isFinite(heading)) ? heading : (m.getBearing ? m.getBearing() : 0)
-                        try { m.flyTo?.({ center: { lng: center[0], lat: center[1] }, zoom: Math.max(16, m.getZoom ? m.getZoom() : 16), bearing, pitch, speed: 0.8, curve: 1.4 }) } catch { }
-                        followNavMarkerRef.current = true
-                    }
-                } catch { }
-            }}
-            style={{ position: 'fixed', right: 10, top: 160, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+            onClick={recenterToNavMarker}
+            style={{ position: 'fixed', right: 10, top: ((navBtnsTopState ?? 110) + 50), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
         >🎯</button>
     )
+
+    // When navigation starts, auto-trigger the same recenter + 3D orientation as the button
+    useEffect(() => {
+        if (navActive) {
+            // small delay to allow nav marker metadata to initialize
+            const t = setTimeout(() => recenterToNavMarker(), 50)
+            return () => clearTimeout(t)
+        }
+    }, [navActive])
     return <>
         <div id="map" ref={container} style={{ height: '100vh' }} onClick={(e) => {
             // Also relay click as custom event with lngLat if possible (dev aid)

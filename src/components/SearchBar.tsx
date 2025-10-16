@@ -52,7 +52,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         return list.filter(i => i.name.toLowerCase().includes(q.toLowerCase()))
     }, [data, q])
 
-    useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])
+    useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); setFocused(false); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])
 
     // respond to map clicks when they dispatch a feature click event
     useEffect(() => {
@@ -93,8 +93,8 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     }
 
     const list = (q ? items : recent).slice(0, 6)
-    // Afficher la liste si la barre est focus ou s'il y a du texte, même si un résultat est sélectionné
-    const showList = (focused || q.length > 0) && list.length > 0
+    // Cacher les suggestions si un élément est sélectionné
+    const showList = (!selected) && (focused || q.length > 0) && list.length > 0
 
     // Ne pas masquer la liste lors d'une sélection, sauf si on sort du champ
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
@@ -114,7 +114,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                     ref={inputRef}
                     className="search-input"
                     value={q}
-                    onChange={e => setQ(e.target.value)}
+                    onChange={e => { setQ(e.target.value); if (selected) setSelected(null); setFocused(true) }}
                     placeholder="Rechercher une salle..."
                     style={{ flex: 1, padding: '8px', background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #eee)', borderRadius: 8, outline: 'none' }}
                     onFocus={() => {
@@ -156,8 +156,8 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
             {showList && (
                 <SearchList items={list as any} onPick={(id, name) => {
                     pick(id, name)
-                    // Ne pas masquer la liste après sélection
-                    setFocused(true)
+                    // Masquer la liste après sélection
+                    setFocused(false)
                 }} />
             )}
 
