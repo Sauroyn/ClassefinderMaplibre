@@ -8,13 +8,21 @@ type Props = {
 import React, { useEffect, useRef, useState } from 'react'
 
 export default function LevelSelector({ level, levels, loading, onChange }: Props) {
-    // helpers to change level by index
+    // Keep latest values in refs for stable event handlers
+    const levelRef = useRef(level)
+    const levelsRef = useRef(levels)
+    const onChangeRef = useRef(onChange)
+    useEffect(() => { levelRef.current = level }, [level])
+    useEffect(() => { levelsRef.current = levels }, [levels])
+    useEffect(() => { onChangeRef.current = onChange }, [onChange])
+    // helpers to change level by index using refs
     const changeByIndex = (dir: number) => {
-        if (!levels || levels.length === 0) return
-        const idx = levels.indexOf(level)
+        const lvls = levelsRef.current
+        if (!lvls || lvls.length === 0) return
+        const idx = lvls.indexOf(levelRef.current)
         if (idx === -1) return
-        const next = Math.min(levels.length - 1, Math.max(0, idx + dir))
-        if (next !== idx) onChange(levels[next])
+        const next = Math.min(lvls.length - 1, Math.max(0, idx + dir))
+        if (next !== idx) onChangeRef.current(lvls[next])
     }
 
     // touch handling for mobile swipe (persist between renders)
@@ -32,19 +40,18 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
         touchStartY.current = null
     }
 
-    // Install a non-passive wheel listener on the container to allow preventDefault without warning
+    // Install a non-passive wheel listener once; use refs for latest values
     useEffect(() => {
         const el = containerRef.current
         if (!el) return
         const handler = (ev: WheelEvent) => {
             if (!ev.deltaY) return
-            ev.preventDefault()
+            try { ev.preventDefault() } catch { }
             changeByIndex(ev.deltaY > 0 ? 1 : -1)
         }
         try { el.addEventListener('wheel', handler, { passive: false }) } catch { el.addEventListener('wheel', handler as any) }
         return () => { try { el.removeEventListener('wheel', handler as any) } catch { } }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [level, levels])
+    }, [])
 
     // dynamic mobile positioning: compute top so the selector sits below searchbar or route-planner
     const containerRef = useRef<HTMLDivElement | null>(null)
@@ -59,6 +66,7 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
             }
             const search = document.querySelector('.searchbar') as HTMLElement | null
             const planner = document.querySelector('.route-planner') as HTMLElement | null
+            const navBanner = document.querySelector('.nav-banner') as HTMLElement | null
             let bottom = 10
             const consider = (el: HTMLElement | null) => {
                 if (!el) return
@@ -74,6 +82,7 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
             }
             consider(search)
             consider(planner)
+            consider(navBanner)
             // add margin below the element
             setMobileTop(Math.ceil(bottom + 14))
         }

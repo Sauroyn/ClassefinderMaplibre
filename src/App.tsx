@@ -35,6 +35,7 @@ export default function App() {
   const [plannerStart, setPlannerStart] = useState<{ id: string, name: string } | null>(null)
   const [plannerEnd, setPlannerEnd] = useState<{ id: string, name: string } | null>(null)
   const { theme, setTheme } = useTheme()
+  const [navActive, setNavActive] = useState(false)
 
   // Settings modal draft states to avoid partial saves and allow cancel
   const { draftTheme, setDraftTheme, draftIcalUrl, setDraftIcalUrl, draftBufferMin, setDraftBufferMin, draftEventsEnabled, setDraftEventsEnabled, resetDraft } = useSettingsDraft({ theme, icalUrl, bufferMin, eventsEnabled })
@@ -49,28 +50,58 @@ export default function App() {
   // theme application handled in useTheme hook
 
   // Events now handled by EventBar; this state is kept to reset when disabling
+  useEffect(() => {
+    function onNav(e: any) {
+      try {
+        const active = !!(e?.detail)
+        setNavActive(active)
+        if (!active) {
+          // On sortie de navigation, fermer le planner pour réafficher la barre de recherche
+          setShowPlanner(false)
+        }
+      } catch { }
+    }
+    window.addEventListener('navigation:active', onNav as any)
+    const onOpenSettings = () => openSettings()
+    const onSetLevel = (e: any) => { try { const n = Number(e?.detail); if (!Number.isNaN(n)) setLevel(n) } catch { } }
+    window.addEventListener('ui:open-settings', onOpenSettings as any)
+    window.addEventListener('ui:set-level', onSetLevel as any)
+    return () => {
+      window.removeEventListener('navigation:active', onNav as any)
+      window.removeEventListener('ui:open-settings', onOpenSettings as any)
+      window.removeEventListener('ui:set-level', onSetLevel as any)
+    }
+  }, [])
 
   return (
     <>
-      <LevelSelector levels={levels} level={level} loading={loading} onChange={setLevel} />
-      {!showPlanner && <SearchBar data={dataRef.current} onSelect={(id, lvl) => {
-        if (!mapRef.current) return
-        // save camera before changing
-        try { prevCameraRef.current = mapRef.current.getCamera() } catch { }
-        if (lvl != null) {
-          const n = typeof lvl === 'string' ? parseInt(lvl, 10) : lvl
-          if (!Number.isNaN(n) && n !== level) setLevel(n)
-        }
-        if (mapRef.current && mapRef.current.selectFeatureById) mapRef.current.selectFeatureById(id)
-      }} onRouteRequest={(feat) => {
-        // open planner with destination prefilled
-        setPlannerDest(feat)
-        setShowPlanner(true)
-      }} onClear={() => {
-        if (!mapRef.current) return
-        if (mapRef.current && mapRef.current.restoreInitialCamera) mapRef.current.restoreInitialCamera()
-        if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
-      }} />}
+      <LevelSelector levels={levels} level={level} loading={loading} onChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }} />
+      {!navActive && !showPlanner && <SearchBar
+        data={dataRef.current}
+        onSelect={(id, lvl) => {
+          if (!mapRef.current) return
+          // save camera before changing
+          try { prevCameraRef.current = mapRef.current.getCamera() } catch { }
+          if (lvl != null) {
+            const n = typeof lvl === 'string' ? parseInt(lvl, 10) : lvl
+            if (!Number.isNaN(n) && n !== level) setLevel(n)
+          }
+          if (mapRef.current && mapRef.current.selectFeatureById) mapRef.current.selectFeatureById(id)
+        }}
+        onRouteRequest={(feat) => {
+          // open planner with destination prefilled
+          setPlannerDest(feat)
+          setShowPlanner(true)
+        }}
+        onClear={() => {
+          if (!mapRef.current) return
+          if (mapRef.current && mapRef.current.restoreInitialCamera) mapRef.current.restoreInitialCamera()
+          if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
+        }}
+        onOpenRoutePlanner={() => {
+          setShowPlanner(true)
+        }}
+      />}
       <MapView ref={mapRef} data={dataRef.current} level={level} theme={theme} onThemeChange={setTheme} />
       {showPlanner && <RoutePlanner
         mapRef={mapRef}
@@ -86,7 +117,7 @@ export default function App() {
       <SettingsButton onClick={openSettings} />
 
       {/* Event selector at bottom center (desktop); CSS positions; keep always mounted if events exist */}
-      {eventsEnabled && (
+      {!navActive && eventsEnabled && (
         <EventBar
           icalUrl={icalUrl}
           bufferMin={bufferMin}

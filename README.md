@@ -1,3 +1,18 @@
+# Paramètres modifiables de l'itinéraire
+
+Voici les principaux paramètres qui influencent le calcul et l'affichage des itinéraires, ainsi que leur emplacement dans le code :
+
+| Paramètre                                      | Description                                                                 | Fichier / Emplacement                                                                 |
+|------------------------------------------------|-----------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+| **Tolérance angle "tout droit"**               | Un segment est considéré comme "tout droit" si l'angle est entre 150° et 210°. | `src/map/computeRoute.ts` → fonction `buildManeuvers`, variables `abs >= 150 && abs <= 210` |
+| **Seuil détection virage**                     | Virage classique : ≥ 60°, léger : ≥ 25°.                                    | `src/map/computeRoute.ts` → fonction `buildManeuvers`, conditions sur `abs` et `delta`      |
+| **Détection rond-point (arc)**                 | ≥ 3 segments consécutifs tournant dans le même sens (seuil 20°).            | `src/map/computeRoute.ts` → fonction `buildManeuvers`, variables `arcThreshold`, `arcCount` |
+| **Distance pour recalcul d'itinéraire**        | Distance à partir de laquelle on recalcule l'itinéraire si l'utilisateur s'éloigne. | `src/components/route-planner/NavigationController.ts` (rechercher "recalcule" ou "distance") |
+| **Distance pour signaler la fin**              | Distance à laquelle l'arrivée est annoncée.                                 | `src/components/route-planner/NavigationBanner.tsx` ou `NavigationController.ts` (rechercher "arrivée" ou "proche") |
+| **Vitesse de marche par défaut**               | Utilisée pour estimer le temps (m/s, par défaut 1.4).                       | `src/map/computeRoute.ts` → variable `speed`                                                |
+| **Marge de départ utilisateur (buffer)**       | Minutes ajoutées pour anticiper le départ.                                  | `src/components/settings/SettingsModal.tsx` et `src/hooks/useSettingsDraft.ts`              |
+
+Pour modifier ces paramètres, éditez les fichiers indiqués et ajustez les valeurs selon vos besoins.
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

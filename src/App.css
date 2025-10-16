@@ -17,6 +17,12 @@
   z-index: 1;
 }
 
+/* When navigation hides geolocate, also hide the maplibre geolocate dot and accuracy circle */
+#map[data-hide-geolocate='1'] .maplibregl-user-location-dot,
+#map[data-hide-geolocate='1'] .maplibregl-user-location-accuracy-circle {
+  display: none !important;
+}
+
 /* Mobile responsive layout */
 @media (max-width: 720px) {
 

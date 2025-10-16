@@ -1,12 +1,14 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react'
 import maplibre from 'maplibre-gl'
 import UserGeolocate from './UserGeolocate'
+import { useNavigationActive } from '../hooks/useNavigationActive'
 import { addBuildingsSource, addCentroidsSource } from '../map/sources'
 import { addFillLayers, addNameLayer } from '../map/layers'
 import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
-import { USER_CONNECTOR_COLOR, USER_CONNECTOR_OPACITY, USER_CONNECTOR_WIDTH } from '../map/route/markers'
+// Connector styling is now handled by combined covered/remaining layers; no direct import needed
 import { fitBoundsSmart } from '../map/viewport'
+import { haversine } from '../map/measure'
 
 type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
 
@@ -19,6 +21,126 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
     const initialized = useRef(false)
     const initialCamera = useRef<any>(null)
     const parsedConfigRef = useRef<any | null>(null)
+    const navActive = useNavigationActive()
+    const followNavMarkerRef = useRef<boolean>(false)
+    // Dynamic top for nav buttons (mobile): keep below level selector to avoid overlap
+    const navBtnsTopRef = useRef<number | null>(null)
+    const [navBtnsTopState, setNavBtnsTopState] = useState<number | null>(null)
+    // Follow mode: stop following on user interactions with the map
+    useEffect(() => {
+        const map = mapRef.current
+        if (!map) return
+        const stopFollow = () => { followNavMarkerRef.current = false }
+        try {
+            map.on('dragstart', stopFollow)
+            map.on('zoomstart', stopFollow)
+            map.on('rotate', stopFollow)
+            map.on('pitch', stopFollow)
+        } catch { }
+        return () => {
+            try {
+                map.off('dragstart', stopFollow)
+                map.off('zoomstart', stopFollow)
+                map.off('rotate', stopFollow)
+                map.off('pitch', stopFollow)
+            } catch { }
+        }
+    }, [])
+    // Compute floating nav buttons positions under the level selector on mobile
+    useEffect(() => {
+        const compute = () => {
+            try {
+                if (typeof window === 'undefined') return
+                // Only compute special positioning for narrow/mobile viewports
+                const isMobile = window.innerWidth <= 720
+                if (!isMobile) { navBtnsTopRef.current = null; setNavBtnsTopState(null); return }
+                const sel = document.querySelector('.level-selector') as HTMLElement | null
+                const GAP = 8
+                if (sel) {
+                    const cs = window.getComputedStyle(sel)
+                    const rect = sel.getBoundingClientRect()
+                    const vv = (window as any).visualViewport
+                    const vvOffsetTop = vv && typeof vv.offsetTop === 'number' ? vv.offsetTop : 0
+                    let baseTop: number
+                    if (cs.position === 'fixed') {
+                        const topCss = parseFloat(cs.top || '')
+                        baseTop = Number.isFinite(topCss) ? topCss + sel.offsetHeight : rect.bottom + vvOffsetTop
+                    } else {
+                        baseTop = rect.bottom + vvOffsetTop
+                    }
+                    const top = Math.ceil(baseTop + GAP)
+                    navBtnsTopRef.current = top
+                    setNavBtnsTopState(top)
+                } else {
+                    // fallback to previous static top used (~110)
+                    navBtnsTopRef.current = 110
+                    setNavBtnsTopState(110)
+                }
+            } catch {
+                navBtnsTopRef.current = 110
+                setNavBtnsTopState(110)
+            }
+        }
+        const update = () => { try { requestAnimationFrame(() => compute()) } catch { compute() } }
+        update()
+        const ro = new ResizeObserver(() => update())
+        try { const el = document.querySelector('.level-selector'); if (el) ro.observe(el as Element) } catch { }
+        window.addEventListener('resize', update)
+        window.addEventListener('orientationchange', update)
+        try {
+            const vv = (window as any).visualViewport
+            if (vv && vv.addEventListener) { vv.addEventListener('resize', update); vv.addEventListener('scroll', update) }
+        } catch { }
+        const mo = new MutationObserver(update)
+        mo.observe(document.body, { childList: true, subtree: true })
+        return () => {
+            try { ro.disconnect() } catch { }
+            window.removeEventListener('resize', update)
+            window.removeEventListener('orientationchange', update)
+            try { const vv = (window as any).visualViewport; if (vv && vv.removeEventListener) { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) } } catch { }
+            try { mo.disconnect() } catch { }
+        }
+    }, [])
+    // Follow mode: when enabled, smoothly recenter on marker updates and orient camera forward in 3D
+    useEffect(() => {
+        const onMarker = (e: any) => {
+            if (!followNavMarkerRef.current) return
+            try {
+                const center = e?.detail?.center as [number, number]
+                const lvl = e?.detail?.level as number | null
+                const heading = e?.detail?.heading as number | null | undefined
+                if (!center) return
+                if (lvl != null) { try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { } }
+                const m: any = mapRef.current
+                if (m) {
+                    // Smooth follow: ease duration proportional to distance, clamped
+                    const curr = m.getCenter ? m.getCenter() : null
+                    const currLL: [number, number] | null = curr ? [curr.lng, curr.lat] : null
+                    const dist = currLL ? haversine(currLL, center) : 0
+                    const duration = Math.max(150, Math.min(500, dist * 8))
+                    const easeOut = (t: number) => 1 - Math.pow(1 - t, 2)
+                    // Target 3D forward looking camera when following
+                    const targetPitch = Math.max(45, Math.min(65, m.getPitch ? m.getPitch() : 60))
+                    const targetBearing = (typeof heading === 'number' && isFinite(heading)) ? heading : (m.getBearing ? m.getBearing() : 0)
+                    try {
+                        m.easeTo?.({ center: { lng: center[0], lat: center[1] }, bearing: targetBearing, pitch: targetPitch, duration, easing: easeOut })
+                    } catch {
+                        // Fallback without easing extras
+                        try { m.setBearing?.(targetBearing) } catch { }
+                        try { m.setPitch?.(targetPitch) } catch { }
+                        m.jumpTo?.({ center: { lng: center[0], lat: center[1] } })
+                    }
+                }
+            } catch { }
+        }
+        window.addEventListener('nav:marker-center', onMarker as any)
+        const onFinish = () => { followNavMarkerRef.current = false }
+        window.addEventListener('navigation:finish', onFinish as any)
+        return () => {
+            window.removeEventListener('nav:marker-center', onMarker as any)
+            window.removeEventListener('navigation:finish', onFinish as any)
+        }
+    }, [])
     useEffect(() => {
         if (!container.current) return
 
@@ -50,6 +172,34 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
             const map = new maplibre.Map({ container: container.current!, style: theme === 'dark' ? darkStyle : lightStyle, center, zoom })
             mapRef.current = map
+
+            // Attach follow-stop handlers on user interactions (not programmatic easeTo)
+            const attachFollowStopHandlers = () => {
+                const stopFollow = (e?: any) => {
+                    try {
+                        // Only stop on user-initiated interactions
+                        if (e && !e.originalEvent) return
+                    } catch { }
+                    followNavMarkerRef.current = false
+                }
+                try {
+                    map.on('movestart', stopFollow)
+                    map.on('dragstart', stopFollow)
+                    map.on('zoomstart', stopFollow)
+                    map.on('rotatestart', stopFollow)
+                    map.on('pitchstart', stopFollow)
+                } catch { }
+                // Save a cleanup to remove the same handlers if needed later
+                ; (map as any).__removeFollowHandlers = () => {
+                    try {
+                        map.off('movestart', stopFollow)
+                        map.off('dragstart', stopFollow)
+                        map.off('zoomstart', stopFollow)
+                        map.off('rotatestart', stopFollow)
+                        map.off('pitchstart', stopFollow)
+                    } catch { }
+                }
+            }
 
             const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
 
@@ -121,8 +271,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 ensureImage('marker-end', '#e74c3c')
             }
 
-            if (map.loaded()) { saveInit(); loadRouteIcons() } else map.on('load', () => { saveInit(); loadRouteIcons() })
-            return () => { map.remove(); mapRef.current = null }
+            if (map.loaded()) { saveInit(); loadRouteIcons(); attachFollowStopHandlers() } else map.on('load', () => { saveInit(); loadRouteIcons(); attachFollowStopHandlers() })
+            return () => {
+                try { const fn = (map as any).__removeFollowHandlers; if (fn) fn() } catch { }
+                map.remove(); mapRef.current = null
+            }
         })()
     }, [])
 
@@ -133,10 +286,37 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         if (!map || !data || initialized.current) return
         const init = () => {
             try {
-                // Before adding source, if theme is dark, derive a dark color property from the light one
+                // Normalize incoming data: ensure numeric level and stable ids; then derive dark color if needed
                 let themedData = data
                 try {
                     if (data && data.type === 'FeatureCollection') {
+                        // first normalize
+                        const normalized = {
+                            ...data,
+                            features: data.features.map((f: any, idx: number) => {
+                                try {
+                                    const p = { ...(f.properties || {}) }
+                                    // coerce level: accept string or number; if missing but "levels" array exists, keep as-is
+                                    if (p.level != null) {
+                                        const n = typeof p.level === 'string' ? parseInt(p.level, 10) : p.level
+                                        p.level = Number.isFinite(n) ? n : p.level
+                                    }
+                                    // set a stable id if missing (prefer existing id, then properties.fid/name, else index)
+                                    const fid = (f.id != null ? f.id : (p.fid != null ? p.fid : (p.id != null ? p.id : undefined)))
+                                    let newId: number
+                                    if (fid != null) {
+                                        if (typeof fid === 'number' && Number.isFinite(fid)) newId = fid
+                                        else {
+                                            const n = parseInt(String(fid), 10)
+                                            newId = Number.isFinite(n) ? n : idx
+                                        }
+                                    } else {
+                                        newId = idx
+                                    }
+                                    return { ...f, id: newId, properties: p }
+                                } catch { return { ...f, id: (f.id ?? idx) } }
+                            })
+                        }
                         const deriveDark = (hex: string): string => {
                             // convert to HSL and shift towards darker/desaturated tone
                             const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
@@ -180,8 +360,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             return `#${toHex(R)}${toHex(G)}${toHex(B)}`
                         }
                         const next = {
-                            ...data,
-                            features: data.features.map((f: any) => {
+                            ...normalized,
+                            features: normalized.features.map((f: any) => {
                                 try {
                                     const p = { ...(f.properties || {}) }
                                     if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
@@ -240,7 +420,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     return { ...cfg0, fillColor: deriveDark(cfg0.fillColor) }
                 })()
                 addFillLayers(map, level, cfg, theme)
-                const centroids = generateCentroids(data)
+                const centroids = generateCentroids(themedData)
                 addCentroidsSource(map, centroids)
                 addNameLayer(map, level, theme)
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
@@ -254,7 +434,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         const map = mapRef.current
         if (!map) return
         try { (map as any).__currentLevel = level } catch (e) { }
-        const filter = ['==', ['get', 'level'], level]
+        const filter: any = [
+            'any',
+            ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+            ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
+        ]
         try {
             if (map.getLayer('buildings-extrusion')) map.setFilter('buildings-extrusion', filter as any)
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
@@ -310,8 +494,31 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             // ensure that if the route layer/source is added later (by compute), we re-apply the filter
             const onData = () => { applyRouteFilterToAll() }
             map.on('sourcedata', onData)
+            // also update nav marker visibility when level changes
+            try {
+                const syncMarkerVis = () => {
+                    try {
+                        const el = (map as any).__navMarkerEl as HTMLElement | null
+                        const mkLvl = (map as any).__navMarkerLevel as number | null
+                        if (el) {
+                            if (mkLvl == null) el.style.display = 'block'
+                            else el.style.display = (mkLvl === (map as any).__currentLevel) ? 'block' : 'none'
+                        }
+                    } catch { }
+                }
+                syncMarkerVis()
+                const handler = syncMarkerVis as any
+                window.addEventListener('ui:set-level', handler)
+                    // attach cleanup to remove the same handler
+                    ; (map as any).__removeLevelSyncHandler = () => {
+                        try { window.removeEventListener('ui:set-level', handler) } catch { }
+                    }
+            } catch { }
             // remove listener on cleanup
-            return () => { try { map.off('sourcedata', onData) } catch (e) { } }
+            return () => {
+                try { map.off('sourcedata', onData) } catch (e) { }
+                try { const fn = (map as any).__removeLevelSyncHandler; if (fn) fn() } catch { }
+            }
         } catch (e) { }
     }, [level])
     useImperativeHandle(ref, () => ({
@@ -454,6 +661,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         const map = mapRef.current
         if (!map) return
         try {
+            // prevent concurrent swaps
+            const swappingKey = '__swappingStyle'
+            if ((map as any)[swappingKey]) return
+                ; (map as any)[swappingKey] = true
+
             const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
             const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
             const target = theme === 'dark' ? darkStyle : lightStyle
@@ -473,18 +685,43 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     }
                 }
             } catch { }
-            ; (map as any).setStyle(target, { diff: true })
-            map.once('styledata', () => {
+            try { (map as any).stop?.() } catch { }
+            ; (map as any).setStyle(target, { diff: false })
+            map.once('style.load', () => {
                 try {
                     // re-add our custom sources/layers if needed
                     const d = latestDataRef.current || data
                     if (!d) return
                     // add sources if missing
                     if (!map.getSource('buildings')) {
-                        // regenerate themed data
+                        // regenerate normalized + themed data
                         const themed = (() => {
                             try {
                                 if (d && d.type === 'FeatureCollection') {
+                                    const normalized = {
+                                        ...d,
+                                        features: d.features.map((f: any, idx: number) => {
+                                            try {
+                                                const p = { ...(f.properties || {}) }
+                                                if (p.level != null) {
+                                                    const n = typeof p.level === 'string' ? parseInt(p.level, 10) : p.level
+                                                    p.level = Number.isFinite(n) ? n : p.level
+                                                }
+                                                const fid = (f.id != null ? f.id : (p.fid != null ? p.fid : (p.id != null ? p.id : undefined)))
+                                                let newId: number
+                                                if (fid != null) {
+                                                    if (typeof fid === 'number' && Number.isFinite(fid)) newId = fid
+                                                    else {
+                                                        const n = parseInt(String(fid), 10)
+                                                        newId = Number.isFinite(n) ? n : idx
+                                                    }
+                                                } else {
+                                                    newId = idx
+                                                }
+                                                return { ...f, id: newId, properties: p }
+                                            } catch { return { ...f, id: (f.id ?? idx) } }
+                                        })
+                                    }
                                     const deriveDark = (hex: string): string => {
                                         const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
                                         if (!m) return hex
@@ -525,8 +762,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                         return `#${toHex(R)}${toHex(G)}${toHex(B)}`
                                     }
                                     return {
-                                        ...d,
-                                        features: d.features.map((f: any) => {
+                                        ...normalized,
+                                        features: normalized.features.map((f: any) => {
                                             const p = { ...(f.properties || {}) }
                                             if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
                                             return { ...f, properties: p }
@@ -585,7 +822,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         return { ...cfg0b, fillColor: deriveDark(cfg0b.fillColor) }
                     })()
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
-                    const centroids = generateCentroids(d)
+                    // Generate centroids from the current data (already normalized in latestDataRef or data)
+                    const centroids = generateCentroids(d || data || latestDataRef.current)
                     if (!map.getSource('buildings-centroids')) addCentroidsSource(map, centroids)
                     addNameLayer(map, (map as any).__currentLevel ?? level, theme)
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
@@ -600,39 +838,112 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         ]
                         for (const saved of savedRouteSources) {
                             try {
-                                if (!map.getSource(saved.id)) map.addSource(saved.id, { type: 'geojson', data: saved.data })
+                                if (!map.getSource(saved.id)) {
+                                    const srcOpts: any = { type: 'geojson', data: saved.data }
+                                    if (saved.id === 'route-planner-0' || saved.id === 'route-planner-user-connector') srcOpts.lineMetrics = true
+                                    map.addSource(saved.id, srcOpts)
+                                }
                             } catch { }
                             const layerId = `${saved.id}-line`
-                            // Compute styling: connector vs route indexes (0 primary)
-                            let paint: any = {}
-                            if (saved.id === 'route-planner-user-connector') {
-                                paint = { 'line-color': USER_CONNECTOR_COLOR, 'line-width': USER_CONNECTOR_WIDTH, 'line-opacity': USER_CONNECTOR_OPACITY }
-                            } else {
-                                let idx = -1
-                                try { const m = /route-planner-(\d+)/.exec(saved.id); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
-                                const color = idx === 0 ? '#ff0000' : (idx === 1 ? '#999999' : '#cccccc')
-                                const width = idx === 0 ? 18 : 12
-                                const opacity = idx === 0 ? 1 : 0.6
-                                paint = { 'line-color': color, 'line-width': width, 'line-opacity': opacity }
+                            // Skip adding layers for connector and primary route; those are handled by draw.ts (covered/remaining)
+                            if (saved.id === 'route-planner-user-connector' || saved.id === 'route-planner-0') {
+                                continue
                             }
+                            // For alternative routes, add simple solid styling
+                            let idx = -1
+                            try { const m = /route-planner-(\d+)/.exec(saved.id); if (m) idx = parseInt(m[1], 10) } catch { idx = -1 }
+                            const color = idx === 1 ? '#999999' : '#cccccc'
+                            const width = 12
+                            const opacity = 0.6
+                            const paint: any = { 'line-color': color, 'line-width': width, 'line-opacity': opacity }
                             try {
                                 if (!map.getLayer(layerId)) {
                                     map.addLayer({ id: layerId, type: 'line', source: saved.id, paint, layout: { 'line-cap': 'round', 'line-join': 'round' } })
                                 }
                             } catch { }
-                            try { map.setFilter(layerId, routeFilter) } catch { }
+                            try { if (map.getLayer(layerId)) map.setFilter(layerId, routeFilter) } catch { }
                         }
-                        try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
+                        // Primary route is now split into covered/remaining; ordering handled when drawing
                     } catch { }
                 } catch (e) { }
                 // restore camera
                 try { map.jumpTo(cam as any) } catch { }
+                try { (map as any)[swappingKey] = false } catch { }
             })
         } catch { }
     }, [theme])
 
+    // Action to recenter on nav marker with 3D camera and follow
+    const recenterToNavMarker = () => {
+        try {
+            const map: any = mapRef.current
+            if (!map) return
+            const lvl: number | null | undefined = map.__navMarkerLevel
+            const center: [number, number] | undefined = map.__navMarkerCenter
+            const heading: number | null | undefined = map.__navMarkerHeading
+            if (lvl != null) {
+                try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: lvl })) } catch { }
+            }
+            // enable follow mode so subsequent marker updates keep camera aligned
+            followNavMarkerRef.current = true
+            if (center && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
+                const pitch = Math.max(45, Math.min(65, map.getPitch ? map.getPitch() : 60))
+                const bearing = (typeof heading === 'number' && isFinite(heading)) ? heading : (map.getBearing ? map.getBearing() : 0)
+                try { map.flyTo?.({ center: { lng: center[0], lat: center[1] }, zoom: Math.max(16, map.getZoom ? map.getZoom() : 16), bearing, pitch, speed: 0.8, curve: 1.4 }) } catch { }
+            }
+        } catch { }
+    }
+
+    const themeToggle = (
+        <button
+            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+            onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
+            style={{ position: 'fixed', right: 10, top: (navBtnsTopState ?? 110), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+        >{theme === 'dark' ? '☀️' : '🌙'}</button>
+    )
+    const recenterToMarker = (
+        <button
+            title={'Recentrer sur le marqueur'}
+            aria-label={'Recentrer sur le marqueur'}
+            onClick={recenterToNavMarker}
+            style={{ position: 'fixed', right: 10, top: ((navBtnsTopState ?? 110) + 50), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
+        >🎯</button>
+    )
+
+    // When navigation starts, auto-trigger the same recenter + 3D orientation as the button
+    useEffect(() => {
+        if (navActive) {
+            // small delay to allow nav marker metadata to initialize
+            const t = setTimeout(() => recenterToNavMarker(), 50)
+            return () => clearTimeout(t)
+        }
+    }, [navActive])
     return <>
-        <div id="map" ref={container} style={{ height: '100vh' }} />
-        <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
+        <div id="map" ref={container} style={{ height: '100vh' }} onClick={(e) => {
+            // Also relay click as custom event with lngLat if possible (dev aid)
+            try {
+                const map = mapRef.current
+                if (map) {
+                    const m = map as any
+                    const rect = (m.getContainer && m.getContainer()) ? m.getContainer().getBoundingClientRect() : (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    const x = (e as any).clientX - rect.left
+                    const y = (e as any).clientY - rect.top
+                    if (m.unproject) {
+                        const ll = m.unproject([x, y])
+                        window.dispatchEvent(new CustomEvent('map:click', { detail: { lngLat: { lng: ll.lng, lat: ll.lat } } }))
+                    }
+                }
+            } catch { }
+        }} />
+        {/* Follow mode handled via top-level effects */}
+        {navActive ? (
+            <>
+                {themeToggle}
+                {recenterToMarker}
+            </>
+        ) : (
+            <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
+        )}
     </>
 })

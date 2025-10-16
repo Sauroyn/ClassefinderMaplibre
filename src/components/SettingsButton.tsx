@@ -46,7 +46,7 @@ export default function SettingsButton({ onClick }: { onClick: () => void }) {
             aria-label="Paramètres"
             title="Paramètres"
             onClick={onClick}
-            style={{ position: 'fixed', right: 12, bottom, zIndex: 10000, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}
+            style={{ position: 'fixed', right: 12, bottom, zIndex: 900, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}
         >
             ⚙
         </button>

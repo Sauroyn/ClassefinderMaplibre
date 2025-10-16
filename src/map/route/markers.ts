@@ -1,9 +1,10 @@
 import maplibre from 'maplibre-gl'
 
-export const USER_CONNECTOR_LEVEL = 1
-export const USER_CONNECTOR_COLOR = '#ff8888ff'
-export const USER_CONNECTOR_OPACITY = 0.55
-export const USER_CONNECTOR_WIDTH = 8
+export const USER_CONNECTOR_LEVEL = 0
+// Compat: ces constantes restent exportées pour MapView, mais ne sont plus utilisées pour dessiner la couche séparée
+export const USER_CONNECTOR_COLOR = '#007bff'
+export const USER_CONNECTOR_OPACITY = 1
+export const USER_CONNECTOR_WIDTH = 18
 
 export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLngLat?: [number, number], nodeById?: Map<string, any>, combinedCoords?: number[][]) {
     if (!userOriginLngLat || !ks || ks.length === 0) return
@@ -11,23 +12,31 @@ export function drawUserConnector(map: any, graph: any, ks: any[], userOriginLng
     const startNodeId = String(ks[0].path[0])
     const startNode = nb.get(startNodeId)
     if (!startNode || !Array.isArray(startNode.coord)) return
+    // toujours dessiner le connecteur utilisateur -> graphe
     const connId = 'route-planner-user-connector'
     const fc = {
         type: 'FeatureCollection',
-        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, startNode.coord] }, properties: { level: USER_CONNECTOR_LEVEL } }]
+        features: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [userOriginLngLat, startNode.coord] }, properties: { level: USER_CONNECTOR_LEVEL, __cutoff: 0, __isConnector: true } }]
     }
     if (map.getSource && map.getSource(connId)) (map.getSource(connId) as any).setData(fc as any)
-    else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc })
+    else if (map.addSource) map.addSource(connId, { type: 'geojson', data: fc } as any)
+    // Ne pas ajouter de couche visible séparée: la progression combinée s'en charge
     const layerId = connId + '-line'
-    if (!map.getLayer || !map.getLayer(layerId)) {
-        map.addLayer({ id: layerId, type: 'line', source: connId, paint: { 'line-color': USER_CONNECTOR_COLOR, 'line-width': USER_CONNECTOR_WIDTH, 'line-opacity': USER_CONNECTOR_OPACITY }, layout: { 'line-cap': 'round', 'line-join': 'round' } })
-    } else {
-        map.setPaintProperty(layerId, 'line-color', USER_CONNECTOR_COLOR)
-        map.setPaintProperty(layerId, 'line-width', USER_CONNECTOR_WIDTH)
-        map.setPaintProperty(layerId, 'line-opacity', USER_CONNECTOR_OPACITY)
-    }
-    try { if (map.moveLayer) map.moveLayer('route-planner-0-line') } catch { }
-    try { combinedCoords && combinedCoords.push(userOriginLngLat as any) } catch { }
+    try { if (map.getLayer && map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'none') } catch { }
+    try { if (map.moveLayer) map.moveLayer('route-planner-0-remaining-line') } catch { }
+    // Injecter le connecteur dans la source "route-planner-0-remaining" pour qu'il soit visible AVANT le démarrage de la navigation
+    try {
+        const remSrc: any = map.getSource && map.getSource('route-planner-0-remaining')
+        if (remSrc && remSrc._data) {
+            const data = remSrc._data
+            const feats = Array.isArray(data.features) ? data.features.slice() : []
+            // Retirer d'éventuels anciens connecteurs
+            const filtered = feats.filter((f: any) => !(f && f.properties && f.properties.__isConnector))
+            filtered.push(fc.features[0])
+            remSrc.setData({ type: 'FeatureCollection', features: filtered })
+        }
+    } catch { }
+    try { if (combinedCoords) { combinedCoords.push(userOriginLngLat as any); combinedCoords.push(startNode.coord as any) } } catch { }
 }
 
 export function placeMarkers(map: any, graph: any, start: string, end: string, ks: any[], userOriginLngLat?: [number, number]) {
@@ -96,9 +105,14 @@ export function placeMarkers(map: any, graph: any, start: string, end: string, k
             const current = (map as any).__currentLevel
             if (marker && (marker as any).getElement) {
                 const mEl = (marker as any).getElement()
-                if (metaLevel !== null && metaLevel !== undefined) mEl.style.display = (metaLevel === current) ? 'block' : 'none'
-                else if (metaLevels && Array.isArray(metaLevels)) mEl.style.display = (metaLevels.indexOf(current) !== -1) ? 'block' : 'none'
-                else mEl.style.display = 'block'
+                // Si on utilise la position utilisateur pour le départ, toujours afficher le marqueur de départ
+                if (role === 'start' && userOriginLngLat) {
+                    mEl.style.display = 'block'
+                } else {
+                    if (metaLevel !== null && metaLevel !== undefined) mEl.style.display = (metaLevel === current) ? 'block' : 'none'
+                    else if (metaLevels && Array.isArray(metaLevels)) mEl.style.display = (metaLevels.indexOf(current) !== -1) ? 'block' : 'none'
+                    else mEl.style.display = 'block'
+                }
             }
         } catch { }
         return { marker, level: metaLevel, levels: metaLevels }
@@ -112,4 +126,50 @@ export function placeMarkers(map: any, graph: any, start: string, end: string, k
     const mkStart = makeDomMarker(startNode, 'start')
     const mkEnd = makeDomMarker(endNode, 'end')
         ; (map as any).__routePlannerMarkers = { start: mkStart ? mkStart.marker : null, end: mkEnd ? mkEnd.marker : null, startLevel: mkStart ? mkStart.level : null, endLevel: mkEnd ? mkEnd.level : null, startLevels: mkStart ? mkStart.levels : null, endLevels: mkEnd ? mkEnd.levels : null }
+
+    // Appliquer immédiatement la visibilité selon l'étage courant sans nécessiter de switch manuel
+    try {
+        const current = (map as any).__currentLevel
+        const applyVis = (mk: any, role: 'start' | 'end', metaLevel: any, metaLevels: any) => {
+            try {
+                const m = mk && mk.marker ? mk.marker : mk
+                if (!m || !m.getElement) return
+                const el = m.getElement() as HTMLElement
+                // Cas: pas de niveau courant défini -> afficher les deux marqueurs
+                if (current == null) { el.style.display = 'block'; return }
+                if (role === 'start' && userOriginLngLat) { el.style.display = 'block'; return }
+                if (metaLevel !== null && metaLevel !== undefined) el.style.display = (metaLevel === current) ? 'block' : 'none'
+                else if (metaLevels && Array.isArray(metaLevels)) el.style.display = (metaLevels.indexOf(current) !== -1) ? 'block' : 'none'
+                else el.style.display = 'block'
+            } catch { }
+        }
+        applyVis(mkStart, 'start', mkStart ? mkStart.level : null, mkStart ? mkStart.levels : null)
+        applyVis(mkEnd, 'end', mkEnd ? mkEnd.level : null, mkEnd ? mkEnd.levels : null)
+    } catch { }
+
+    // Réagir aux changements d'étage publiés par l'UI pour réappliquer la visibilité
+    try {
+        const onLevel = (e: any) => {
+            try {
+                const lvl = e?.detail
+                    ; (map as any).__currentLevel = lvl
+                const prev = (map as any).__routePlannerMarkers
+                if (!prev) return
+                const upd = (mk: any, role: 'start' | 'end', metaLevel: any, metaLevels: any) => {
+                    if (!mk) return
+                    const m = mk.marker ? mk.marker : mk
+                    if (!m || !m.getElement) return
+                    const el = m.getElement() as HTMLElement
+                    if (role === 'start' && userOriginLngLat) { el.style.display = 'block'; return }
+                    if (metaLevel !== null && metaLevel !== undefined) el.style.display = (metaLevel === lvl) ? 'block' : 'none'
+                    else if (metaLevels && Array.isArray(metaLevels)) el.style.display = (metaLevels.indexOf(lvl) !== -1) ? 'block' : 'none'
+                    else el.style.display = 'block'
+                }
+                upd(mkStart, 'start', mkStart ? mkStart.level : null, mkStart ? mkStart.levels : null)
+                upd(mkEnd, 'end', mkEnd ? mkEnd.level : null, mkEnd ? mkEnd.levels : null)
+            } catch { }
+        }
+        // Écoute PERSISTANTE (pas uniquement 'once') pour suivre tous les changements d'étage
+        window.addEventListener('ui:set-level', onLevel as any)
+    } catch { }
 }

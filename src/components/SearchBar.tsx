@@ -7,6 +7,7 @@ type Props = {
     onSelect: (id: number | string, level?: number | string) => void
     onRouteRequest?: (feature: any) => void
     onClear?: () => void
+    onOpenRoutePlanner?: () => void
 }
 
 const BASE_STORAGE_KEY = 'cf:recent_searches'
@@ -22,7 +23,7 @@ function getScopedStorageKey() {
     }
 }
 
-export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: Props) {
+export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onOpenRoutePlanner }: Props) {
     const [q, setQ] = useState('')
     const [focused, setFocused] = useState(false)
     const [showBack, setShowBack] = useState(false)
@@ -42,19 +43,25 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
     const items = useMemo(() => {
         if (!data) return []
         const list: Array<{ id: string | number; name: string; level?: string }> = []
-        for (const f of data.features as any) list.push({ id: f.id ?? f.properties?.id ?? f.properties?.name, name: f.properties?.name || '', level: f.properties?.level })
+        for (const f of data.features as any) {
+            const name = f.properties?.name || ''
+            if (typeof name === 'string' && name.trim().length > 0) {
+                list.push({ id: f.id ?? f.properties?.id ?? name, name, level: f.properties?.level })
+            }
+        }
         return list.filter(i => i.name.toLowerCase().includes(q.toLowerCase()))
     }, [data, q])
 
-    useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])
+    useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); setFocused(false); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])
 
     // respond to map clicks when they dispatch a feature click event
     useEffect(() => {
         function onMapFeatureClick(e: any) {
             const feat = e.detail as any
             if (!feat) return
-            const name = feat.properties?.name ?? feat.properties?.title ?? feat.id
-            const id = feat.id ?? feat.properties?.id ?? name
+            // Accept features without name: use id or generate a placeholder
+            const name = feat.properties?.name ?? feat.properties?.title ?? (feat.id != null ? `Zone ${feat.id}` : 'Zone')
+            const id = feat.id ?? feat.properties?.id ?? feat.properties?.name ?? name
             // mimic a user pick
             pick(id, name)
             // do not auto-open route planner here; RoutePlanner listens separately when open
@@ -86,7 +93,12 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
     }
 
     const list = (q ? items : recent).slice(0, 6)
-    const showList = focused && !selected
+    // Cacher les suggestions si un élément est sélectionné
+    const showList = (!selected) && (focused || q.length > 0) && list.length > 0
+
+    // Ne pas masquer la liste lors d'une sélection, sauf si on sort du champ
+    // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
+    // On ne force plus setSelected(null) sur focus input, pour permettre la sélection ET la liste
     return (
         <div className="searchbar" style={{ position: 'absolute', left: 12, top: 12, zIndex: 10, width: 360, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.18)', border: '1px solid var(--panel-border, #ddd)' }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -98,9 +110,56 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest }: P
                 ) : (
                     <button onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }} style={{ width: 36, height: 36, background: 'var(--btn-bg, transparent)', border: '1px solid var(--btn-border, transparent)', borderRadius: 8, color: 'var(--btn-fg, inherit)' }} aria-label="search">🔍</button>
                 )}
-                <input ref={inputRef} className="search-input" value={q} onChange={e => setQ(e.target.value)} placeholder="Rechercher une salle..." style={{ flex: 1, padding: '8px', background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #eee)', borderRadius: 8, outline: 'none' }} onFocus={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setFocused(true); setSelected(null) }} onBlur={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); blurTimeout.current = window.setTimeout(() => { setFocused(false); blurTimeout.current = null }, 150) }} />
+                <input
+                    ref={inputRef}
+                    className="search-input"
+                    value={q}
+                    onChange={e => { setQ(e.target.value); if (selected) setSelected(null); setFocused(true) }}
+                    placeholder="Rechercher une salle..."
+                    style={{ flex: 1, padding: '8px', background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #eee)', borderRadius: 8, outline: 'none' }}
+                    onFocus={() => {
+                        if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }
+                        setFocused(true)
+                        // Ne pas forcer setSelected(null) ici
+                    }}
+                    onBlur={() => {
+                        if (blurTimeout.current) clearTimeout(blurTimeout.current)
+                        blurTimeout.current = window.setTimeout(() => {
+                            setFocused(false)
+                            // Si pas de texte, on peut masquer la sélection
+                            if (!q) setSelected(null)
+                        }, 150)
+                    }}
+                />
+                {/* Bouton accès direct itinéraire à droite de l'input */}
+                {(!focused && !q) && (
+                    <button
+                        onClick={() => { if (typeof onOpenRoutePlanner === 'function') { onOpenRoutePlanner(); } }}
+                        style={{
+                            width: 36,
+                            height: 36,
+                            marginLeft: 2,
+                            borderRadius: 8,
+                            border: '1px solid var(--btn-border, #444)',
+                            background: 'var(--btn-bg, #222)',
+                            color: 'var(--btn-fg, #fff)',
+                            fontWeight: 700,
+                            transition: 'background 0.2s, color 0.2s',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
+                        }}
+                        title="Itinéraire"
+                        aria-label="Itinéraire"
+                        className="itinerary-btn"
+                    >🗺️</button>
+                )}
             </div>
-            {showList && <SearchList items={list as any} onPick={(id, name) => pick(id, name)} />}
+            {showList && (
+                <SearchList items={list as any} onPick={(id, name) => {
+                    pick(id, name)
+                    // Masquer la liste après sélection
+                    setFocused(false)
+                }} />
+            )}
 
             {/* Selected details */}
             <SearchSelected selected={selected as any} onRoute={(feat: any) => { if (onRouteRequest) onRouteRequest(feat) }} data={data} />
