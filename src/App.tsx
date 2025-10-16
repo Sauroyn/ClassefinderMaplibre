@@ -76,24 +76,32 @@ export default function App() {
   return (
     <>
       <LevelSelector levels={levels} level={level} loading={loading} onChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }} />
-      {!navActive && !showPlanner && <SearchBar data={dataRef.current} onSelect={(id, lvl) => {
-        if (!mapRef.current) return
-        // save camera before changing
-        try { prevCameraRef.current = mapRef.current.getCamera() } catch { }
-        if (lvl != null) {
-          const n = typeof lvl === 'string' ? parseInt(lvl, 10) : lvl
-          if (!Number.isNaN(n) && n !== level) setLevel(n)
-        }
-        if (mapRef.current && mapRef.current.selectFeatureById) mapRef.current.selectFeatureById(id)
-      }} onRouteRequest={(feat) => {
-        // open planner with destination prefilled
-        setPlannerDest(feat)
-        setShowPlanner(true)
-      }} onClear={() => {
-        if (!mapRef.current) return
-        if (mapRef.current && mapRef.current.restoreInitialCamera) mapRef.current.restoreInitialCamera()
-        if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
-      }} />}
+      {!navActive && !showPlanner && <SearchBar
+        data={dataRef.current}
+        onSelect={(id, lvl) => {
+          if (!mapRef.current) return
+          // save camera before changing
+          try { prevCameraRef.current = mapRef.current.getCamera() } catch { }
+          if (lvl != null) {
+            const n = typeof lvl === 'string' ? parseInt(lvl, 10) : lvl
+            if (!Number.isNaN(n) && n !== level) setLevel(n)
+          }
+          if (mapRef.current && mapRef.current.selectFeatureById) mapRef.current.selectFeatureById(id)
+        }}
+        onRouteRequest={(feat) => {
+          // open planner with destination prefilled
+          setPlannerDest(feat)
+          setShowPlanner(true)
+        }}
+        onClear={() => {
+          if (!mapRef.current) return
+          if (mapRef.current && mapRef.current.restoreInitialCamera) mapRef.current.restoreInitialCamera()
+          if (mapRef.current && mapRef.current.clearSelection) mapRef.current.clearSelection()
+        }}
+        onOpenRoutePlanner={() => {
+          setShowPlanner(true)
+        }}
+      />}
       <MapView ref={mapRef} data={dataRef.current} level={level} theme={theme} onThemeChange={setTheme} />
       {showPlanner && <RoutePlanner
         mapRef={mapRef}

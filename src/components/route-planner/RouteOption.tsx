@@ -14,7 +14,7 @@ export default function RouteOption({ route, primary, highlighted, onHover, onLe
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 12, height: 12, borderRadius: 6, background: color, opacity: primary ? 1 : 0.6 }} />
-                <button style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }} onClick={(e) => { e.stopPropagation(); onGo(route) }}>Go</button>
+                <button style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }} onClick={(e) => { e.stopPropagation(); onGo(route) }}>Voir</button>
             </div>
         </div>
     )

@@ -3,19 +3,87 @@ import ConfirmStartModal from './route-planner/ConfirmStartModal'
 
 import { getUserStartDistance } from './route-planner/getStartProximity'
 import { computeAndDrawRoute } from '../map/computeRoute'
-import { parseGeoJSON } from './route-planner/utils'
 import type { Graph } from './route-planner/utils'
 import Suggestions from './route-planner/Suggestions'
 import RoutesList from './route-planner/RoutesList'
-import { isMobileViewport, RouteDetailsBottomSheet, RoutesBottomSheet } from './route-planner/MobileSheets'
+import DesktopRouteDetails from './route-planner/DesktopRouteDetails'
+import { isMobileViewport } from './route-planner/MobileSheetsUtils'
+import { MobileRoutesSheet } from './route-planner/MobileRoutesSheet'
+import { MobileRouteDetailsSheet } from './route-planner/MobileRouteDetailsSheet'
 import { useNavigationController } from './route-planner/NavigationController'
 import NavigationBanner from './route-planner/NavigationBanner'
 import NavigationBottomSheet from './route-planner/NavigationBottomSheet'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 import { fitBoundsSmart } from '../map/viewport'
+import { loadGraphFromConfigOrFallback } from '../utils/graph'
 
 export default function RoutePlanner({ mapRef, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
+
+    // Bloc unique de hooks d'état
+    const [graph, setGraph] = useState<Graph | null>(null)
+    const [start, setStart] = useState<string>('')
+    const [end, setEnd] = useState<string>('')
+    const [nodeOptions, setNodeOptions] = useState<Array<{ id: string, name: string, level?: string }>>([])
+    const [startQuery, setStartQuery] = useState<string>('')
+    const [endQuery, setEndQuery] = useState<string>('')
+    const [focusedField, setFocusedField] = useState<'start' | 'end' | null>(null)
+    const [routes, setRoutes] = useState<Array<any>>([])
+    const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null)
+    const [excludeStairs, setExcludeStairs] = useState<boolean>(false)
+    const [coveredOnly, setCoveredOnly] = useState<boolean>(false)
+    const [showSecondary, setShowSecondary] = useState<boolean>(true)
+    const [showSettings, setShowSettings] = useState<boolean>(false)
+    const [isMobile] = useState<boolean>(() => isMobileViewport())
+    const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false)
+    const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
+    const [detailsOpen, setDetailsOpen] = useState(false)
+    const [navigationActive, setNavigationActive] = useState(false)
+    const [confirmOpen, setConfirmOpen] = useState(false)
+    const [confirmDistance, setConfirmDistance] = useState(0)
+    const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
+
+    // Load graph and populate nodeOptions at mount
+    useEffect(() => {
+        (async () => {
+            try {
+                const g = await loadGraphFromConfigOrFallback()
+                if (g) {
+                    setGraph(g)
+                    // Build node options for autocomplete
+                    const opts = g.nodes.map((n: any) => ({
+                        id: String(n.id),
+                        name: n.name || String(n.id),
+                        level: n.level != null ? String(n.level) : undefined
+                    }))
+                    setNodeOptions(opts)
+
+                    // Initialize start/end if provided
+                    if (initialStartId && initialStartName) {
+                        setStart(initialStartId)
+                        setStartQuery(initialStartName)
+                    }
+                    if (initialEndId && initialEndName) {
+                        setEnd(initialEndId)
+                        setEndQuery(initialEndName)
+                    }
+                    // Handle initialDestination if provided
+                    if (initialDestination) {
+                        const name = initialDestination.properties?.name ?? initialDestination.properties?.title ?? initialDestination.id
+                        const fid = initialDestination.id ?? initialDestination.properties?.id ?? name
+                        const match = opts.find((n: any) => String(n.id) === String(fid) || String((n.name || '')).toLowerCase() === String(name).toLowerCase())
+                        const setId = match ? String(match.id) : String(fid)
+                        setEnd(setId)
+                        setEndQuery(String(match?.name ?? name))
+                    }
+                }
+            } catch (err) {
+                console.error('[RoutePlanner] failed to load graph', err)
+            }
+        })()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     // Gestion du bouton retour sur le menu de détails mobile
     useEffect(() => {
         function onBack() {
@@ -25,124 +93,6 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
         window.addEventListener('route-details-back', onBack)
         return () => window.removeEventListener('route-details-back', onBack)
     }, [])
-    const [graph, setGraph] = useState<Graph | null>(null)
-    const [start, setStart] = useState<string>('')
-    const [end, setEnd] = useState<string>('')
-
-    const [nodeOptions, setNodeOptions] = useState<Array<{ id: string, name: string, level?: string }>>([])
-    const [startQuery, setStartQuery] = useState<string>('')
-    const [endQuery, setEndQuery] = useState<string>('')
-    const [focusedField, setFocusedField] = useState<'start' | 'end' | null>(null)
-
-    useEffect(() => {
-        // Load graph using selected config if available, else fall back to defaults
-        const CONFIG_STORAGE_KEY = 'site_config_file'
-        async function loadGraph() {
-            const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'))
-            let candidates: string[] = []
-            try {
-                const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
-                if (sel) {
-                    try {
-                        const r = await fetch(prefix + 'configs/' + sel)
-                        if (r.ok) {
-                            const parsed = await r.json()
-                            if (parsed.graphGeojson && typeof parsed.graphGeojson === 'string') {
-                                const url = prefix + String(parsed.graphGeojson).replace(/^\//, '')
-                                candidates.push(url)
-                            }
-                        }
-                    } catch (e) { /* ignore parse errors, will use fallbacks */ }
-                }
-            } catch (e) { /* ignore storage errors */ }
-            // add fallbacks
-            candidates.push(prefix + 'testGraph.geojson')
-            candidates.push(prefix + 'Paris-graph.geojson')
-
-            for (const url of candidates) {
-                try {
-                    console.log('[RoutePlanner] trying to load graph', url)
-                    const r = await fetch(url)
-                    if (!r.ok) continue
-                    const j = await r.json()
-                    const g = parseGeoJSON(j)
-                    console.log('[RoutePlanner] parsed graph', g)
-                    setGraph(g)
-                    setNodeOptions(g.nodes.map(n => {
-                        const raw = n.raw || {}
-                        const props = raw.properties || {}
-                        const level = props.level ?? props.floor ?? (Array.isArray(props.levels) ? props.levels[0] : undefined)
-                        return { id: n.id, name: n.name ?? n.id, level: level != null ? String(level) : '' }
-                    }))
-                    // success
-                    return
-                } catch (e) { /* try next candidate */ }
-            }
-            console.warn('[RoutePlanner] no graph file found from config nor defaults')
-        }
-        loadGraph()
-    }, [])
-
-    // if an initialDestination was provided (from SearchBar), try to set end field
-    useEffect(() => {
-        if (!initialDestination) return
-        // initialDestination may be a GeoJSON feature or an object { id, name }
-        const feat = initialDestination as any
-        const name = feat.properties?.name ?? feat.name ?? feat.properties?.title
-        const id = feat.id ?? feat.properties?.id ?? feat.properties?.ref ?? feat.properties?.name ?? feat.name
-        // Prefer setting the visible query to the human name when available
-        if (name) {
-            setEndQuery(String(name))
-        }
-        // Try to set internal end ID only if we can match a node from nodeOptions
-        const sid = id != null ? String(id) : null
-        if (sid) {
-            // try to find by id first
-            let found = nodeOptions.find(n => String(n.id) === sid)
-            // if not found, try to find by name (useful when feature id is numeric but node names are letters)
-            if (!found && name) found = nodeOptions.find(n => String(n.name) === String(name))
-            if (found) {
-                setEnd(found.id)
-                setEndQuery(found.name)
-            }
-        }
-    }, [initialDestination, nodeOptions])
-
-    // prefill start/end if explicitly provided (e.g., from EventSelector decision)
-    useEffect(() => {
-        if (!nodeOptions || nodeOptions.length === 0) return
-        if (initialStartId) {
-            setStart(initialStartId)
-            if (initialStartName) setStartQuery(initialStartName)
-        }
-        if (initialEndId) {
-            setEnd(initialEndId)
-            if (initialEndName) setEndQuery(initialEndName)
-        }
-    }, [initialStartId, initialStartName, initialEndId, initialEndName, nodeOptions])
-
-    // no file input handling: graph loaded from defaults only
-
-    const [routes, setRoutes] = useState<Array<any>>([])
-    const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null)
-    const [excludeStairs, setExcludeStairs] = useState<boolean>(false)
-    const [coveredOnly, setCoveredOnly] = useState<boolean>(false)
-    const [showSecondary, setShowSecondary] = useState<boolean>(true)
-    const [showSettings, setShowSettings] = useState<boolean>(false)
-    const [isMobile, setIsMobile] = useState<boolean>(() => isMobileViewport())
-    useEffect(() => {
-        const onResize = () => setIsMobile(isMobileViewport())
-        window.addEventListener('resize', onResize)
-        return () => window.removeEventListener('resize', onResize)
-    }, [])
-
-    const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false)
-    const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
-    const [detailsOpen, setDetailsOpen] = useState(false)
-    const [navigationActive, setNavigationActive] = useState(false)
-    const [confirmOpen, setConfirmOpen] = useState(false)
-    const [confirmDistance, setConfirmDistance] = useState(0)
-    const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
     // Contrôleur de navigation (mobile)
     const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false), mapRef)
 
@@ -381,7 +331,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             </>
         )
     }
-    // Sinon, toujours afficher le planner classique
+    // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
         <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)', display: (navigationActive ? 'none' : 'block') }}>
             <div style={{ position: 'relative', marginBottom: 6 }}>
@@ -417,30 +367,50 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                     />
                 )}
             </div>
-            {/* Bottom suggestion panel inside planner container (full width under inputs) */}
+            {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
             <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
                 <div style={{ marginBottom: 8 }}>
-                    {/* On desktop show routes list inline; on mobile use bottom sheet */}
-                    {!isMobile && routes && routes.length > 0 && (
+                    <Suggestions
+                        focusedField={focusedField}
+                        startQuery={startQuery}
+                        endQuery={endQuery}
+                        nodeOptions={nodeOptions}
+                        onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }}
+                        onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }}
+                    />
+                    {/* Liste visible seulement si détail non ouvert */}
+                    {!isMobile && routes && routes.length > 0 && !detailsOpen && (
                         <RoutesList
                             routes={routes}
                             highlightedRoute={highlightedRoute}
                             onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
                             onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
                             onGo={(rt: any) => {
-                                setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId)
-                                if (isMobile) {
-                                    setSelectedRoute(rt)
-                                    setDetailsOpen(true)
-                                }
+                                setSelectedRoute(rt)
+                                setDetailsOpen(true)
+                                setHighlightedRoute(rt.layerId)
+                                highlightRouteLayer(rt.layerId)
                             }}
                         />
                     )}
-                    <Suggestions focusedField={focusedField} startQuery={startQuery} endQuery={endQuery} nodeOptions={nodeOptions} onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }} onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }} />
                 </div>
             </div>
+            {/* Affichage du détail en-dessous en mode desktop */}
+            {!isMobile && detailsOpen && selectedRoute && (
+                <DesktopRouteDetails
+                    route={selectedRoute}
+                    arrivalTime={(() => {
+                        if (!selectedRoute) return null
+                        try { const now = new Date(); return new Date(now.getTime() + Math.round((selectedRoute.time || 0) * 1000)) } catch { return null }
+                    })()}
+                    onBack={() => {
+                        setDetailsOpen(false)
+                        setSelectedRoute(null)
+                    }}
+                />
+            )}
             {isMobile && (
-                <RoutesBottomSheet
+                <MobileRoutesSheet
                     routes={routes}
                     open={mobileRoutesOpen}
                     onSelect={(rt) => {
@@ -470,13 +440,12 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                                     }
                                 }
                             })
-                            // also hide the alternative sources if needed
                         } catch { }
                     }}
                 />
             )}
             {isMobile && !navigationActive && (
-                <RouteDetailsBottomSheet
+                <MobileRouteDetailsSheet
                     open={detailsOpen}
                     route={selectedRoute}
                     onStart={async () => {
