@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { normalizedFeatureId, coerceLevel, findByNormalizedId } from '../utils/featureId'
 import SearchList from './search/SearchList'
 import SearchSelected from './search/SearchSelected'
 
@@ -39,20 +40,55 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     const [selected, setSelected] = useState<RecentItem | null>(null)
     const inputRef = useRef<HTMLInputElement | null>(null)
     const blurTimeout = useRef<number | null>(null)
+    // Group navigation state
+    const [groupView, setGroupView] = useState<{ title: string, items: Array<{ id: number | string, name: string, level?: number | string }> } | null>(null)
 
-    const items = useMemo(() => {
+    const flatItems = useMemo(() => {
         if (!data) return []
-        const list: Array<{ id: string | number; name: string; level?: string }> = []
-        for (const f of data.features as any) {
-            const name = f.properties?.name || ''
+        const list: Array<{ id: number; name: string; level?: number | string }> = []
+        const feats = (data.features as any[]) || []
+        for (let i = 0; i < feats.length; i++) {
+            const f = feats[i]
+            const name = (f.properties?.name ?? '') as string
             if (typeof name === 'string' && name.trim().length > 0) {
-                list.push({ id: f.id ?? f.properties?.id ?? name, name, level: f.properties?.level })
+                const id = normalizedFeatureId(f, i)
+                const level = coerceLevel(f.properties?.level)
+                list.push({ id, name, level })
             }
         }
-        return list.filter(i => i.name.toLowerCase().includes(q.toLowerCase()))
+        const qn = q.trim().toLowerCase()
+        return list.filter(i => i.name.toLowerCase().includes(qn))
     }, [data, q])
 
-    useEffect(() => { const handler = (e: KeyboardEvent) => { if (e.key === 'Tab' && items.length === 1) { e.preventDefault(); const it = items[0]; setQ(it.name); setSelected(it); setShowBack(true); setFocused(false); onSelect(it.id, it.level) } }; window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler) }, [items, onSelect])
+    // Build grouped entries only when searching (q non vide). Recent list remains flat.
+    const groupedEntries = useMemo(() => {
+        if (!q) return [] as any[]
+        const byName = new Map<string, Array<{ id: number; name: string; level?: number | string }>>()
+        for (const it of flatItems) {
+            const arr = byName.get(it.name) || []
+            arr.push(it)
+            byName.set(it.name, arr)
+        }
+        const entries: any[] = []
+        for (const [name, arr] of byName.entries()) {
+            if (arr.length === 1) entries.push({ type: 'single', item: arr[0] })
+            else entries.push({ type: 'group', name, items: arr })
+        }
+        return entries
+    }, [flatItems, q])
+
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Tab' && flatItems.length === 1) {
+                e.preventDefault()
+                const it = flatItems[0]
+                // Use pick() to ensure proper ID resolution and highlight
+                pick(it.id, it.name)
+            }
+        }
+        window.addEventListener('keydown', handler)
+        return () => window.removeEventListener('keydown', handler)
+    }, [flatItems])
 
     // respond to map clicks when they dispatch a feature click event
     useEffect(() => {
@@ -61,23 +97,45 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
             if (!feat) return
             // Accept features without name: use id or generate a placeholder
             const name = feat.properties?.name ?? feat.properties?.title ?? (feat.id != null ? `Zone ${feat.id}` : 'Zone')
-            const id = feat.id ?? feat.properties?.id ?? feat.properties?.name ?? name
+            // Use the feature's id directly from the map (should be the normalized id)
+            let id = feat.id
+            if (id == null) {
+                // Fallback: try to find in flatItems by name
+                const match = flatItems.find(it => it.name === name)
+                id = match ? match.id : name
+            }
             // mimic a user pick
             pick(id, name)
             // do not auto-open route planner here; RoutePlanner listens separately when open
         }
         window.addEventListener('map:feature-click', onMapFeatureClick as any)
         return () => { window.removeEventListener('map:feature-click', onMapFeatureClick as any) }
-    }, [data])
+    }, [flatItems])
+
+    // Listen for highlight clear events from the map (e.g., clicking outside features)
+    useEffect(() => {
+        function onHighlightCleared() {
+            // Only clear UI state, do NOT call onClear() to avoid unwanted zoom reset
+            setSelected(null)
+            setShowBack(false)
+        }
+        window.addEventListener('map:highlight-clear', onHighlightCleared as any)
+        return () => { window.removeEventListener('map:highlight-clear', onHighlightCleared as any) }
+    }, [])
 
     const pick = (id: string | number, name: string) => {
-        let resolved: string | number = id
-        if (data) {
-            const found = data.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === id || f.properties?.name === name)
-            if (found) resolved = found.id ?? found.properties?.id ?? name
-        }
+        // Always bind selection to the normalized numeric id to avoid collisions on duplicate names
+        let resolved: number | string = id
+        // try to coerce to number when possible (ids are numeric in map source)
+        const n = parseInt(String(id), 10)
+        if (Number.isFinite(n)) resolved = n
+        // derive level from the feature matched by normalized id
+        const lvl = (() => {
+            const feat = findByNormalizedId(data as any, resolved as number)
+            const lv = feat?.properties?.level
+            return coerceLevel(lv)
+        })()
         setQ(name)
-        const lvl = data && data.features ? (data.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === resolved) || {}).properties?.level : undefined
         // update recent as objects
         setRecent(r => {
             const next = [{ id: resolved, name, level: lvl }, ...r.filter(x => String(x.id) !== String(resolved))].slice(0, 5)
@@ -90,11 +148,22 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         setShowBack(true)
         setFocused(false)
         onSelect(resolved, lvl)
+        // Emit highlight event
+        try { window.dispatchEvent(new CustomEvent('map:highlight-feature', { detail: resolved })) } catch { }
     }
 
-    const list = (q ? items : recent).slice(0, 6)
+    // Limiter à 6 entrées top-level pour l'UI
+    const list = (() => {
+        // Si on est dans une vue de groupe, afficher uniquement les items du groupe
+        if (groupView) {
+            return groupView.items.map(it => ({ type: 'single', item: it }))
+        }
+        // Sinon, afficher les résultats normaux
+        return (q ? groupedEntries : recent.map(r => ({ type: 'single', item: r })) as any).slice(0, 6)
+    })()
+
     // Cacher les suggestions si un élément est sélectionné
-    const showList = (!selected) && (focused || q.length > 0) && list.length > 0
+    const showList = (!selected) && (focused || q.length > 0 || groupView) && list.length > 0
 
     // Ne pas masquer la liste lors d'une sélection, sauf si on sort du champ
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
@@ -103,10 +172,24 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         <div className="searchbar" style={{ position: 'absolute', left: 12, top: 12, zIndex: 10, width: 360, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.18)', border: '1px solid var(--panel-border, #ddd)' }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {/* left icon: back | clear | search */}
-                {showBack ? (
-                    <button onClick={() => { setQ(''); setFocused(false); setShowBack(false); setSelected(null); if ((onClear)) onClear() }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>←</button>
+                {showBack || groupView ? (
+                    <button onClick={() => {
+                        if (groupView) {
+                            // Si on est dans une vue de groupe, revenir à la liste de recherche
+                            setGroupView(null)
+                            try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
+                        } else {
+                            // Sinon, réinitialiser complètement
+                            setQ('')
+                            setFocused(false)
+                            setShowBack(false)
+                            setSelected(null)
+                            try { window.dispatchEvent(new CustomEvent('map:highlight-clear')) } catch { }
+                            if ((onClear)) onClear()
+                        }
+                    }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>←</button>
                 ) : q.length > 0 ? (
-                    <button onClick={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setQ(''); setFocused(true); if (inputRef.current) inputRef.current.focus() }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button>
+                    <button onClick={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setQ(''); setSelected(null); setFocused(true); if (inputRef.current) inputRef.current.focus() }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button>
                 ) : (
                     <button onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }} style={{ width: 36, height: 36, background: 'var(--btn-bg, transparent)', border: '1px solid var(--btn-border, transparent)', borderRadius: 8, color: 'var(--btn-fg, inherit)' }} aria-label="search">🔍</button>
                 )}
@@ -154,11 +237,23 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 )}
             </div>
             {showList && (
-                <SearchList items={list as any} onPick={(id, name) => {
-                    pick(id, name)
-                    // Masquer la liste après sélection
-                    setFocused(false)
-                }} />
+                <>
+                    {groupView && (
+                        <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--panel-border, #eee)', fontWeight: 700, fontSize: 14 }}>
+                            {groupView.title} ({groupView.items.length})
+                        </div>
+                    )}
+                    <SearchList items={list as any} onPick={(id, name) => {
+                        // Clear hover to mirror map click behavior
+                        try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
+                        pick(id, name)
+                        setFocused(false)
+                        setGroupView(null) // Clear group view after selection
+                    }} onOpenGroup={(name, items) => {
+                        setGroupView({ title: name, items })
+                        setFocused(true) // Keep focus to show the list
+                    }} />
+                </>
             )}
 
             {/* Selected details */}

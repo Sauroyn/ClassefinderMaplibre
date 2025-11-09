@@ -23,6 +23,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
     const parsedConfigRef = useRef<any | null>(null)
     const navActive = useNavigationActive()
     const followNavMarkerRef = useRef<boolean>(false)
+    // Hover management from Search UI
+    const uiHoverIdRef = useRef<number | null>(null)
+    const uiHoverIdsRef = useRef<number[] | null>(null)
+    // Highlight management from Search UI (persists after hover clears)
+    const uiHighlightIdRef = useRef<number | null>(null)
     // Dynamic top for nav buttons (mobile): keep below level selector to avoid overlap
     const navBtnsTopRef = useRef<number | null>(null)
     const [navBtnsTopState, setNavBtnsTopState] = useState<number | null>(null)
@@ -203,6 +208,115 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
 
             const saveInit = () => { const c = map.getCenter(); initialCamera.current = { center: [c.lng, c.lat], zoom: map.getZoom() } }
 
+            // Attach UI hover handlers after map exists so feature-state can be set reliably
+            const attachSearchHoverHandlers = () => {
+                const setHover = (id: number | null) => {
+                    try {
+                        if (uiHoverIdRef.current != null) {
+                            try { map.setFeatureState({ source: 'buildings', id: uiHoverIdRef.current }, { hover: false }) } catch { }
+                        }
+                        // clear any previous multi-hover
+                        if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
+                            for (const pid of uiHoverIdsRef.current) {
+                                try { map.setFeatureState({ source: 'buildings', id: pid }, { hover: false }) } catch { }
+                            }
+                            uiHoverIdsRef.current = null
+                        }
+                        if (id != null) {
+                            try { map.setFeatureState({ source: 'buildings', id }, { hover: true }) } catch { }
+                        }
+                        uiHoverIdRef.current = id
+                    } catch { }
+                }
+                const setHoverMany = (ids: number[] | null) => {
+                    try {
+                        // clear previous single
+                        if (uiHoverIdRef.current != null) {
+                            try { map.setFeatureState({ source: 'buildings', id: uiHoverIdRef.current }, { hover: false }) } catch { }
+                            uiHoverIdRef.current = null
+                        }
+                        // clear previous many
+                        if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
+                            for (const pid of uiHoverIdsRef.current) {
+                                try { map.setFeatureState({ source: 'buildings', id: pid }, { hover: false }) } catch { }
+                            }
+                        }
+                        uiHoverIdsRef.current = null
+                        if (ids && ids.length) {
+                            const out: number[] = []
+                            for (const raw of ids) {
+                                const n = parseInt(String(raw), 10)
+                                const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
+                                if (id != null) {
+                                    try { map.setFeatureState({ source: 'buildings', id }, { hover: true }) } catch { }
+                                    out.push(id as number)
+                                }
+                            }
+                            uiHoverIdsRef.current = out
+                        }
+                    } catch { }
+                }
+                const onHover = (e: any) => {
+                    try {
+                        const raw = e?.detail
+                        const n = parseInt(String(raw), 10)
+                        const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
+                        if (id == null) { setHover(null); return }
+                        setHover(id)
+                    } catch { }
+                }
+                const onHoverMany = (e: any) => {
+                    try {
+                        const arr = Array.isArray(e?.detail) ? e.detail : []
+                        setHoverMany(arr)
+                    } catch { }
+                }
+                const onClear = () => setHover(null)
+                // Highlight handlers: set/clear persistent highlight independent of hover
+                const onHighlight = (e: any) => {
+                    try {
+                        const map = mapRef.current
+                        if (!map) return
+                        // Clear previous highlight
+                        if (uiHighlightIdRef.current != null) {
+                            try { map.setFeatureState({ source: 'buildings', id: uiHighlightIdRef.current }, { highlight: false }) } catch { }
+                        }
+                        // Set new highlight
+                        const raw = e?.detail
+                        const n = parseInt(String(raw), 10)
+                        const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
+                        if (id != null) {
+                            try { map.setFeatureState({ source: 'buildings', id }, { highlight: true }) } catch { }
+                            uiHighlightIdRef.current = id as number
+                        } else {
+                            uiHighlightIdRef.current = null
+                        }
+                    } catch { }
+                }
+                const onClearHighlight = () => {
+                    try {
+                        const map = mapRef.current
+                        if (!map) return
+                        if (uiHighlightIdRef.current != null) {
+                            try { map.setFeatureState({ source: 'buildings', id: uiHighlightIdRef.current }, { highlight: false }) } catch { }
+                            uiHighlightIdRef.current = null
+                        }
+                    } catch { }
+                }
+                window.addEventListener('map:hover-feature', onHover as any)
+                window.addEventListener('map:hover-features', onHoverMany as any)
+                window.addEventListener('map:hover-clear', onClear as any)
+                window.addEventListener('map:highlight-feature', onHighlight as any)
+                window.addEventListener('map:highlight-clear', onClearHighlight as any)
+                    ; (map as any).__removeSearchHoverHandlers = () => {
+                        try { window.removeEventListener('map:hover-feature', onHover as any) } catch { }
+                        try { window.removeEventListener('map:hover-features', onHoverMany as any) } catch { }
+                        try { window.removeEventListener('map:hover-clear', onClear as any) } catch { }
+                        try { window.removeEventListener('map:highlight-feature', onHighlight as any) } catch { }
+                        try { window.removeEventListener('map:highlight-clear', onClearHighlight as any) } catch { }
+                    }
+            }
+
             const loadRouteIcons = async () => {
                 const tryLoad = (url: string, name: string) => new Promise<boolean>(async (resolve) => {
                     try {
@@ -271,9 +385,10 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 ensureImage('marker-end', '#e74c3c')
             }
 
-            if (map.loaded()) { saveInit(); loadRouteIcons(); attachFollowStopHandlers() } else map.on('load', () => { saveInit(); loadRouteIcons(); attachFollowStopHandlers() })
+            if (map.loaded()) { saveInit(); loadRouteIcons(); attachFollowStopHandlers(); attachSearchHoverHandlers() } else map.on('load', () => { saveInit(); loadRouteIcons(); attachFollowStopHandlers(); attachSearchHoverHandlers() })
             return () => {
                 try { const fn = (map as any).__removeFollowHandlers; if (fn) fn() } catch { }
+                try { const fn2 = (map as any).__removeSearchHoverHandlers; if (fn2) fn2() } catch { }
                 map.remove(); mapRef.current = null
             }
         })()

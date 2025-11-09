@@ -17,7 +17,13 @@ export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColo
         map.addLayer({
             id: 'buildings-extrusion', type: 'fill-extrusion', source: 'buildings',
             paint: {
-                'fill-extrusion-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffcc00', ['boolean', ['feature-state', 'selected'], false], '#ffcc00', defaultColorExpr],
+                'fill-extrusion-color': [
+                    'case',
+                    ['boolean', ['feature-state', 'highlight'], false], '#ff6b35',
+                    ['boolean', ['feature-state', 'hover'], false], '#ffcc00',
+                    ['boolean', ['feature-state', 'selected'], false], '#ffcc00',
+                    defaultColorExpr
+                ],
                 'fill-extrusion-height': heightExpr,
                 'fill-extrusion-base': 0,
                 'fill-extrusion-opacity': ['interpolate', ['linear'], ['zoom'], tz - 0.5, 0.9, tz, 0]
@@ -32,7 +38,16 @@ export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColo
     if (!map.getLayer('buildings-fill')) {
         map.addLayer({
             id: 'buildings-fill', type: 'fill', source: 'buildings',
-            paint: { 'fill-color': ['case', ['boolean', ['feature-state', 'hover'], false], '#ffcc00', ['boolean', ['feature-state', 'selected'], false], '#ffcc00', defaultColorExpr], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], tz - 0.5, 0, tz, 0.9] },
+            paint: {
+                'fill-color': [
+                    'case',
+                    ['boolean', ['feature-state', 'highlight'], false], '#ff6b35',
+                    ['boolean', ['feature-state', 'hover'], false], '#ffcc00',
+                    ['boolean', ['feature-state', 'selected'], false], '#ffcc00',
+                    defaultColorExpr
+                ],
+                'fill-opacity': ['interpolate', ['linear'], ['zoom'], tz - 0.5, 0, tz, 0.9]
+            },
             layout: { visibility: 'visible' },
             filter: [
                 'any',

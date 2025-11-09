@@ -77,7 +77,12 @@ export function addInteractions(map: maplibre.Map, refs: any) {
     map.on('click', 'buildings-fill', clickHandler)
     map.on('click', (e: any) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ['buildings-fill', 'buildings-extrusion'] })
-        if (!features || features.length === 0) { setSelected(null); refs.selected = null }
+        if (!features || features.length === 0) {
+            setSelected(null)
+            refs.selected = null
+            // Clear highlight from search when clicking outside
+            try { window.dispatchEvent(new CustomEvent('map:highlight-clear')) } catch { }
+        }
     })
     map.on('mouseleave', 'buildings-extrusion', () => setHover(null))
     map.on('mouseleave', 'buildings-fill', () => setHover(null))

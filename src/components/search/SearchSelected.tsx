@@ -1,8 +1,10 @@
+import { findByNormalizedId } from '../../utils/featureId'
+
 type Item = { id: string | number; name: string; level?: string | number }
 
 export default function SearchSelected({ selected, onRoute, data }: { selected: Item | null; onRoute?: (feat: any) => void; data?: GeoJSON.FeatureCollection | null }) {
     if (!selected) return null
-    const feat = (data && data.features) ? data.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === selected.id || f.properties?.name === selected.name) : null
+    const feat = findByNormalizedId(data as any, selected.id)
     // Determine if feature has a name (not auto-generated)
     const hasRealName = feat && feat.properties && feat.properties.name && typeof feat.properties.name === 'string' && feat.properties.name.trim().length > 0
     return (
