@@ -105,6 +105,7 @@ export default function App() {
       <MapView ref={mapRef} data={dataRef.current} level={level} theme={theme} onThemeChange={setTheme} />
       {showPlanner && <RoutePlanner
         mapRef={mapRef}
+        data={dataRef.current}
         initialDestination={plannerDest}
         initialStartId={plannerStart?.id}
         initialStartName={plannerStart?.name}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import ConfirmStartModal from './route-planner/ConfirmStartModal'
+import Toast from './route-planner/Toast'
 
 import { getUserStartDistance } from './route-planner/getStartProximity'
 import { computeAndDrawRoute } from '../map/computeRoute'
@@ -17,8 +18,10 @@ import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 import { fitBoundsSmart } from '../map/viewport'
 import { loadGraphFromConfigOrFallback } from '../utils/graph'
+import { findByNormalizedId } from '../utils/featureId'
+import { createProvisionalNode } from '../map/provisionalNode'
 
-export default function RoutePlanner({ mapRef, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
+export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
 
     // Bloc unique de hooks d'état
     const [graph, setGraph] = useState<Graph | null>(null)
@@ -42,6 +45,8 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
     const [confirmOpen, setConfirmOpen] = useState(false)
     const [confirmDistance, setConfirmDistance] = useState(0)
     const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
+    const [toastMessage, setToastMessage] = useState<string | null>(null)
+    const [_provisionalNodes, setProvisionalNodes] = useState<Map<string, any>>(new Map())
 
     // Load graph and populate nodeOptions at mount
     useEffect(() => {
@@ -56,6 +61,34 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                         name: n.name || String(n.id),
                         level: n.level != null ? String(n.level) : undefined
                     }))
+
+                    // Add provisional options for features without matching nodes
+                    if (data && data.features) {
+                        const nodeNames = new Set(opts.map((n: any) => (n.name || '').toLowerCase().trim()))
+                        const features = data.features as any[]
+
+                        for (let i = 0; i < features.length; i++) {
+                            const feat = features[i]
+                            const name = feat.properties?.name
+                            if (!name || typeof name !== 'string' || name.trim().length === 0) continue
+
+                            const nameLower = name.toLowerCase().trim()
+                            if (nodeNames.has(nameLower)) continue // Already has a node
+
+                            // This feature has a name but no corresponding node
+                            // Add it as a provisional option
+                            const level = feat.properties?.level ?? (Array.isArray(feat.properties?.levels) && feat.properties.levels.length > 0 ? feat.properties.levels[0] : null)
+                            opts.push({
+                                id: `PROVISIONAL_${i}`,
+                                name,
+                                level: level != null ? String(level) : undefined,
+                                provisional: true,
+                                featureIndex: i
+                            } as any)
+                            nodeNames.add(nameLower)
+                        }
+                    }
+
                     setNodeOptions(opts)
 
                     // Initialize start/end if provided
@@ -82,7 +115,7 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             }
         })()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [data])
 
     // Gestion du bouton retour sur le menu de détails mobile
     useEffect(() => {
@@ -212,12 +245,56 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
             let userCoord: [number, number] | null = null
             if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { s = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
             if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
+
+            // Handle provisional nodes: create temporary graph with provisional nodes/edges
+            let workingGraph = graph
+            let hasProvisional = false
+            const newProvisionalNodes = new Map<string, any>()
+
+            if (s.startsWith('PROVISIONAL_') || e.startsWith('PROVISIONAL_')) {
+                workingGraph = { ...graph, nodes: [...graph.nodes], edges: [...graph.edges] }
+
+                for (const id of [s, e]) {
+                    if (!id.startsWith('PROVISIONAL_')) continue
+
+                    // Find the corresponding feature
+                    const opt = nodeOptions.find((n: any) => n.id === id) as any
+                    if (!opt || !opt.featureIndex || !data) continue
+
+                    const feature = findByNormalizedId(data, opt.featureIndex)
+                    if (!feature) continue
+
+                    // Create provisional node
+                    const provisional = createProvisionalNode(feature, graph, id)
+                    if (!provisional) continue
+
+                    // Add to working graph
+                    workingGraph.nodes.push(provisional.node)
+                    if (provisional.intermediateNode) {
+                        workingGraph.nodes.push(provisional.intermediateNode)
+                    }
+                    for (const edge of provisional.connectionEdges) {
+                        workingGraph.edges.push(edge)
+                    }
+
+                    newProvisionalNodes.set(id, provisional)
+                    hasProvisional = true
+                }
+
+                setProvisionalNodes(newProvisionalNodes)
+            }
+
             const k = showSecondary ? 3 : 1
-            const res = await computeAndDrawRoute({ graph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k, userOriginLngLat: userCoord || undefined })
+            const res = await computeAndDrawRoute({ graph: workingGraph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k, userOriginLngLat: userCoord || undefined })
             if (res && res.routes) {
                 setRoutes(res.routes)
                 if (isMobile) {
                     setMobileRoutesOpen(true)
+                }
+
+                // Show toast if using provisional node
+                if (hasProvisional) {
+                    setToastMessage("Chemin approximatif : la salle sélectionnée n'a pas de point d'accès défini. L'itinéraire vous rapprochera au maximum.")
                 }
             }
         } catch (err) { console.error('[RoutePlanner] compute failed', err) }
@@ -568,6 +645,14 @@ export default function RoutePlanner({ mapRef, initialDestination, initialStartI
                             setConfirmOpen(false)
                         }
                     }}
+                />
+            )}
+            {/* Toast for provisional node warning */}
+            {toastMessage && (
+                <Toast
+                    message={toastMessage}
+                    duration={6000}
+                    onClose={() => setToastMessage(null)}
                 />
             )}
         </div>
