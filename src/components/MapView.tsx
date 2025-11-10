@@ -14,6 +14,7 @@ import { normalizeFeatureCollection } from '../utils/featureNormalization'
 import { deriveDarkColor } from '../utils/colors'
 import { STORAGE_KEYS } from '../utils/storage'
 import { removeLayer, removeSource, getLayersWithPrefix, getSourcesWithPrefix, setFeatureState, setFilter } from '../utils/mapHelpers'
+import { getFeatureBounds } from '../utils/geometryBounds'
 import { getMapStyleUrl } from '../utils/mapStyles'
 
 type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
@@ -547,28 +548,21 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const features = map.querySourceFeatures('buildings', { sourceLayer: undefined, filter: ['==', ['id'], id] })
             const feat = features && features[0]
             if (feat && feat.geometry) {
-                {
-                    // synchronous import (tree-shaken) for bounds helper
-                    try {
-                        const { getFeatureBounds } = require('../utils/geometryBounds')
-                        const bbox = getFeatureBounds(feat)
-                        if (bbox) { fitBoundsSmart(map, bbox); return }
-                    } catch {
-                        // fall back to manual
-                        if (feat.geometry.type === 'Polygon') {
-                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                            const coords = (feat.geometry as any).coordinates[0]
-                            for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
-                        } else if (feat.geometry.type === 'MultiPolygon') {
-                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                            for (const poly of (feat.geometry as any).coordinates) {
-                                const ring = poly[0]
-                                for (const p of ring) { const x = p[0], y = p[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                            }
-                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
-                        }
+                const bbox = getFeatureBounds(feat)
+                if (bbox) { fitBoundsSmart(map, bbox); return }
+                // fallback manual (should rarely hit)
+                if (feat.geometry.type === 'Polygon') {
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                    const coords = (feat.geometry as any).coordinates[0]
+                    for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
+                    if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
+                } else if (feat.geometry.type === 'MultiPolygon') {
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                    for (const poly of (feat.geometry as any).coordinates) {
+                        const ring = poly[0]
+                        for (const p of ring) { const x = p[0], y = p[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
                     }
+                    if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
                 }
             }
             // if feature wasn't found in the source, try to find it in latestDataRef (search results when data not yet added)
@@ -577,11 +571,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 if (d && d.features && d.features.length) {
                     const found = d.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === id || (f.properties && f.properties.name) === id)
                     if (found && found.geometry) {
-                        try {
-                            const { getFeatureBounds } = require('../utils/geometryBounds')
-                            const bbox = getFeatureBounds(found)
-                            if (bbox) { fitBoundsSmart(map, bbox); return }
-                        } catch { }
+                        const bbox = getFeatureBounds(found)
+                        if (bbox) { fitBoundsSmart(map, bbox); return }
                     }
                 }
             } catch (e) { }

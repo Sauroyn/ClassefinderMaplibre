@@ -21,8 +21,8 @@ import { fitBoundsSmart } from '../map/viewport'
 import { haversine } from '../map/measure'
 import { getCurrentPosition } from '../utils/geolocation'
 import { loadGraphFromConfigOrFallback } from '../utils/graph'
-import { findByNormalizedId } from '../utils/featureId'
-import { createProvisionalNode } from '../map/provisionalNode'
+// Provisional helpers now wrapped by buildProvisionalGraph
+import { buildProvisionalGraph } from './route-planner/buildProvisionalGraph'
 import { getMapInstance, setPaintProperty, setLayoutProperty } from '../utils/mapHelpers'
 import { highlightRouteLayer } from './route-planner/utils'
 import { useRoutePlannerState } from '../hooks/useRoutePlannerState'
@@ -268,81 +268,10 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { s = nid; try { const pos = await getCurrentPosition(); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
             if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await getCurrentPosition(); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
 
-            // Handle provisional nodes: create temporary graph with provisional nodes/edges
-            let workingGraph = graph
-            let hasProvisional = false
-            const newProvisionalNodes = new Map<string, any>()
-
-            if (s.startsWith('PROVISIONAL_') || e.startsWith('PROVISIONAL_')) {
-                workingGraph = { ...graph, nodes: [...graph.nodes], edges: [...graph.edges] }
-
-                const edgesToRemove: Array<{ from: string; to: string }> = []
-                const provisionalsList: any[] = []
-
-                // First pass: create all provisional nodes and collect info
-                for (const id of [s, e]) {
-                    if (!id.startsWith('PROVISIONAL_')) continue
-
-                    // Find the corresponding feature
-                    const opt = nodeOptions.find((n: any) => n.id === id) as any
-                    if (!opt || !opt.featureIndex || !data) continue
-
-                    const feature = findByNormalizedId(data, opt.featureIndex)
-                    if (!feature) continue
-
-                    // Create provisional node, passing all features for intersection checking
-                    const allFeatures = data.features as any[]
-                    const provisional = createProvisionalNode(feature, graph, id, allFeatures)
-                    if (!provisional) continue
-
-                    provisionalsList.push(provisional)
-
-                    // Collect edges to remove if intermediate node was created
-                    if (provisional.intermediateNode && provisional.edgeToRemove) {
-                        const splitEdge = provisional.connectionEdges.find((e: any) =>
-                            e.id && e.id.includes('-split-1') && !e.id.includes('-reverse')
-                        )
-
-                        if (splitEdge) {
-                            const fromNodeId = splitEdge.from
-                            const toNodeId = provisional.connectionEdges.find((e: any) =>
-                                e.id && e.id.includes('-split-2') && !e.id.includes('-reverse')
-                            )?.to
-
-                            if (toNodeId) {
-                                edgesToRemove.push({ from: String(fromNodeId), to: String(toNodeId) })
-                            }
-                        }
-                    }
-
-                    newProvisionalNodes.set(id, provisional)
-                    hasProvisional = true
-                }
-
-                // Second pass: remove original edges that were split
-                if (edgesToRemove.length > 0) {
-                    workingGraph.edges = workingGraph.edges.filter((e: any) => {
-                        // Check if this edge matches any edge to remove
-                        return !edgesToRemove.some(toRemove =>
-                            (String(e.from) === toRemove.from && String(e.to) === toRemove.to) ||
-                            (String(e.from) === toRemove.to && String(e.to) === toRemove.from)
-                        )
-                    })
-                }
-
-                // Third pass: add all new nodes and edges
-                for (const provisional of provisionalsList) {
-                    workingGraph.nodes.push(provisional.node)
-                    if (provisional.intermediateNode) {
-                        workingGraph.nodes.push(provisional.intermediateNode)
-                    }
-                    for (const edge of provisional.connectionEdges) {
-                        workingGraph.edges.push(edge)
-                    }
-                }
-
-                setProvisionalNodes(newProvisionalNodes)
-            } const k = showSecondary ? 3 : 1
+            // Handle provisional nodes via utility
+            const { workingGraph, hasProvisional, provisionalNodes } = buildProvisionalGraph({ graph, startId: s, endId: e, data: data || null, nodeOptions })
+            if (provisionalNodes.size) setProvisionalNodes(provisionalNodes)
+            const k = showSecondary ? 3 : 1
             const res = await computeAndDrawRoute({ graph: workingGraph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k, userOriginLngLat: userCoord || undefined })
             // Save the working graph (with any provisional nodes) for follow-up actions like onAdjust
             try { workingGraphRef.current = workingGraph as any } catch { }
