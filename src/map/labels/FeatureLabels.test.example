@@ -1,0 +1,235 @@
+/**
+ * Tests pour le module FeatureLabels
+ * 
+ * Ces tests montrent comment vérifier le bon fonctionnement du système de labels.
+ * Note : Ce sont des exemples de tests, pas une suite de tests complète.
+ */
+
+import { FeatureLabels, createFeatureLabels, type LabelStyle } from './FeatureLabels'
+
+// Mock de maplibre-gl pour les tests
+class MockMap {
+    private layers: Map<string, any> = new Map()
+    private sources: Map<string, any> = new Map()
+    
+    addLayer(layer: any) {
+        this.layers.set(layer.id, layer)
+    }
+    
+    getLayer(id: string) {
+        return this.layers.get(id)
+    }
+    
+    removeLayer(id: string) {
+        this.layers.delete(id)
+    }
+    
+    setFilter(layerId: string, filter: any) {
+        const layer = this.layers.get(layerId)
+        if (layer) {
+            layer.filter = filter
+        }
+    }
+    
+    setPaintProperty(layerId: string, property: string, value: any) {
+        const layer = this.layers.get(layerId)
+        if (layer) {
+            if (!layer.paint) layer.paint = {}
+            layer.paint[property] = value
+        }
+    }
+    
+    setLayoutProperty(layerId: string, property: string, value: any) {
+        const layer = this.layers.get(layerId)
+        if (layer) {
+            if (!layer.layout) layer.layout = {}
+            layer.layout[property] = value
+        }
+    }
+    
+    getSource(id: string) {
+        return this.sources.get(id)
+    }
+    
+    // Méthodes pour inspecter l'état dans les tests
+    _getLayers() { return this.layers }
+}
+
+// ============================================
+// Tests
+// ============================================
+
+describe('FeatureLabels', () => {
+    let mockMap: MockMap
+    let labels: FeatureLabels
+    
+    beforeEach(() => {
+        mockMap = new MockMap()
+        labels = new FeatureLabels(mockMap as any)
+    })
+    
+    test('devrait créer un layer lors de la première mise à jour', () => {
+        labels.update(0, 'light')
+        
+        const layer = mockMap.getLayer('buildings-name')
+        expect(layer).toBeDefined()
+        expect(layer.type).toBe('symbol')
+        expect(layer.source).toBe('buildings-centroids')
+    })
+    
+    test('devrait utiliser le style par défaut pour le thème clair', () => {
+        labels.update(0, 'light')
+        
+        const layer = mockMap.getLayer('buildings-name')
+        expect(layer.paint['text-color']).toBe('#111111')
+        expect(layer.paint['text-halo-color']).toBe('rgba(255,255,255,0.85)')
+    })
+    
+    test('devrait utiliser le style par défaut pour le thème sombre', () => {
+        labels.update(0, 'dark')
+        
+        const layer = mockMap.getLayer('buildings-name')
+        expect(layer.paint['text-color']).toBe('#f2f2f2')
+        expect(layer.paint['text-halo-color']).toBe('rgba(0,0,0,0.9)')
+    })
+    
+    test('devrait appliquer un style personnalisé', () => {
+        const customStyle: Partial<LabelStyle> = {
+            textSize: 20,
+            textColor: '#ff0000'
+        }
+        
+        labels.update(0, 'light', customStyle)
+        
+        const layer = mockMap.getLayer('buildings-name')
+        expect(layer.layout['text-size']).toBe(20)
+        expect(layer.paint['text-color']).toBe('#ff0000')
+    })
+    
+    test('devrait mettre à jour le filtre lors du changement de niveau', () => {
+        labels.update(0, 'light')
+        labels.update(1, 'light')
+        
+        const layer = mockMap.getLayer('buildings-name')
+        expect(layer.filter).toBeDefined()
+        expect(JSON.stringify(layer.filter)).toContain('1')
+    })
+    
+    test('devrait changer la visibilité', () => {
+        labels.update(0, 'light')
+        
+        labels.setVisibility(false)
+        let layer = mockMap.getLayer('buildings-name')
+        expect(layer.layout.visibility).toBe('none')
+        
+        labels.setVisibility(true)
+        layer = mockMap.getLayer('buildings-name')
+        expect(layer.layout.visibility).toBe('visible')
+    })
+    
+    test('devrait supprimer le layer', () => {
+        labels.update(0, 'light')
+        expect(mockMap.getLayer('buildings-name')).toBeDefined()
+        
+        labels.remove()
+        expect(mockMap.getLayer('buildings-name')).toBeUndefined()
+    })
+    
+    test('devrait retourner le bon ID de layer', () => {
+        expect(labels.getLayerId()).toBe('buildings-name')
+    })
+    
+    test('ne devrait pas créer plusieurs layers lors de mises à jour successives', () => {
+        labels.update(0, 'light')
+        labels.update(1, 'light')
+        labels.update(2, 'dark')
+        
+        const layers = mockMap._getLayers()
+        const labelLayers = Array.from(layers.keys()).filter(id => id === 'buildings-name')
+        expect(labelLayers.length).toBe(1)
+    })
+})
+
+describe('createFeatureLabels', () => {
+    test('devrait créer une instance de FeatureLabels', () => {
+        const mockMap = new MockMap()
+        const labels = createFeatureLabels(mockMap as any)
+        
+        expect(labels).toBeInstanceOf(FeatureLabels)
+    })
+})
+
+describe('Integration tests', () => {
+    test('scénario complet : initialisation, mise à jour, changement de thème', () => {
+        const mockMap = new MockMap()
+        const labels = createFeatureLabels(mockMap as any)
+        
+        // Initialisation
+        labels.update(0, 'light')
+        let layer = mockMap.getLayer('buildings-name')
+        expect(layer).toBeDefined()
+        expect(layer.paint['text-color']).toBe('#111111')
+        
+        // Changement de niveau
+        labels.update(1, 'light')
+        layer = mockMap.getLayer('buildings-name')
+        expect(layer.filter).toBeDefined()
+        
+        // Changement de thème
+        labels.update(1, 'dark')
+        layer = mockMap.getLayer('buildings-name')
+        expect(layer.paint['text-color']).toBe('#f2f2f2')
+        
+        // Masquage
+        labels.setVisibility(false)
+        layer = mockMap.getLayer('buildings-name')
+        expect(layer.layout.visibility).toBe('none')
+        
+        // Nettoyage
+        labels.remove()
+        expect(mockMap.getLayer('buildings-name')).toBeUndefined()
+    })
+})
+
+// ============================================
+// Exemples d'assertions personnalisées
+// ============================================
+
+function assertLayerHasCorrectFilter(layer: any, expectedLevel: number) {
+    expect(layer.filter).toBeDefined()
+    const filterStr = JSON.stringify(layer.filter)
+    expect(filterStr).toContain(String(expectedLevel))
+    expect(filterStr).toContain('level')
+}
+
+function assertLayerHasCorrectStyle(layer: any, theme: 'light' | 'dark') {
+    if (theme === 'light') {
+        expect(layer.paint['text-color']).toBe('#111111')
+        expect(layer.paint['text-halo-color']).toBe('rgba(255,255,255,0.85)')
+    } else {
+        expect(layer.paint['text-color']).toBe('#f2f2f2')
+        expect(layer.paint['text-halo-color']).toBe('rgba(0,0,0,0.9)')
+    }
+    expect(layer.layout['text-size']).toBe(14)
+    expect(layer.paint['text-halo-width']).toBe(1)
+}
+
+test('exemple avec assertions personnalisées', () => {
+    const mockMap = new MockMap()
+    const labels = createFeatureLabels(mockMap as any)
+    
+    labels.update(2, 'dark')
+    
+    const layer = mockMap.getLayer('buildings-name')
+    assertLayerHasCorrectFilter(layer, 2)
+    assertLayerHasCorrectStyle(layer, 'dark')
+})
+
+// Note : Pour utiliser ces tests avec Jest, installez :
+// npm install --save-dev jest @types/jest ts-jest
+// 
+// Et configurez jest.config.js :
+// module.exports = {
+//   preset: 'ts-jest',
+//   testEnvironment: 'node',
+// }

@@ -58,7 +58,13 @@ export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColo
     }
 }
 
+/**
+ * @deprecated Utiliser FeatureLabels à la place (src/map/labels/FeatureLabels.ts)
+ * Cette fonction est maintenue pour compatibilité mais sera supprimée dans une future version
+ */
 export function addNameLayer(map: maplibre.Map, level: number, theme: 'light' | 'dark' = 'light') {
+    console.warn('[addNameLayer] Cette fonction est dépréciée. Utilisez FeatureLabels à la place.')
+
     const textColor = theme === 'dark' ? '#f2f2f2' : '#111111'
     const haloColor = theme === 'dark' ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.85)'
 
@@ -72,7 +78,7 @@ export function addNameLayer(map: maplibre.Map, level: number, theme: 'light' | 
                 'any',
                 ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
                 ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
-            ])
+            ] as any)
         } catch { }
         return
     }
@@ -83,6 +89,6 @@ export function addNameLayer(map: maplibre.Map, level: number, theme: 'light' | 
             'any',
             ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
             ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
-        ]
+        ] as any
     })
 }

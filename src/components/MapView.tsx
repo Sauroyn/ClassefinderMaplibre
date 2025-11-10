@@ -3,7 +3,8 @@ import maplibre from 'maplibre-gl'
 import UserGeolocate from './UserGeolocate'
 import { useNavigationActive } from '../hooks/useNavigationActive'
 import { addBuildingsSource, addCentroidsSource } from '../map/sources'
-import { addFillLayers, addNameLayer } from '../map/layers'
+import { addFillLayers } from '../map/layers'
+import { createFeatureLabels, FeatureLabels } from '../map/labels/FeatureLabels'
 import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
 // Connector styling is now handled by combined covered/remaining layers; no direct import needed
@@ -23,6 +24,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
     const parsedConfigRef = useRef<any | null>(null)
     const navActive = useNavigationActive()
     const followNavMarkerRef = useRef<boolean>(false)
+    // Gestionnaire des labels de features
+    const featureLabelsRef = useRef<FeatureLabels | null>(null)
     // Hover management from Search UI
     const uiHoverIdRef = useRef<number | null>(null)
     const uiHoverIdsRef = useRef<number[] | null>(null)
@@ -177,6 +180,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
             const map = new maplibre.Map({ container: container.current!, style: theme === 'dark' ? darkStyle : lightStyle, center, zoom })
             mapRef.current = map
+                // Exposer la map globalement pour le debug
+                ; (window as any).__debugMap = map
 
             // Attach follow-stop handlers on user interactions (not programmatic easeTo)
             const attachFollowStopHandlers = () => {
@@ -537,7 +542,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 addFillLayers(map, level, cfg, theme)
                 const centroids = generateCentroids(themedData)
                 addCentroidsSource(map, centroids)
-                addNameLayer(map, level, theme)
+                // Initialiser le gestionnaire de labels
+                featureLabelsRef.current = createFeatureLabels(map)
+                featureLabelsRef.current.update(level, theme)
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                 initialized.current = true
             } catch (e) { console.warn('init map sources failed', e) }
@@ -557,7 +564,10 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         try {
             if (map.getLayer('buildings-extrusion')) map.setFilter('buildings-extrusion', filter as any)
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
-            if (map.getLayer('buildings-name')) map.setFilter('buildings-name', filter as any)
+            // Mettre à jour les labels avec le nouveau niveau
+            if (featureLabelsRef.current) {
+                featureLabelsRef.current.update(level, theme)
+            }
             // apply filter to any route-planner layers (IDs like "route-planner-0-line")
             const applyRouteFilterToAll = () => {
                 try {
@@ -802,15 +812,19 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             } catch { }
             try { (map as any).stop?.() } catch { }
             ; (map as any).setStyle(target, { diff: false })
+            console.log('[MapView] setStyle appelé, en attente de style.load')
             map.once('style.load', () => {
+                console.log('[MapView] style.load déclenché')
                 try {
                     // re-add our custom sources/layers if needed
                     const d = latestDataRef.current || data
                     if (!d) return
+                    // We'll keep a normalized/themed copy to reuse for centroids
+                    let themedDataForAll: any = d
                     // add sources if missing
                     if (!map.getSource('buildings')) {
                         // regenerate normalized + themed data
-                        const themed = (() => {
+                        themedDataForAll = (() => {
                             try {
                                 if (d && d.type === 'FeatureCollection') {
                                     const normalized = {
@@ -888,7 +902,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             } catch { }
                             return d
                         })()
-                        addBuildingsSource(map, themed)
+                        addBuildingsSource(map, themedDataForAll)
                     }
                     // layers (derive cfg for dark)
                     const cfg0b = parsedConfigRef.current || undefined
@@ -937,10 +951,25 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         return { ...cfg0b, fillColor: deriveDark(cfg0b.fillColor) }
                     })()
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
-                    // Generate centroids from the current data (already normalized in latestDataRef or data)
-                    const centroids = generateCentroids(d || data || latestDataRef.current)
-                    if (!map.getSource('buildings-centroids')) addCentroidsSource(map, centroids)
-                    addNameLayer(map, (map as any).__currentLevel ?? level, theme)
+                    // Generate centroids from the normalized/themed data to ensure coerced numeric levels
+                    const centroids = generateCentroids(themedDataForAll)
+                    console.log('[MapView] Centroïdes générés:', centroids.features.length, 'features')
+                    if (centroids.features.length > 0) {
+                        console.log('[MapView] Premier centroïde:', centroids.features[0])
+                        console.log('[MapView] Propriétés du premier centroïde:', centroids.features[0].properties)
+                        console.log('[MapView] Propriété name:', centroids.features[0].properties?.name)
+                    }
+                    // Toujours recréer la source centroids après un swap de style (force=true)
+                    addCentroidsSource(map, centroids, true)
+
+                    // Recréer les labels après le swap de style
+                    // IMPORTANT: Ne PAS utiliser requestAnimationFrame car il peut être appelé plusieurs fois
+                    if (!featureLabelsRef.current) {
+                        featureLabelsRef.current = createFeatureLabels(map)
+                    }
+                    console.log('[MapView] Recréation des labels après swap de style')
+                    featureLabelsRef.current.update((map as any).__currentLevel ?? level, theme)
+
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                     // Restore previously drawn route layers/sources (lost during style swap)
                     try {
