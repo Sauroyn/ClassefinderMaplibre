@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { normalizedFeatureId, coerceLevel, findByNormalizedId } from '../utils/featureId'
 import SearchList from './search/SearchList'
 import SearchSelected from './search/SearchSelected'
+import { STORAGE_KEYS, getScopedKey, safeGetItem, safeSetItem } from '../utils/storage'
 
 type Props = {
     data: GeoJSON.FeatureCollection | null
@@ -11,19 +12,6 @@ type Props = {
     onOpenRoutePlanner?: () => void
 }
 
-const BASE_STORAGE_KEY = 'cf:recent_searches'
-const CONFIG_STORAGE_KEY = 'site_config_file'
-
-function getScopedStorageKey() {
-    try {
-        const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
-        const suffix = sel && typeof sel === 'string' ? sel : 'default'
-        return `${BASE_STORAGE_KEY}:${suffix}`
-    } catch (e) {
-        return `${BASE_STORAGE_KEY}:default`
-    }
-}
-
 export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onOpenRoutePlanner }: Props) {
     const [q, setQ] = useState('')
     const [focused, setFocused] = useState(false)
@@ -31,8 +19,8 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     type RecentItem = { id: string | number, name: string, level?: string | number }
     const [recent, setRecent] = useState<RecentItem[]>(() => {
         try {
-            const key = getScopedStorageKey()
-            const raw = JSON.parse(localStorage.getItem(key) || '[]')
+            const key = getScopedKey(STORAGE_KEYS.RECENT_SEARCHES_BASE)
+            const raw = JSON.parse(safeGetItem(key) || '[]')
             if (Array.isArray(raw)) return raw.map((r: any) => typeof r === 'string' ? { id: r, name: r } : { id: r.id ?? r.name, name: r.name, level: r.level })
         } catch (e) { }
         return []
@@ -139,7 +127,8 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         // update recent as objects
         setRecent(r => {
             const next = [{ id: resolved, name, level: lvl }, ...r.filter(x => String(x.id) !== String(resolved))].slice(0, 5)
-            try { const key = getScopedStorageKey(); localStorage.setItem(key, JSON.stringify(next)) } catch { }
+            const key = getScopedKey(STORAGE_KEYS.RECENT_SEARCHES_BASE)
+            safeSetItem(key, JSON.stringify(next))
             return next
         })
         // apply selection

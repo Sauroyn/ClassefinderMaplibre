@@ -21,6 +21,7 @@ import { fitBoundsSmart } from '../map/viewport'
 import { loadGraphFromConfigOrFallback } from '../utils/graph'
 import { findByNormalizedId } from '../utils/featureId'
 import { createProvisionalNode } from '../map/provisionalNode'
+import { getMapInstance, setPaintProperty, setLayoutProperty } from '../utils/mapHelpers'
 
 export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
 
@@ -149,7 +150,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             window.dispatchEvent(new CustomEvent('navigation:dev-set-user-position', { detail: p }))
         }
         // Option 1: listen to maplibre click
-        const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+        const map = getMapInstance(mapRef)
         const onNativeClick = (ev: any) => {
             if (import.meta.env && import.meta.env.DEV !== true) return
             try {
@@ -202,7 +203,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             try {
                 const bounds = e?.detail as [[number, number], [number, number]]
                 if (!bounds || !Array.isArray(bounds[0]) || !Array.isArray(bounds[1])) return
-                const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                const map = getMapInstance(mapRef)
                 if (map) fitBoundsSmart(map, bounds)
             } catch { }
         }
@@ -431,7 +432,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
 
     // route selector UI helpers: highlight route on map when hovering an item
     function highlightRouteLayer(layerId: string | null) {
-        const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
+        const map = getMapInstance(mapRef)
         if (!map) return
         // reset all route layers to default opacity and width
         const primaryCovered = 'route-planner-0-covered-line'
@@ -440,13 +441,13 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             const isPrimary = r.layerId === 'route-planner-0-line'
             const isSelected = r.layerId === layerId
             if (isPrimary) {
-                try { map.setPaintProperty(primaryCovered, 'line-width', isSelected ? 22 : 18) } catch { }
-                try { map.setPaintProperty(primaryRemaining, 'line-width', isSelected ? 18 : 18) } catch { }
-                try { map.setPaintProperty(primaryCovered, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
-                try { map.setPaintProperty(primaryRemaining, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
+                setPaintProperty(map, primaryCovered, 'line-width', isSelected ? 22 : 18)
+                setPaintProperty(map, primaryRemaining, 'line-width', isSelected ? 18 : 18)
+                setPaintProperty(map, primaryCovered, 'line-opacity', isSelected ? 1 : 0.6)
+                setPaintProperty(map, primaryRemaining, 'line-opacity', isSelected ? 1 : 0.6)
             } else {
-                try { map.setPaintProperty(r.layerId, 'line-width', isSelected ? 22 : 12) } catch { }
-                try { map.setPaintProperty(r.layerId, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
+                setPaintProperty(map, r.layerId, 'line-width', isSelected ? 22 : 12)
+                setPaintProperty(map, r.layerId, 'line-opacity', isSelected ? 1 : 0.6)
             }
         })
     }
@@ -554,29 +555,22 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         setMobileRoutesOpen(false)
                         setDetailsOpen(true)
                         // hide other routes on map leaving only selected
-                        try {
-                            const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                        const map = getMapInstance(mapRef)
+                        if (map) {
                             const primaryCovered = 'route-planner-0-covered-line'
                             const primaryRemaining = 'route-planner-0-remaining-line'
                             routes.forEach((r) => {
                                 const isPrimary = r.layerId === 'route-planner-0-line'
-                                if (r.layerId !== rt.layerId) {
-                                    if (isPrimary) {
-                                        try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'none') } catch { }
-                                        try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'none') } catch { }
-                                    } else {
-                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
-                                    }
+                                const visibility = r.layerId === rt.layerId ? 'visible' : 'none'
+
+                                if (isPrimary) {
+                                    setLayoutProperty(map, primaryCovered, 'visibility', visibility)
+                                    setLayoutProperty(map, primaryRemaining, 'visibility', visibility)
                                 } else {
-                                    if (isPrimary) {
-                                        try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'visible') } catch { }
-                                        try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'visible') } catch { }
-                                    } else {
-                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
-                                    }
+                                    setLayoutProperty(map, r.layerId, 'visibility', visibility)
                                 }
                             })
-                        } catch { }
+                        }
                     }}
                 />
             )}

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import publicConfigs from 'virtual:public-configs'
-
-const STORAGE_KEY = 'site_config_file'
+import { STORAGE_KEYS, safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage'
 
 const ConfigSelector: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
-    const [selected, setSelected] = useState<string | null>(typeof window !== 'undefined' ? (localStorage.getItem(STORAGE_KEY) || null) : null);
+    const [selected, setSelected] = useState<string | null>(
+        typeof window !== 'undefined' ? safeGetItem(STORAGE_KEYS.CONFIG_FILE) : null
+    );
     const [files, setFiles] = useState<string[]>([])
 
     useEffect(() => {
@@ -24,10 +25,11 @@ const ConfigSelector: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
                     onChange={(e) => {
                         const v = e.target.value || null
                         setSelected(v)
-                        try {
-                            if (v) localStorage.setItem(STORAGE_KEY, v)
-                            else localStorage.removeItem(STORAGE_KEY)
-                        } catch (e) { }
+                        if (v) {
+                            safeSetItem(STORAGE_KEYS.CONFIG_FILE, v)
+                        } else {
+                            safeRemoveItem(STORAGE_KEYS.CONFIG_FILE)
+                        }
                         window.location.reload()
                     }}
                 >
