@@ -1,5 +1,10 @@
-// Centralized localStorage keys and config key
-export const CONFIG_STORAGE_KEY = 'site_config_file'
-export const ICAL_URL_KEY = 'cf:ical_url'
-export const TRAVEL_BUFFER_MIN_KEY = 'cf:travel_buffer_min'
-export const EVENTS_ENABLED_KEY = 'cf:events_enabled'
+/**
+ * @deprecated Use STORAGE_KEYS from './storage' instead
+ * Kept for backwards compatibility
+ */
+import { STORAGE_KEYS } from './storage'
+
+export const CONFIG_STORAGE_KEY = STORAGE_KEYS.CONFIG_FILE
+export const ICAL_URL_KEY = STORAGE_KEYS.ICAL_URL
+export const TRAVEL_BUFFER_MIN_KEY = STORAGE_KEYS.TRAVEL_BUFFER_MIN
+export const EVENTS_ENABLED_KEY = STORAGE_KEYS.EVENTS_ENABLED
