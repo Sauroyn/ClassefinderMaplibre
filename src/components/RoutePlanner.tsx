@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import ConfirmStartModal from './route-planner/ConfirmStartModal'
 import Toast from './route-planner/Toast'
 import GroupedResultsMenu from './search/GroupedResultsMenu'
@@ -22,36 +22,52 @@ import { loadGraphFromConfigOrFallback } from '../utils/graph'
 import { findByNormalizedId } from '../utils/featureId'
 import { createProvisionalNode } from '../map/provisionalNode'
 import { getMapInstance, setPaintProperty, setLayoutProperty } from '../utils/mapHelpers'
+import { useRoutePlannerState } from '../hooks/useRoutePlannerState'
 
 export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
 
-    // Bloc unique de hooks d'état
-    const [graph, setGraph] = useState<Graph | null>(null)
-    const [start, setStart] = useState<string>('')
-    const [end, setEnd] = useState<string>('')
-    const [nodeOptions, setNodeOptions] = useState<Array<{ id: string, name: string, level?: string }>>([])
-    const [startQuery, setStartQuery] = useState<string>('')
-    const [endQuery, setEndQuery] = useState<string>('')
-    const [focusedField, setFocusedField] = useState<'start' | 'end' | null>(null)
-    const [routes, setRoutes] = useState<Array<any>>([])
-    const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null)
-    const [excludeStairs, setExcludeStairs] = useState<boolean>(false)
-    const [coveredOnly, setCoveredOnly] = useState<boolean>(false)
-    const [showSecondary, setShowSecondary] = useState<boolean>(true)
-    const [showSettings, setShowSettings] = useState<boolean>(false)
-    const [isMobile] = useState<boolean>(() => isMobileViewport())
-    const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false)
-    const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
-    const [detailsOpen, setDetailsOpen] = useState(false)
-    const [navigationActive, setNavigationActive] = useState(false)
-    const [confirmOpen, setConfirmOpen] = useState(false)
-    const [confirmDistance, setConfirmDistance] = useState(0)
-    const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
-    const [toastMessage, setToastMessage] = useState<string | null>(null)
-    const [_provisionalNodes, setProvisionalNodes] = useState<Map<string, any>>(new Map())
-    const [groupMenuField, setGroupMenuField] = useState<'start' | 'end' | null>(null)
-    const [groupMenuTitle, setGroupMenuTitle] = useState<string>('')
-    const [groupMenuItems, setGroupMenuItems] = useState<Array<{ id: string, name: string, level?: string }>>([])
+    // Unified state management with useReducer
+    const [state, dispatch] = useRoutePlannerState(isMobileViewport())
+
+    // Destructure state for easier access
+    const {
+        graph,
+        input: { start, end, startQuery, endQuery, focusedField },
+        routes: { list: routes, highlighted: highlightedRoute, selected: selectedRoute },
+        settings: { excludeStairs, coveredOnly, showSecondary, showSettings },
+        ui: { isMobile, mobileRoutesOpen, detailsOpen },
+        navigation: { active: navigationActive, confirmOpen, confirmDistance, confirmUserCoord },
+        suggestions: { nodeOptions, groupMenuField, groupMenuTitle, groupMenuItems },
+        toastMessage
+    } = state
+
+    // Helper functions to update state (wrapper around dispatch for cleaner code)
+    // Removed unused setGraph helper (direct dispatch used where needed)
+    const setStart = (payload: string) => dispatch({ type: 'SET_START', payload })
+    const setEnd = (payload: string) => dispatch({ type: 'SET_END', payload })
+    const setStartQuery = (payload: string) => dispatch({ type: 'SET_START_QUERY', payload })
+    const setEndQuery = (payload: string) => dispatch({ type: 'SET_END_QUERY', payload })
+    const setFocusedField = (payload: 'start' | 'end' | null) => dispatch({ type: 'SET_FOCUSED_FIELD', payload })
+    const setRoutes = (payload: Array<any>) => dispatch({ type: 'SET_ROUTES', payload })
+    const setHighlightedRoute = (payload: string | null) => dispatch({ type: 'SET_HIGHLIGHTED_ROUTE', payload })
+    const setSelectedRoute = (payload: any | null) => dispatch({ type: 'SET_SELECTED_ROUTE', payload })
+    const setMobileRoutesOpen = (payload: boolean) => dispatch({ type: 'SET_MOBILE_ROUTES_OPEN', payload })
+    const setDetailsOpen = (payload: boolean) => dispatch({ type: 'SET_DETAILS_OPEN', payload })
+    const setNavigationActive = (payload: boolean) => dispatch({ type: 'SET_NAVIGATION_ACTIVE', payload })
+    const setConfirmOpen = (payload: boolean) => dispatch({ type: 'SET_CONFIRM_OPEN', payload })
+    const setConfirmDistance = (payload: number) => dispatch({ type: 'SET_CONFIRM_DISTANCE', payload })
+    const setConfirmUserCoord = (payload: [number, number] | null) => dispatch({ type: 'SET_CONFIRM_USER_COORD', payload })
+    const setToastMessage = (payload: string | null) => dispatch({ type: 'SET_TOAST_MESSAGE', payload })
+    const setProvisionalNodes = (payload: Map<string, any>) => dispatch({ type: 'SET_PROVISIONAL_NODES', payload })
+    const setExcludeStairs = () => dispatch({ type: 'TOGGLE_EXCLUDE_STAIRS' })
+    const setCoveredOnly = () => dispatch({ type: 'TOGGLE_COVERED_ONLY' })
+    const setShowSecondary = () => dispatch({ type: 'TOGGLE_SHOW_SECONDARY' })
+    const setShowSettings = (payload: boolean) => dispatch({ type: 'SET_SHOW_SETTINGS', payload: payload })
+    const setGroupMenuField = (payload: 'start' | 'end' | null) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: payload, title: groupMenuTitle, items: groupMenuItems } })
+    const setGroupMenuTitle = (title: string) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title, items: groupMenuItems } })
+    const setGroupMenuItems = (items: Array<{ id: string; name: string; level?: string }>) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title: groupMenuTitle, items } })
+    // setGroupMenu & clearGroupMenu helpers removed (unused); individual setters retained
+
     // Keep the last computed workingGraph (with provisional nodes) so we can reuse it for onAdjust
     const workingGraphRef = useRef<Graph | null>(null)
 
@@ -62,7 +78,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             try {
                 const g = await loadGraphFromConfigOrFallback()
                 if (g) {
-                    setGraph(g)
+                    dispatch({ type: 'SET_GRAPH', payload: g })
                     // Build node options for autocomplete
                     const opts = g.nodes.map((n: any) => ({
                         id: String(n.id),
@@ -97,16 +113,16 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         }
                     }
 
-                    setNodeOptions(opts)
+                    dispatch({ type: 'SET_NODE_OPTIONS', payload: opts })
 
                     // Initialize start/end if provided
                     if (initialStartId && initialStartName) {
-                        setStart(initialStartId)
-                        setStartQuery(initialStartName)
+                        dispatch({ type: 'SET_START', payload: initialStartId })
+                        dispatch({ type: 'SET_START_QUERY', payload: initialStartName })
                     }
                     if (initialEndId && initialEndName) {
-                        setEnd(initialEndId)
-                        setEndQuery(initialEndName)
+                        dispatch({ type: 'SET_END', payload: initialEndId })
+                        dispatch({ type: 'SET_END_QUERY', payload: initialEndName })
                     }
                     // Handle initialDestination if provided
                     if (initialDestination) {
@@ -114,8 +130,8 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         const fid = initialDestination.id ?? initialDestination.properties?.id ?? name
                         const match = opts.find((n: any) => String(n.id) === String(fid) || String((n.name || '')).toLowerCase() === String(name).toLowerCase())
                         const setId = match ? String(match.id) : String(fid)
-                        setEnd(setId)
-                        setEndQuery(String(match?.name ?? name))
+                        dispatch({ type: 'SET_END', payload: setId })
+                        dispatch({ type: 'SET_END_QUERY', payload: String(match?.name ?? name) })
                     }
                 }
             } catch (err) {
@@ -128,14 +144,19 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     // Gestion du bouton retour sur le menu de détails mobile
     useEffect(() => {
         function onBack() {
-            setDetailsOpen(false)
-            setMobileRoutesOpen(true)
+            dispatch({ type: 'SET_DETAILS_OPEN', payload: false })
+            dispatch({ type: 'SET_MOBILE_ROUTES_OPEN', payload: true })
         }
         window.addEventListener('route-details-back', onBack)
         return () => window.removeEventListener('route-details-back', onBack)
     }, [])
+
     // Contrôleur de navigation (mobile)
-    const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false), mapRef)
+    const nav = useNavigationController(
+        state.navigation.active ? state.routes.selected : null,
+        () => dispatch({ type: 'SET_NAVIGATION_ACTIVE', payload: false }),
+        mapRef
+    )
 
     // Dev-only override: click on map sets user position when navigating
     useEffect(() => {
@@ -468,7 +489,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             <div style={{ position: 'relative', marginBottom: 6 }}>
                 {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
-                <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
+                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
                 <Inputs

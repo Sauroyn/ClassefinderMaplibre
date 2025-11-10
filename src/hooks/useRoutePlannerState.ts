@@ -85,6 +85,7 @@ export type RoutePlannerAction =
     | { type: 'TOGGLE_COVERED_ONLY' }
     | { type: 'TOGGLE_SHOW_SECONDARY' }
     | { type: 'TOGGLE_SHOW_SETTINGS' }
+    | { type: 'SET_SHOW_SETTINGS'; payload: boolean }
     | { type: 'SET_MOBILE_ROUTES_OPEN'; payload: boolean }
     | { type: 'SET_DETAILS_OPEN'; payload: boolean }
     | { type: 'SET_NAVIGATION_ACTIVE'; payload: boolean }
@@ -197,6 +198,9 @@ const routePlannerReducer: Reducer<RoutePlannerState, RoutePlannerAction> = (
 
         case 'TOGGLE_SHOW_SETTINGS':
             return { ...state, settings: { ...state.settings, showSettings: !state.settings.showSettings } }
+
+        case 'SET_SHOW_SETTINGS':
+            return { ...state, settings: { ...state.settings, showSettings: action.payload } }
 
         case 'SET_MOBILE_ROUTES_OPEN':
             return { ...state, ui: { ...state.ui, mobileRoutesOpen: action.payload } }
