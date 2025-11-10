@@ -607,21 +607,21 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                                         const isPrimary = r.layerId === 'route-planner-0-line'
                                         if (selectedRoute && r.layerId === selectedRoute.layerId) {
                                             if (isPrimary) {
-                                                try { map.setPaintProperty?.(primaryCovered, 'line-width', 20) } catch { }
-                                                try { map.setPaintProperty?.(primaryRemaining, 'line-width', 18) } catch { }
-                                                try { map.setLayoutProperty?.(primaryCovered, 'visibility', 'visible') } catch { }
-                                                try { map.setLayoutProperty?.(primaryRemaining, 'visibility', 'visible') } catch { }
+                                                setPaintProperty(map, primaryCovered, 'line-width', 20)
+                                                setPaintProperty(map, primaryRemaining, 'line-width', 18)
+                                                setLayoutProperty(map, primaryCovered, 'visibility', 'visible')
+                                                setLayoutProperty(map, primaryRemaining, 'visibility', 'visible')
                                             } else {
-                                                try { map.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
-                                                try { map.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
-                                                try { map.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
+                                                setPaintProperty(map, r.layerId, 'line-opacity', 1)
+                                                setPaintProperty(map, r.layerId, 'line-width', 20)
+                                                setLayoutProperty(map, r.layerId, 'visibility', 'visible')
                                             }
                                         } else {
                                             if (isPrimary) {
-                                                try { map.setLayoutProperty?.(primaryCovered, 'visibility', 'none') } catch { }
-                                                try { map.setLayoutProperty?.(primaryRemaining, 'visibility', 'none') } catch { }
+                                                setLayoutProperty(map, primaryCovered, 'visibility', 'none')
+                                                setLayoutProperty(map, primaryRemaining, 'visibility', 'none')
                                             } else {
-                                                try { map.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                                setLayoutProperty(map, r.layerId, 'visibility', 'none')
                                             }
                                         }
                                     })

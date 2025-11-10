@@ -13,7 +13,8 @@ import { haversine } from '../map/measure'
 import { normalizeFeatureCollection } from '../utils/featureNormalization'
 import { deriveDarkColor } from '../utils/colors'
 import { STORAGE_KEYS } from '../utils/storage'
-import { removeLayer, removeSource, getLayersWithPrefix, getSourcesWithPrefix } from '../utils/mapHelpers'
+import { removeLayer, removeSource, getLayersWithPrefix, getSourcesWithPrefix, setFeatureState, setFilter } from '../utils/mapHelpers'
+import { getMapStyleUrl } from '../utils/mapStyles'
 
 type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
 
@@ -178,9 +179,12 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 }
             } catch (e) { /* ignore localStorage errors */ }
 
-            const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const map = new maplibre.Map({ container: container.current!, style: theme === 'dark' ? darkStyle : lightStyle, center, zoom })
+            const map = new maplibre.Map({
+                container: container.current!,
+                style: getMapStyleUrl(theme),
+                center,
+                zoom
+            })
             mapRef.current = map
                 // Exposer la map globalement pour le debug
                 ; (window as any).__debugMap = map
@@ -220,17 +224,17 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 const setHover = (id: number | null) => {
                     try {
                         if (uiHoverIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHoverIdRef.current }, { hover: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHoverIdRef.current, { hover: false })
                         }
                         // clear any previous multi-hover
                         if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
                             for (const pid of uiHoverIdsRef.current) {
-                                try { map.setFeatureState({ source: 'buildings', id: pid }, { hover: false }) } catch { }
+                                setFeatureState(map, 'buildings', pid, { hover: false })
                             }
                             uiHoverIdsRef.current = null
                         }
                         if (id != null) {
-                            try { map.setFeatureState({ source: 'buildings', id }, { hover: true }) } catch { }
+                            setFeatureState(map, 'buildings', id, { hover: true })
                         }
                         uiHoverIdRef.current = id
                     } catch { }
@@ -239,13 +243,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     try {
                         // clear previous single
                         if (uiHoverIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHoverIdRef.current }, { hover: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHoverIdRef.current, { hover: false })
                             uiHoverIdRef.current = null
                         }
                         // clear previous many
                         if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
                             for (const pid of uiHoverIdsRef.current) {
-                                try { map.setFeatureState({ source: 'buildings', id: pid }, { hover: false }) } catch { }
+                                setFeatureState(map, 'buildings', pid, { hover: false })
                             }
                         }
                         uiHoverIdsRef.current = null
@@ -255,7 +259,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                 const n = parseInt(String(raw), 10)
                                 const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
                                 if (id != null) {
-                                    try { map.setFeatureState({ source: 'buildings', id }, { hover: true }) } catch { }
+                                    setFeatureState(map, 'buildings', id, { hover: true })
                                     out.push(id as number)
                                 }
                             }
@@ -286,14 +290,14 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         if (!map) return
                         // Clear previous highlight
                         if (uiHighlightIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHighlightIdRef.current }, { highlight: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHighlightIdRef.current, { highlight: false })
                         }
                         // Set new highlight
                         const raw = e?.detail
                         const n = parseInt(String(raw), 10)
                         const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
                         if (id != null) {
-                            try { map.setFeatureState({ source: 'buildings', id }, { highlight: true }) } catch { }
+                            setFeatureState(map, 'buildings', id, { highlight: true })
                             uiHighlightIdRef.current = id as number
                         } else {
                             uiHighlightIdRef.current = null
@@ -305,7 +309,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         const map = mapRef.current
                         if (!map) return
                         if (uiHighlightIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHighlightIdRef.current }, { highlight: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHighlightIdRef.current, { highlight: false })
                             uiHighlightIdRef.current = null
                         }
                     } catch { }
@@ -467,7 +471,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     ]
                     for (const lyr of layers) {
                         if (lyr && typeof lyr.id === 'string' && lyr.id.startsWith('route-planner-')) {
-                            try { map.setFilter(lyr.id, routeFilter as any) } catch (e) { }
+                            setFilter(map, lyr.id, routeFilter as any)
                         }
                     }
                 } catch (e) { }
@@ -590,8 +594,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             // ensure feature-state selection is applied
             try {
                 const all = map.querySourceFeatures('buildings') || []
-                for (const f of all) try { map.setFeatureState({ source: 'buildings', id: f.id }, { selected: false, hover: false }) } catch (e) { }
-                try { map.setFeatureState({ source: 'buildings', id }, { selected: true }) } catch (e) { }
+                for (const f of all) setFeatureState(map, 'buildings', f.id as number, { selected: false, hover: false })
+                setFeatureState(map, 'buildings', id, { selected: true })
             } catch (e) { }
         }
         ,
@@ -617,7 +621,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             // try to unset any selected feature state by querying source features
             try {
                 const features = map.querySourceFeatures('buildings')
-                for (const f of features) try { map.setFeatureState({ source: 'buildings', id: f.id }, { selected: false, hover: false }) } catch (e) { }
+                for (const f of features) setFeatureState(map, 'buildings', f.id as number, { selected: false, hover: false })
             } catch (e) { }
         }
         ,
@@ -670,9 +674,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             if ((map as any)[swappingKey]) return
                 ; (map as any)[swappingKey] = true
 
-            const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const target = theme === 'dark' ? darkStyle : lightStyle
+            const target = getMapStyleUrl(theme)
             // Always setStyle; preserve camera
             const cam = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }
             // Snapshot current route sources' data so we can restore them after the style reload
@@ -769,7 +771,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                     map.addLayer({ id: layerId, type: 'line', source: saved.id, paint, layout: { 'line-cap': 'round', 'line-join': 'round' } })
                                 }
                             } catch { }
-                            try { if (map.getLayer(layerId)) map.setFilter(layerId, routeFilter) } catch { }
+                            setFilter(map, layerId, routeFilter)
                         }
                         // Primary route is now split into covered/remaining; ordering handled when drawing
                     } catch { }
