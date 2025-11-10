@@ -59,9 +59,25 @@ export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColo
 }
 
 export function addNameLayer(map: maplibre.Map, level: number, theme: 'light' | 'dark' = 'light') {
-    if (map.getLayer('buildings-name')) return
     const textColor = theme === 'dark' ? '#f2f2f2' : '#111111'
     const haloColor = theme === 'dark' ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.85)'
+
+    // If layer exists, update colors for theme change
+    if (map.getLayer('buildings-name')) {
+        map.setPaintProperty('buildings-name', 'text-color', textColor)
+        map.setPaintProperty('buildings-name', 'text-halo-color', haloColor)
+        // Also ensure the filter matches the requested level after a theme/style swap
+        try {
+            map.setFilter('buildings-name', [
+                'any',
+                ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
+            ])
+        } catch { }
+        return
+    }
+
+    // Otherwise create the layer
     map.addLayer({
         id: 'buildings-name', type: 'symbol', source: 'buildings-centroids', layout: { 'text-field': ['get', 'name'], 'text-size': 14, 'text-anchor': 'center' }, paint: { 'text-color': textColor, 'text-halo-color': haloColor, 'text-halo-width': 1 }, filter: [
             'any',

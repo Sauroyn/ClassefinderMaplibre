@@ -1,4 +1,5 @@
 import { haversine } from './measure'
+import { lineIntersectsFeature, pointInFeature } from './geometry'
 import type { Graph } from '../components/route-planner/utils'
 
 /**
@@ -114,11 +115,17 @@ function closestPointOnSegment(
 /**
  * Find the closest point on any edge in the graph with the same level
  * Returns the edge, the closest point on it, the distance, and whether we need a new node
+ * 
+ * Constraints:
+ * - Do NOT connect to nodes that have a name (risk of going through walls)
+ * - Prefer edges where the connection line doesn't cross other features
  */
 export function findClosestPointOnGraph(
     graph: Graph,
     coord: [number, number],
-    targetLevel: number | string | null
+    targetLevel: number | string | null,
+    sourceFeature?: any,  // The feature we're connecting from
+    allFeatures?: any[]   // All features to check for intersections
 ): {
     edgeId: string;
     closestPoint: [number, number];
@@ -156,7 +163,6 @@ export function findClosestPointOnGraph(
         )
 
         if (result.distance < bestDistance) {
-            bestDistance = result.distance
             const [x1, y1] = fromNode.coord as [number, number]
             const [x2, y2] = toNode.coord as [number, number]
             const dx = x2 - x1
@@ -173,6 +179,50 @@ export function findClosestPointOnGraph(
             const distToTo = haversine(result.point, toNode.coord as [number, number])
             const threshold = 0.5 // meters
 
+            // Check if nodes have names (for constraint checking)
+            const fromHasName = fromNode.name && typeof fromNode.name === 'string' && fromNode.name.trim().length > 0
+            const toHasName = toNode.name && typeof toNode.name === 'string' && toNode.name.trim().length > 0
+
+            // CONSTRAINT 2: Check if connection line crosses other features
+            let crossesOtherFeatures = false
+            if (allFeatures && sourceFeature) {
+                const connectionLine: [number, number] = coord
+                const targetPoint: [number, number] = result.point
+
+                for (const feat of allFeatures) {
+                    // Skip the source feature itself
+                    if (feat === sourceFeature) continue
+
+                    // Skip features on different levels
+                    const featLevel = feat.properties?.level ??
+                        (Array.isArray(feat.properties?.levels) && feat.properties.levels.length > 0
+                            ? feat.properties.levels[0]
+                            : null)
+
+                    if (featLevel != null && targetLevel != null && String(featLevel) !== String(targetLevel)) {
+                        continue
+                    }
+
+                    // Check if the connection line intersects this feature
+                    if (lineIntersectsFeature(connectionLine, targetPoint, feat)) {
+                        // Additional check: if the target point is inside this feature, it's OK
+                        // (we might be connecting to an adjacent corridor)
+                        if (!pointInFeature(targetPoint, feat)) {
+                            crossesOtherFeatures = true
+                            break
+                        }
+                    }
+                }
+            }
+
+            // Skip this edge if it crosses other features
+            if (crossesOtherFeatures) continue
+
+            // CONSTRAINT 1: If the closest point is on a named node, skip it (risk of wall crossing)
+            if (distToFrom < threshold && fromHasName) continue
+            if (distToTo < threshold && toHasName) continue
+
+            bestDistance = result.distance
             bestResult = {
                 edgeId: String(edge.id),
                 closestPoint: result.point,
@@ -234,12 +284,14 @@ export function findClosestNodeWithLevel(
 export function createProvisionalNode(
     feature: any,
     graph: Graph,
-    provisionalId: string
+    provisionalId: string,
+    allFeatures?: any[]  // All features to check for intersections
 ): {
     node: any;
     connectionEdges: any[];
     level: number | string | null;
     intermediateNode?: any; // Node created on edge if needed
+    edgeToRemove?: string; // ID of the original edge to remove if split
 } | null {
     // Calculate centroid
     const centroid = calculateFeatureCentroid(feature)
@@ -248,8 +300,8 @@ export function createProvisionalNode(
     // Extract level
     const level = extractFeatureLevel(feature)
 
-    // Find closest point on graph (edge or node)
-    const closest = findClosestPointOnGraph(graph, centroid, level)
+    // Find closest point on graph (edge or node), passing feature and all features for intersection check
+    const closest = findClosestPointOnGraph(graph, centroid, level, feature, allFeatures)
     if (!closest) return null
 
     // Create provisional node at feature centroid
@@ -410,6 +462,7 @@ export function createProvisionalNode(
         node,
         connectionEdges: edges,
         level,
-        intermediateNode
+        intermediateNode,
+        edgeToRemove: closest.needsNewNode ? closest.edgeId : undefined
     }
 }

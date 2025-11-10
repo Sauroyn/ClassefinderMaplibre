@@ -199,6 +199,7 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                             arcCount = 0
                         }
                         // 3. Virages classiques
+                        // Convention: delta > 0 => rotation anti-horaire (gauche) si bearings augmentent en sens trigonométrique
                         let typ: string | null = null
                         if (abs >= NORMAL_TURN_MIN_DEG) typ = (delta > 0 ? 'turn-left' : 'turn-right')
                         else if (abs >= SLIGHT_TURN_MIN_DEG) typ = (delta > 0 ? 'turn-slight-left' : 'turn-slight-right')

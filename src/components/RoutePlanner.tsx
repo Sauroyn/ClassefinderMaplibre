@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ConfirmStartModal from './route-planner/ConfirmStartModal'
 import Toast from './route-planner/Toast'
+import GroupedResultsMenu from './search/GroupedResultsMenu'
 
 import { getUserStartDistance } from './route-planner/getStartProximity'
 import { computeAndDrawRoute } from '../map/computeRoute'
@@ -47,6 +48,12 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
     const [toastMessage, setToastMessage] = useState<string | null>(null)
     const [_provisionalNodes, setProvisionalNodes] = useState<Map<string, any>>(new Map())
+    const [groupMenuField, setGroupMenuField] = useState<'start' | 'end' | null>(null)
+    const [groupMenuTitle, setGroupMenuTitle] = useState<string>('')
+    const [groupMenuItems, setGroupMenuItems] = useState<Array<{ id: string, name: string, level?: string }>>([])
+    // Keep the last computed workingGraph (with provisional nodes) so we can reuse it for onAdjust
+    const workingGraphRef = useRef<Graph | null>(null)
+
 
     // Load graph and populate nodeOptions at mount
     useEffect(() => {
@@ -76,7 +83,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                             if (nodeNames.has(nameLower)) continue // Already has a node
 
                             // This feature has a name but no corresponding node
-                            // Add it as a provisional option
+                            // Add it as a provisional option (allow multiple features with same name)
                             const level = feat.properties?.level ?? (Array.isArray(feat.properties?.levels) && feat.properties.levels.length > 0 ? feat.properties.levels[0] : null)
                             opts.push({
                                 id: `PROVISIONAL_${i}`,
@@ -85,7 +92,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                                 provisional: true,
                                 featureIndex: i
                             } as any)
-                            nodeNames.add(nameLower)
+                            // Don't add to nodeNames - allow duplicates for grouped selection
                         }
                     }
 
@@ -254,6 +261,10 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             if (s.startsWith('PROVISIONAL_') || e.startsWith('PROVISIONAL_')) {
                 workingGraph = { ...graph, nodes: [...graph.nodes], edges: [...graph.edges] }
 
+                const edgesToRemove: Array<{ from: string; to: string }> = []
+                const provisionalsList: any[] = []
+
+                // First pass: create all provisional nodes and collect info
                 for (const id of [s, e]) {
                     if (!id.startsWith('PROVISIONAL_')) continue
 
@@ -264,11 +275,48 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     const feature = findByNormalizedId(data, opt.featureIndex)
                     if (!feature) continue
 
-                    // Create provisional node
-                    const provisional = createProvisionalNode(feature, graph, id)
+                    // Create provisional node, passing all features for intersection checking
+                    const allFeatures = data.features as any[]
+                    const provisional = createProvisionalNode(feature, graph, id, allFeatures)
                     if (!provisional) continue
 
-                    // Add to working graph
+                    provisionalsList.push(provisional)
+
+                    // Collect edges to remove if intermediate node was created
+                    if (provisional.intermediateNode && provisional.edgeToRemove) {
+                        const splitEdge = provisional.connectionEdges.find((e: any) =>
+                            e.id && e.id.includes('-split-1') && !e.id.includes('-reverse')
+                        )
+
+                        if (splitEdge) {
+                            const fromNodeId = splitEdge.from
+                            const toNodeId = provisional.connectionEdges.find((e: any) =>
+                                e.id && e.id.includes('-split-2') && !e.id.includes('-reverse')
+                            )?.to
+
+                            if (toNodeId) {
+                                edgesToRemove.push({ from: String(fromNodeId), to: String(toNodeId) })
+                            }
+                        }
+                    }
+
+                    newProvisionalNodes.set(id, provisional)
+                    hasProvisional = true
+                }
+
+                // Second pass: remove original edges that were split
+                if (edgesToRemove.length > 0) {
+                    workingGraph.edges = workingGraph.edges.filter((e: any) => {
+                        // Check if this edge matches any edge to remove
+                        return !edgesToRemove.some(toRemove =>
+                            (String(e.from) === toRemove.from && String(e.to) === toRemove.to) ||
+                            (String(e.from) === toRemove.to && String(e.to) === toRemove.from)
+                        )
+                    })
+                }
+
+                // Third pass: add all new nodes and edges
+                for (const provisional of provisionalsList) {
                     workingGraph.nodes.push(provisional.node)
                     if (provisional.intermediateNode) {
                         workingGraph.nodes.push(provisional.intermediateNode)
@@ -276,16 +324,13 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     for (const edge of provisional.connectionEdges) {
                         workingGraph.edges.push(edge)
                     }
-
-                    newProvisionalNodes.set(id, provisional)
-                    hasProvisional = true
                 }
 
                 setProvisionalNodes(newProvisionalNodes)
-            }
-
-            const k = showSecondary ? 3 : 1
+            } const k = showSecondary ? 3 : 1
             const res = await computeAndDrawRoute({ graph: workingGraph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k, userOriginLngLat: userCoord || undefined })
+            // Save the working graph (with any provisional nodes) for follow-up actions like onAdjust
+            try { workingGraphRef.current = workingGraph as any } catch { }
             if (res && res.routes) {
                 setRoutes(res.routes)
                 if (isMobile) {
@@ -304,7 +349,9 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
 
     // trigger compute automatically when both start and end IDs are present
     useEffect(() => {
+        console.log('[RoutePlanner] useEffect compute trigger:', { graph: !!graph, start, end })
         if (graph && start && end) {
+            console.log('[RoutePlanner] Calling compute()')
             compute()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -318,8 +365,20 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             const name = feat.properties?.name ?? feat.properties?.title ?? feat.id
             const fid = feat.id ?? feat.properties?.id ?? name
 
-            // try to find a matching node in the parsed graph by name or id (case-insensitive)
-            const match = nodeOptions.find(n => String(n.id) === String(fid) || String((n.name || '')).toLowerCase() === String(name).toLowerCase())
+            // Try to find exact match by feature ID (important for provisional nodes with duplicate names)
+            // feat.id is the normalized index from MapView, so we can match PROVISIONAL_{index}
+            let match = nodeOptions.find(n => String(n.id) === String(fid))
+
+            // If no exact match, try provisional ID pattern (PROVISIONAL_{index})
+            if (!match && typeof fid === 'number') {
+                const provisionalId = `PROVISIONAL_${fid}`
+                match = nodeOptions.find(n => n.id === provisionalId)
+            }
+
+            // Fallback: match by name (only if no exact ID match found)
+            if (!match) {
+                match = nodeOptions.find(n => String((n.name || '')).toLowerCase() === String(name).toLowerCase())
+            }
 
             if (focusedField === 'start') {
                 // if we matched a graph node, set its id; otherwise set raw feature id
@@ -364,13 +423,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                 }
                 return
             }
-            // if planner is open but no focused field and no start/end selected, set end to matched node if possible
-            if (!focusedField && !start && !end) {
-                const setId = match ? String(match.id) : String(fid)
-                setEnd(setId); setEndQuery(String(match?.name ?? name));
-                return
-            }
-            // otherwise ignore here (SearchBar handles non-planner clicks)
+            // If no field is focused, ignore (let SearchBar handle the click)
         }
         window.addEventListener('map:feature-click', onMapFeatureClick as any)
         return () => { window.removeEventListener('map:feature-click', onMapFeatureClick as any) }
@@ -454,6 +507,12 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         nodeOptions={nodeOptions}
                         onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }}
                         onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }}
+                        onRequestGroup={(field, name, items) => {
+                            setGroupMenuField(field)
+                            setGroupMenuTitle(name)
+                            setGroupMenuItems(items)
+                            setFocusedField(null)
+                        }}
                     />
                     {/* Liste visible seulement si détail non ouvert */}
                     {!isMobile && routes && routes.length > 0 && !detailsOpen && (
@@ -598,11 +657,16 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     onCancel={() => { setConfirmOpen(false); setNavigationActive(false); setDetailsOpen(true) }}
                     onAdjust={async () => {
                         try {
+                            console.log('[RoutePlanner] onAdjust: starting', { confirmUserCoord, graph: !!graph, selectedRoute: !!selectedRoute })
                             const user = confirmUserCoord
                             setConfirmOpen(false)
-                            if (graph && selectedRoute && user) {
+                            // Prefer the last workingGraph so provisional endpoints still exist
+                            const g2 = (workingGraphRef.current as any) || graph
+                            if (g2 && selectedRoute && user) {
+                                console.log('[RoutePlanner] onAdjust: calling computeAndDrawRoute')
                                 // recalcul en ancrant le départ sur la position utilisateur (le moteur forcera le niveau 1)
-                                const res = await computeAndDrawRoute({ graph, start: String(selectedRoute.path?.[0] ?? start), end: end, excludeStairs, coveredOnly, mapRef, k: 3, userOriginLngLat: user })
+                                const res = await computeAndDrawRoute({ graph: g2, start: String(selectedRoute.path?.[0] ?? start), end: end, excludeStairs, coveredOnly, mapRef, k: 3, userOriginLngLat: user })
+                                console.log('[RoutePlanner] onAdjust: result', { hasRoutes: res && res.routes && res.routes.length > 0 })
                                 if (res && res.routes && res.routes.length) {
                                     const primary = res.routes[0]
                                     setRoutes(res.routes)
@@ -641,7 +705,8 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                                     }
                                 }
                             }
-                        } catch {
+                        } catch (err) {
+                            console.error('[RoutePlanner] onAdjust: error', err)
                             setConfirmOpen(false)
                         }
                     }}
@@ -653,6 +718,28 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     message={toastMessage}
                     duration={6000}
                     onClose={() => setToastMessage(null)}
+                />
+            )}
+            {/* Group menu for multiple features with same name */}
+            {groupMenuField && groupMenuItems.length > 0 && (
+                <GroupedResultsMenu
+                    title={groupMenuTitle}
+                    items={groupMenuItems}
+                    onPick={(id, name) => {
+                        console.log('[RoutePlanner] GroupedResultsMenu onPick:', { field: groupMenuField, id, name })
+                        if (groupMenuField === 'start') {
+                            setStart(String(id))
+                            setStartQuery(name)
+                        } else {
+                            setEnd(String(id))
+                            setEndQuery(name)
+                        }
+                        setGroupMenuField(null)
+                    }}
+                    onClose={() => {
+                        setGroupMenuField(null)
+                        try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
+                    }}
                 />
             )}
         </div>
