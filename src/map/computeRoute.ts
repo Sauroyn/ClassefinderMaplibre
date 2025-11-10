@@ -158,9 +158,11 @@ export async function computeAndDrawRoute(params: { graph: any, start: string, e
                 if (lastSegBearing != null && lastSegIdx != null) {
                     let delta = normalizeDelta(br - lastSegBearing)
                     let abs = Math.abs(delta)
-                    // DEBUG : log toujours actif pour analyse
-                    // eslint-disable-next-line no-console
-                    console.info(`[ManeuverDebug] i=${i} delta=${delta.toFixed(2)} abs=${abs.toFixed(2)} br=${br.toFixed(2)} last=${lastSegBearing.toFixed(2)}`)
+                    // DEBUG: only log in development to avoid noise in production
+                    if (import.meta && (import.meta as any).env && (import.meta as any).env.DEV) {
+                        // eslint-disable-next-line no-console
+                        console.info(`[ManeuverDebug] i=${i} delta=${delta.toFixed(2)} abs=${abs.toFixed(2)} br=${br.toFixed(2)} last=${lastSegBearing.toFixed(2)}`)
+                    }
                     // 1. Tolérance "tout droit" : angle faible (<= STRAIGHT_ANGLE_TOL_DEG)
                     if (abs <= STRAIGHT_ANGLE_TOL_DEG) {
                         // Considérer comme tout droit, pas de manœuvre

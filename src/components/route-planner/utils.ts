@@ -1,3 +1,32 @@
+// Distance helpers
+export { haversine } from '../../map/measure'
+
+import { getMapInstance, setPaintProperty } from '../../utils/mapHelpers'
+
+/**
+ * Highlight a specific route layer by increasing width/opacity.
+ * Resets others to default visual state.
+ */
+export function highlightRouteLayer(mapRef: any, routes: Array<any>, layerId: string | null) {
+    const map = getMapInstance(mapRef)
+    if (!map) return
+    const primaryCovered = 'route-planner-0-covered-line'
+    const primaryRemaining = 'route-planner-0-remaining-line'
+    for (const r of routes) {
+        const isPrimary = r.layerId === 'route-planner-0-line'
+        const isSelected = r.layerId === layerId
+        if (isPrimary) {
+            setPaintProperty(map, primaryCovered, 'line-width', isSelected ? 22 : 18)
+            setPaintProperty(map, primaryRemaining, 'line-width', isSelected ? 18 : 18)
+            setPaintProperty(map, primaryCovered, 'line-opacity', isSelected ? 1 : 0.6)
+            setPaintProperty(map, primaryRemaining, 'line-opacity', isSelected ? 1 : 0.6)
+        } else {
+            setPaintProperty(map, r.layerId, 'line-width', isSelected ? 22 : 12)
+            setPaintProperty(map, r.layerId, 'line-opacity', isSelected ? 1 : 0.6)
+        }
+    }
+}
+
 export type Graph = { nodes: any[], edges: any[] }
 
 export function distance2(a: number[], b: number[]) {

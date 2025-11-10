@@ -547,21 +547,28 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const features = map.querySourceFeatures('buildings', { sourceLayer: undefined, filter: ['==', ['id'], id] })
             const feat = features && features[0]
             if (feat && feat.geometry) {
-                if (feat.geometry.type === 'Polygon') {
-                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                    const coords = feat.geometry.coordinates[0]
-                    for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                    if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
-                } else if (feat.geometry.type === 'MultiPolygon') {
-                    let best: { area: number, bounds: [number, number, number, number] } | null = null
-                    for (const poly of feat.geometry.coordinates) {
-                        const ring = poly[0]
-                        let a = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                        for (let i = 0; i < ring.length - 1; i++) { const x0 = ring[i][0], y0 = ring[i][1], x1 = ring[i + 1][0], y1 = ring[i + 1][1]; a += (x0 * y1 - x1 * y0); if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0 }
-                        a = Math.abs(a) / 2
-                        if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
+                {
+                    // synchronous import (tree-shaken) for bounds helper
+                    try {
+                        const { getFeatureBounds } = require('../utils/geometryBounds')
+                        const bbox = getFeatureBounds(feat)
+                        if (bbox) { fitBoundsSmart(map, bbox); return }
+                    } catch {
+                        // fall back to manual
+                        if (feat.geometry.type === 'Polygon') {
+                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                            const coords = (feat.geometry as any).coordinates[0]
+                            for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
+                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
+                        } else if (feat.geometry.type === 'MultiPolygon') {
+                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                            for (const poly of (feat.geometry as any).coordinates) {
+                                const ring = poly[0]
+                                for (const p of ring) { const x = p[0], y = p[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
+                            }
+                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
+                        }
                     }
-                    if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
                 }
             }
             // if feature wasn't found in the source, try to find it in latestDataRef (search results when data not yet added)
@@ -570,23 +577,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 if (d && d.features && d.features.length) {
                     const found = d.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === id || (f.properties && f.properties.name) === id)
                     if (found && found.geometry) {
-                        const geom = found.geometry
-                        if (geom.type === 'Polygon') {
-                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                            const coords = geom.coordinates[0]
-                            for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
-                        } else if (geom.type === 'MultiPolygon') {
-                            let best: { area: number, bounds: [number, number, number, number] } | null = null
-                            for (const poly of geom.coordinates) {
-                                const ring = poly[0]
-                                let a = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                                for (let i = 0; i < ring.length - 1; i++) { const x0 = ring[i][0], y0 = ring[i][1], x1 = ring[i + 1][0], y1 = ring[i + 1][1]; a += (x0 * y1 - x1 * y0); if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0 }
-                                a = Math.abs(a) / 2
-                                if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
-                            }
-                            if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
-                        }
+                        try {
+                            const { getFeatureBounds } = require('../utils/geometryBounds')
+                            const bbox = getFeatureBounds(found)
+                            if (bbox) { fitBoundsSmart(map, bbox); return }
+                        } catch { }
                     }
                 }
             } catch (e) { }
@@ -719,11 +714,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
                     // Generate centroids from the normalized/themed data to ensure coerced numeric levels
                     const centroids = generateCentroids(themedDataForAll)
-                    console.log('[MapView] Centroïdes générés:', centroids.features.length, 'features')
-                    if (centroids.features.length > 0) {
-                        console.log('[MapView] Premier centroïde:', centroids.features[0])
-                        console.log('[MapView] Propriétés du premier centroïde:', centroids.features[0].properties)
-                        console.log('[MapView] Propriété name:', centroids.features[0].properties?.name)
+                    if (import.meta && (import.meta as any).env && (import.meta as any).env.DEV) {
+                        console.log('[MapView] Centroïdes générés:', centroids.features.length, 'features')
+                        if (centroids.features.length > 0) {
+                            console.log('[MapView] Premier centroïde:', centroids.features[0])
+                            console.log('[MapView] Propriétés du premier centroïde:', centroids.features[0].properties)
+                            console.log('[MapView] Propriété name:', centroids.features[0].properties?.name)
+                        }
                     }
                     // Toujours recréer la source centroids après un swap de style (force=true)
                     addCentroidsSource(map, centroids, true)

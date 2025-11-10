@@ -18,10 +18,13 @@ import NavigationBottomSheet from './route-planner/NavigationBottomSheet'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 import { fitBoundsSmart } from '../map/viewport'
+import { haversine } from '../map/measure'
+import { getCurrentPosition } from '../utils/geolocation'
 import { loadGraphFromConfigOrFallback } from '../utils/graph'
 import { findByNormalizedId } from '../utils/featureId'
 import { createProvisionalNode } from '../map/provisionalNode'
 import { getMapInstance, setPaintProperty, setLayoutProperty } from '../utils/mapHelpers'
+import { highlightRouteLayer } from './route-planner/utils'
 import { useRoutePlannerState } from '../hooks/useRoutePlannerState'
 
 export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
@@ -250,30 +253,20 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             let e = end
             const nearestToUser = async (): Promise<string | null> => {
                 try {
-                    const user = await new Promise<{ lng: number, lat: number }>((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition((pos) => resolve({ lng: pos.coords.longitude, lat: pos.coords.latitude }), (err) => reject(err), { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })
-                    })
+                    const pos = await getCurrentPosition()
+                    const user: [number, number] = [pos.coords.longitude, pos.coords.latitude]
                     let bestId: string | null = null
                     let bestD = Infinity
-                    const toRad = (v: number) => v * Math.PI / 180
-                    const hav = (a: [number, number], b: [number, number]) => {
-                        const R = 6371000
-                        const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
-                        const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
-                        const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
-                        const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
-                        return R * c
-                    }
                     for (const n of graph.nodes) {
-                        const d = hav([user.lng, user.lat], n.coord as [number, number])
+                        const d = haversine(user, n.coord as [number, number])
                         if (d < bestD) { bestD = d; bestId = String(n.id) }
                     }
                     return bestId
                 } catch { return null }
             }
             let userCoord: [number, number] | null = null
-            if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { s = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
-            if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
+            if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { s = nid; try { const pos = await getCurrentPosition(); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
+            if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await getCurrentPosition(); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
 
             // Handle provisional nodes: create temporary graph with provisional nodes/edges
             let workingGraph = graph
@@ -418,22 +411,13 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         let userCoord: [number, number] | undefined = undefined
                         if (s === 'USER_POSITION') {
                             try {
-                                const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 }))
+                                const pos = await getCurrentPosition()
                                 userCoord = [pos.coords.longitude, pos.coords.latitude]
                                 // find nearest node id
                                 let bestId: string | null = null
                                 let bestD = Infinity
-                                const toRad = (v: number) => v * Math.PI / 180
-                                const hav = (a: [number, number], b: [number, number]) => {
-                                    const R = 6371000
-                                    const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
-                                    const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
-                                    const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
-                                    const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
-                                    return R * c
-                                }
                                 for (const n of graph.nodes) {
-                                    const d = hav([pos.coords.longitude, pos.coords.latitude], n.coord as [number, number])
+                                    const d = haversine([pos.coords.longitude, pos.coords.latitude], n.coord as [number, number])
                                     if (d < bestD) { bestD = d; bestId = String(n.id) }
                                 }
                                 if (bestId) s = bestId
@@ -452,26 +436,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }, [focusedField, start, end, nodeOptions, mapRef])
 
     // route selector UI helpers: highlight route on map when hovering an item
-    function highlightRouteLayer(layerId: string | null) {
-        const map = getMapInstance(mapRef)
-        if (!map) return
-        // reset all route layers to default opacity and width
-        const primaryCovered = 'route-planner-0-covered-line'
-        const primaryRemaining = 'route-planner-0-remaining-line'
-        routes.forEach((r) => {
-            const isPrimary = r.layerId === 'route-planner-0-line'
-            const isSelected = r.layerId === layerId
-            if (isPrimary) {
-                setPaintProperty(map, primaryCovered, 'line-width', isSelected ? 22 : 18)
-                setPaintProperty(map, primaryRemaining, 'line-width', isSelected ? 18 : 18)
-                setPaintProperty(map, primaryCovered, 'line-opacity', isSelected ? 1 : 0.6)
-                setPaintProperty(map, primaryRemaining, 'line-opacity', isSelected ? 1 : 0.6)
-            } else {
-                setPaintProperty(map, r.layerId, 'line-width', isSelected ? 22 : 12)
-                setPaintProperty(map, r.layerId, 'line-opacity', isSelected ? 1 : 0.6)
-            }
-        })
-    }
+    // highlightRouteLayer extracted to utils for reuse
 
     // En mode navigation, on masque le planner et on affiche la bannière + le panneau bas d'info
     if (navigationActive) {
@@ -541,13 +506,13 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         <RoutesList
                             routes={routes}
                             highlightedRoute={highlightedRoute}
-                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
-                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
+                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(mapRef, routes, rt.layerId) }}
+                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(mapRef, routes, null) }}
                             onGo={(rt: any) => {
                                 setSelectedRoute(rt)
                                 setDetailsOpen(true)
                                 setHighlightedRoute(rt.layerId)
-                                highlightRouteLayer(rt.layerId)
+                                highlightRouteLayer(mapRef, routes, rt.layerId)
                             }}
                         />
                     )}
@@ -602,7 +567,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     onStart={async () => {
                         // Avant de démarrer, vérifier la distance utilisateur -> départ de l'itinéraire
                         try {
-                            const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 20000, timeout: 8000 }))
+                            const pos = await getCurrentPosition({ enableHighAccuracy: true, maximumAge: 20000, timeout: 8000 })
                             const user: [number, number] = [pos.coords.longitude, pos.coords.latitude]
                             if (selectedRoute && graph) {
                                 try {
