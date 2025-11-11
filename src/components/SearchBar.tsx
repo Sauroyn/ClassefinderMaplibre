@@ -109,15 +109,20 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         function onMapFeatureClick(e: any) {
             const feat = e.detail as any
             if (!feat) return
-            // Accept features without name: use id or generate a placeholder
-            const name = feat.properties?.name ?? feat.properties?.title ?? (feat.id != null ? `Zone ${feat.id}` : 'Zone')
+
             // Use the feature's id directly from the map (should be the normalized id)
             let id = feat.id
             if (id == null) {
-                // Fallback: try to find in flatItems by name
-                const match = flatItems.find(it => it.name === name)
-                id = match ? match.id : name
+                // Fallback: try to find in flatItems
+                const originalName = feat.properties?.name ?? feat.properties?.title ?? (feat.id != null ? `Zone ${feat.id}` : 'Zone')
+                const match = flatItems.find(it => it.name === originalName)
+                id = match ? match.id : originalName
             }
+
+            // Vérifier si cette feature a un alias
+            const alias = getAlias(id)
+            const name = alias ? alias.aliasName : (feat.properties?.name ?? feat.properties?.title ?? (id != null ? `Zone ${id}` : 'Zone'))
+
             // mimic a user pick
             pick(id, name)
             // do not auto-open route planner here; RoutePlanner listens separately when open

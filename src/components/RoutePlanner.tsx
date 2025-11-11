@@ -139,9 +139,19 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     }
                     // Handle initialDestination if provided
                     if (initialDestination) {
-                        const name = initialDestination.properties?.name ?? initialDestination.properties?.title ?? initialDestination.id
-                        const fid = initialDestination.id ?? initialDestination.properties?.id ?? name
-                        const match = opts.find((n: any) => String(n.id) === String(fid) || String((n.name || '')).toLowerCase() === String(name).toLowerCase())
+                        // Prioriser l'ID de destination
+                        const fid = initialDestination.id ?? initialDestination.properties?.id
+                        // Le nom peut être un alias (passé depuis SearchSelected)
+                        const name = initialDestination.properties?.name ?? initialDestination.properties?.title ?? fid
+
+                        // D'abord essayer de matcher par ID exact (le plus fiable)
+                        let match = opts.find((n: any) => String(n.id) === String(fid))
+
+                        // Sinon, essayer de matcher par nom (alias ou original)
+                        if (!match && name) {
+                            match = opts.find((n: any) => String((n.name || '')).toLowerCase() === String(name).toLowerCase())
+                        }
+
                         const setId = match ? String(match.id) : String(fid)
                         dispatch({ type: 'SET_END', payload: setId })
                         dispatch({ type: 'SET_END_QUERY', payload: String(match?.name ?? name) })
