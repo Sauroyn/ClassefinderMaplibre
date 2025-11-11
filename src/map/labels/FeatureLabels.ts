@@ -108,16 +108,16 @@ export class FeatureLabels {
                         ['get', 'label'],
                         ['get', 'title'],
                         ['get', 'NAME'],
-                        ['get', 'Name'],
-                        'Sans nom'
+                        ['get', 'Name']
                     ],
                     'text-size': style.textSize,
                     'text-anchor': 'center',
-                    // Important: éviter que les labels disparaissent à cause des collisions
-                    // avec les couches de texte du style de base (qui changent selon le thème).
-                    // On autorise le recouvrement pour garantir l'affichage des noms.
-                    'text-allow-overlap': true,
-                    'text-ignore-placement': true,
+                    // Désactiver le recouvrement pour éviter que les noms se superposent
+                    'text-allow-overlap': false,
+                    'text-ignore-placement': false,
+                    // Options pour améliorer la gestion des collisions
+                    'text-optional': true,
+                    'text-padding': 2,
                     // Dessiner dans l'ordre de la source pour une stabilité visuelle
                     'symbol-z-order': 'source',
                     'visibility': 'visible'
@@ -127,7 +127,21 @@ export class FeatureLabels {
                     'text-halo-color': style.haloColor,
                     'text-halo-width': style.haloWidth
                 },
-                filter: this.createLevelFilter(level)
+                filter: [
+                    'all',
+                    // Filtre de niveau
+                    this.createLevelFilter(level),
+                    // N'afficher que les features qui ont un nom
+                    [
+                        'any',
+                        ['has', 'name'],
+                        ['has', 'nom'],
+                        ['has', 'label'],
+                        ['has', 'title'],
+                        ['has', 'NAME'],
+                        ['has', 'Name']
+                    ]
+                ]
             }, beforeId)
             console.log('[FeatureLabels] Layer créé avec succès', beforeId ? `avant ${beforeId}` : 'au-dessus de tout')
         } catch (error) {
