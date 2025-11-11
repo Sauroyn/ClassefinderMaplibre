@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LocationArrow, Sun, Moon } from '@gravity-ui/icons'
 import maplibre from 'maplibre-gl'
+import { useNavigationActive } from '../hooks/useNavigationActive'
 
 type Props = {
     map?: maplibre.Map | null
@@ -26,9 +27,11 @@ export default function MobileControlsBar({
     loading,
     onLevelChange
 }: Props) {
+    const navActive = useNavigationActive()
     const containerRef = useRef<HTMLDivElement | null>(null)
     const [topPosition, setTopPosition] = useState<number>(75)
-    const [visible, setVisible] = useState<boolean>(true)
+    // Only hide the geolocate button on specific UI events; never hide the whole bar
+    const [hideGeo, setHideGeo] = useState<boolean>(false)
     const geolocateControlRef = useRef<maplibre.GeolocateControl | null>(null)
 
     // Touch handling for level selector swipe
@@ -108,8 +111,8 @@ export default function MobileControlsBar({
                 considerElement(routePlanner)
                 considerElement(navBanner)
 
-                // Add gap below
-                const GAP = 14
+                // Add gap below (tight spacing)
+                const GAP = 8
                 setTopPosition(Math.ceil(maxBottom + GAP))
             } catch (e) {
                 setTopPosition(75) // Fallback
@@ -172,7 +175,7 @@ export default function MobileControlsBar({
     // React to UI show/hide events (navigation mode)
     useEffect(() => {
         const hide = () => {
-            setVisible(false)
+            setHideGeo(true)
             // Hide native geolocate dot/accuracy circle
             try {
                 const container = (map as any)?.getContainer?.() as HTMLElement | null
@@ -180,7 +183,7 @@ export default function MobileControlsBar({
             } catch { }
         }
         const show = () => {
-            setVisible(true)
+            setHideGeo(false)
             try {
                 const container = (map as any)?.getContainer?.() as HTMLElement | null
                 if (container) container.removeAttribute('data-hide-geolocate')
@@ -233,6 +236,10 @@ export default function MobileControlsBar({
         } catch { }
     }
 
+    const triggerRecenterNav = () => {
+        try { window.dispatchEvent(new CustomEvent('ui:recenter-nav-marker')) } catch { }
+    }
+
     // Touch handlers for level selector
     const onTouchStart = (e: React.TouchEvent) => {
         touchStartY.current = e.touches[0]?.clientY ?? null
@@ -258,19 +265,17 @@ export default function MobileControlsBar({
         return null
     }
 
-    if (!visible) {
-        return null
-    }
+    // Always visible on mobile; individual buttons may hide via flags
 
     return (
         <div
             ref={containerRef}
-            className="fixed right-3 z-controls flex items-center gap-2"
+            className="mobile-controls-bar fixed right-3 z-controls flex flex-col gap-2 items-end"
             style={{ top: topPosition }}
         >
-            {/* Level Selector */}
+            {/* Level Selector (compact, desktop-like but lighter) */}
             <div
-                className="level-select-wrapper bg-black/50 dark:bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg text-white shadow-lg flex items-center gap-2 flex-1"
+                className="level-select-wrapper bg-black/50 dark:bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg text-white shadow-lg flex items-center gap-2"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
@@ -283,7 +288,7 @@ export default function MobileControlsBar({
                     value={level}
                     onChange={e => onLevelChange(Number(e.target.value))}
                     disabled={loading || levels.length === 0}
-                    className="bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-0"
+                    className="bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 >
                     {loading ? (
                         <option>Chargement...</option>
@@ -295,25 +300,53 @@ export default function MobileControlsBar({
                 </select>
             </div>
 
-            {/* Geolocate Button */}
-            <button
-                title="Me localiser"
-                aria-label="Me localiser"
-                onClick={triggerGeolocate}
-                className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
-            >
-                <LocationArrow className="w-5 h-5" />
-            </button>
-
-            {/* Dark Mode Button */}
-            <button
-                title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-                aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-                onClick={() => onToggleTheme && onToggleTheme()}
-                className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
-            >
-                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+            {/* Buttons row */}
+            <div className="flex flex-row items-center gap-2">
+                {navActive ? (
+                    <>
+                        {/* Recenter button (navigation) */}
+                        <button
+                            title="Recentrer sur le trajet"
+                            aria-label="Recentrer sur le trajet"
+                            onClick={triggerRecenterNav}
+                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
+                        >
+                            <LocationArrow className="w-5 h-5" />
+                        </button>
+                        {/* Dark Mode */}
+                        <button
+                            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                            onClick={() => onToggleTheme && onToggleTheme()}
+                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
+                        >
+                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        {/* Geolocate (non-navigation) */}
+                        <button
+                            title="Me localiser"
+                            aria-label="Me localiser"
+                            onClick={triggerGeolocate}
+                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
+                            style={{ display: hideGeo ? 'none' : 'flex' }}
+                        >
+                            <LocationArrow className="w-5 h-5" />
+                        </button>
+                        {/* Dark Mode */}
+                        <button
+                            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                            onClick={() => onToggleTheme && onToggleTheme()}
+                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
+                        >
+                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                        </button>
+                    </>
+                )}
+            </div>
         </div>
     )
 }

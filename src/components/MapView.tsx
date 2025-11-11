@@ -67,7 +67,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 // Only compute special positioning for narrow/mobile viewports
                 const isMobile = window.innerWidth <= 720
                 if (!isMobile) { navBtnsTopRef.current = null; setNavBtnsTopState(null); return }
-                const sel = document.querySelector('.level-selector') as HTMLElement | null
+                const sel = document.querySelector('.mobile-controls-bar') as HTMLElement | null || document.querySelector('.level-selector') as HTMLElement | null
                 const GAP = 8
                 if (sel) {
                     const cs = window.getComputedStyle(sel)
@@ -836,6 +836,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         } catch { }
     }
 
+    // Allow external UI to trigger recenter (MobileControlsBar)
+    useEffect(() => {
+        const onRecenter = () => recenterToNavMarker()
+        window.addEventListener('ui:recenter-nav-marker', onRecenter as any)
+        return () => window.removeEventListener('ui:recenter-nav-marker', onRecenter as any)
+    }, [])
+
     const themeToggle = (
         <button
             title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
@@ -887,8 +894,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         {/* Follow mode handled via top-level effects */}
         {navActive ? (
             <>
-                {themeToggle}
-                {recenterToMarker}
+                {/* On mobile, MobileControlsBar renders these; only render here on desktop */}
+                {navBtnsTopState == null && (
+                    <>
+                        {themeToggle}
+                        {recenterToMarker}
+                    </>
+                )}
             </>
         ) : (
             <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />

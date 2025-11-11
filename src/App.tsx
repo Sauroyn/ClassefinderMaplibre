@@ -81,8 +81,8 @@ export default function App() {
       {/* Desktop level selector */}
       <LevelSelector levels={levels} level={level} loading={loading} onChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }} />
 
-      {/* Mobile controls bar (level, geolocate, dark mode) - only visible on mobile and not during navigation */}
-      {!navActive && <MobileControlsBar
+      {/* Mobile controls bar (level, geolocate, dark mode) - always visible on mobile, positions itself below SearchBar/NavigationBanner */}
+      <MobileControlsBar
         map={mapRef.current}
         theme={theme}
         onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
@@ -90,7 +90,7 @@ export default function App() {
         levels={levels}
         loading={loading}
         onLevelChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }}
-      />}
+      />
 
       {!navActive && !showPlanner && <SearchBar
         data={dataRef.current}
