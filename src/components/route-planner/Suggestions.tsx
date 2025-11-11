@@ -1,3 +1,5 @@
+import { LocationArrow, MapPin } from '@gravity-ui/icons'
+
 function dispatchHover(id?: string | number) {
     try {
         if (id === undefined || id === null) {
@@ -80,25 +82,32 @@ export default function Suggestions(props: {
                     } catch { }
                     onSelectStart('USER_POSITION', 'Ma position')
                 }}
-                className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
             >
-                Ma position
+                <LocationArrow className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <span className="flex-1">Ma position</span>
             </div>
-            {uniqueList.map(n => {
+            {uniqueList.map((n, idx) => {
                 const isGrouped = n.provisional && groupedMap.has(n.name.toLowerCase().trim()) && groupedMap.get(n.name.toLowerCase().trim())!.length > 1
+                const isLast = idx === uniqueList.length - 1
                 return (
                     <div
                         key={`s-${n.id}`}
                         onMouseEnter={() => n.provisional && n.featureIndex != null ? dispatchHover(n.featureIndex) : undefined}
                         onMouseLeave={() => dispatchHover(undefined)}
                         onMouseDown={() => handleSelect('start', n)}
-                        className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer flex justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        className={`p-2 ${!isLast ? 'border-b border-gray-100 dark:border-gray-700' : ''} cursor-pointer flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors`}
                     >
-                        <span className="text-gray-900 dark:text-gray-100">
+                        <MapPin className="w-4 h-4 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+                        <span className="flex-1 text-gray-900 dark:text-gray-100">
                             {n.name}
                             {isGrouped && <span className="ml-1.5 text-xs opacity-70">({groupedMap.get(n.name.toLowerCase().trim())!.length})</span>}
                         </span>
-                        <span className="text-gray-600 dark:text-gray-400">{n.level || ''}</span>
+                        {n.level && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                Étage {n.level}
+                            </span>
+                        )}
                     </div>
                 )
             })}
@@ -136,25 +145,32 @@ export default function Suggestions(props: {
                     } catch { }
                     onSelectEnd('USER_POSITION', 'Ma position')
                 }}
-                className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex items-center gap-2"
             >
-                Ma position
+                <LocationArrow className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <span className="flex-1">Ma position</span>
             </div>
-            {uniqueList.map(n => {
+            {uniqueList.map((n, idx) => {
                 const isGrouped = n.provisional && groupedMap.has(n.name.toLowerCase().trim()) && groupedMap.get(n.name.toLowerCase().trim())!.length > 1
+                const isLast = idx === uniqueList.length - 1
                 return (
                     <div
                         key={`e-${n.id}`}
                         onMouseEnter={() => n.provisional && n.featureIndex != null ? dispatchHover(n.featureIndex) : undefined}
                         onMouseLeave={() => dispatchHover(undefined)}
                         onMouseDown={() => handleSelect('end', n)}
-                        className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer flex justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        className={`p-2 ${!isLast ? 'border-b border-gray-100 dark:border-gray-700' : ''} cursor-pointer flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors`}
                     >
-                        <span className="text-gray-900 dark:text-gray-100">
+                        <MapPin className="w-4 h-4 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+                        <span className="flex-1 text-gray-900 dark:text-gray-100">
                             {n.name}
                             {isGrouped && <span className="ml-1.5 text-xs opacity-70">({groupedMap.get(n.name.toLowerCase().trim())!.length})</span>}
                         </span>
-                        <span className="text-gray-600 dark:text-gray-400">{n.level || ''}</span>
+                        {n.level && (
+                            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                                Étage {n.level}
+                            </span>
+                        )}
                     </div>
                 )
             })}

@@ -443,8 +443,8 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
             {/* Afficher le conteneur seulement si suggestions ou routes présentes */}
             {(focusedField || (routes && routes.length > 0 && !detailsOpen)) && (
-                <div className="w-full border-t border-gray-200 dark:border-gray-700 pt-1.5 max-h-[220px] overflow-auto">
-                    <div className="mb-2">
+                <div className="w-full border-t border-gray-200 dark:border-gray-700 max-h-[220px] overflow-auto">
+                    <div>
                         <Suggestions
                             focusedField={focusedField}
                             startQuery={startQuery}

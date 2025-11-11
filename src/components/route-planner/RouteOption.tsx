@@ -7,10 +7,6 @@ export default function RouteOption({ route, primary, highlighted, onHover, onLe
         ? 'bg-blue-50 dark:bg-blue-900/30'
         : 'bg-white dark:bg-gray-800'
 
-    const borderClass = highlighted
-        ? 'border-blue-200 dark:border-blue-700'
-        : 'border-gray-300 dark:border-gray-600'
-
     const hoverClass = highlighted
         ? 'hover:bg-blue-100 dark:hover:bg-blue-900/40'
         : 'hover:bg-gray-50 dark:hover:bg-gray-700'
@@ -20,7 +16,7 @@ export default function RouteOption({ route, primary, highlighted, onHover, onLe
             onMouseEnter={() => onHover(route)}
             onMouseLeave={() => onLeave(route)}
             onClick={() => onGo(route)}
-            className={`flex justify-between items-center px-2 py-1.5 rounded-md cursor-pointer border ${bgClass} ${borderClass} ${hoverClass} transition-colors`}
+            className={`flex justify-between items-center px-2 py-1.5 cursor-pointer ${bgClass} ${hoverClass} transition-colors`}
         >
             <div>
                 <div className="font-bold text-gray-900 dark:text-gray-100">{primary ? 'Plus court' : `Alternative ${route.index}`}</div>

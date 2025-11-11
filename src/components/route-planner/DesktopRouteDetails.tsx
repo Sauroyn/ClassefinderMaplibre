@@ -31,7 +31,7 @@ export default function DesktopRouteDetails({
     if (!route) return null
 
     return (
-        <div className="w-full border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
+        <div className="w-full border-t border-gray-200 dark:border-gray-700 pt-3 px-3 pb-3 mt-3">
             {/* Header avec bouton retour */}
             <div className="flex items-center mb-3">
                 <button
