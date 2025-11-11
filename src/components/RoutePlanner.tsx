@@ -401,10 +401,10 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
         <div className={`route-planner absolute top-2.5 left-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-md z-controls w-[360px] border border-gray-300 dark:border-gray-600 shadow-lg ${navigationActive ? 'hidden' : 'block'}`}>
-            <div className="relative mb-1.5">
-                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="absolute left-1.5 top-1.5 w-7 h-7 rounded border border-gray-300 dark:border-gray-600 bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
+            <div className="relative mb-4">
+                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="absolute left-0 top-0 w-7 h-7 rounded bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
                 <div className="text-center font-semibold">Itinéraire</div>
-                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="absolute right-1.5 top-1.5 w-8 h-7 rounded border border-gray-300 dark:border-gray-600 bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
+                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="absolute right-0 top-0 w-8 h-7 rounded bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
             </div>
             <div className="flex gap-2 mb-1.5 items-center">
                 <Inputs
@@ -420,7 +420,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
                 />
                 <div className="flex items-center">
-                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="px-2.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">⇄</button>
+                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="px-2.5 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">⇄</button>
                 </div>
                 {showSettings && (
                     <SettingsPopover
@@ -435,39 +435,42 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                 )}
             </div>
             {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
-            <div className="w-full mt-1.5 border-t border-gray-200 dark:border-gray-700 pt-1.5 max-h-[220px] overflow-auto">
-                <div className="mb-2">
-                    <Suggestions
-                        focusedField={focusedField}
-                        startQuery={startQuery}
-                        endQuery={endQuery}
-                        nodeOptions={nodeOptions}
-                        onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }}
-                        onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }}
-                        onRequestGroup={(field, name, items) => {
-                            setGroupMenuField(field)
-                            setGroupMenuTitle(name)
-                            setGroupMenuItems(items)
-                            setFocusedField(null)
-                        }}
-                    />
-                    {/* Liste visible seulement si détail non ouvert */}
-                    {!isMobile && routes && routes.length > 0 && !detailsOpen && (
-                        <RoutesList
-                            routes={routes}
-                            highlightedRoute={highlightedRoute}
-                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(mapRef, routes, rt.layerId) }}
-                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(mapRef, routes, null) }}
-                            onGo={(rt: any) => {
-                                setSelectedRoute(rt)
-                                setDetailsOpen(true)
-                                setHighlightedRoute(rt.layerId)
-                                highlightRouteLayer(mapRef, routes, rt.layerId)
+            {/* Afficher le conteneur seulement si suggestions ou routes présentes */}
+            {(focusedField || (routes && routes.length > 0 && !detailsOpen)) && (
+                <div className="w-full mt-1.5 border-t border-gray-200 dark:border-gray-700 pt-1.5 max-h-[220px] overflow-auto">
+                    <div className="mb-2">
+                        <Suggestions
+                            focusedField={focusedField}
+                            startQuery={startQuery}
+                            endQuery={endQuery}
+                            nodeOptions={nodeOptions}
+                            onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }}
+                            onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }}
+                            onRequestGroup={(field, name, items) => {
+                                setGroupMenuField(field)
+                                setGroupMenuTitle(name)
+                                setGroupMenuItems(items)
+                                setFocusedField(null)
                             }}
                         />
-                    )}
+                        {/* Liste visible seulement si détail non ouvert */}
+                        {!isMobile && routes && routes.length > 0 && !detailsOpen && (
+                            <RoutesList
+                                routes={routes}
+                                highlightedRoute={highlightedRoute}
+                                onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(mapRef, routes, rt.layerId) }}
+                                onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(mapRef, routes, null) }}
+                                onGo={(rt: any) => {
+                                    setSelectedRoute(rt)
+                                    setDetailsOpen(true)
+                                    setHighlightedRoute(rt.layerId)
+                                    highlightRouteLayer(mapRef, routes, rt.layerId)
+                                }}
+                            />
+                        )}
+                    </div>
                 </div>
-            </div>
+            )}
             {/* Affichage du détail en-dessous en mode desktop */}
             {!isMobile && detailsOpen && selectedRoute && (
                 <DesktopRouteDetails
