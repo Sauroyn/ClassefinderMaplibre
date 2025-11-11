@@ -202,7 +202,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
     // On ne force plus setSelected(null) sur focus input, pour permettre la sélection ET la liste
     return (
-        <div className={`searchbar absolute left-3 top-[15px] md:top-3 z-search w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-0 shadow-lg border-none transition-[width,height,background-color,box-shadow] duration-100 ${isSearchClosed ? 'rounded-full' : 'rounded-[15px]'}`}>
+        <div className={`searchbar absolute left-3 right-3 top-[15px] md:left-3 md:right-auto md:top-3 z-search w-auto md:w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-0 shadow-lg border-none transition-[width,height,background-color,box-shadow] duration-100 overflow-hidden ${isSearchClosed ? 'rounded-full' : 'rounded-[15px]'}`}>
             <div className="flex gap-1 items-center px-3 py-2">
                 {/* left icon: back | clear | search */}
                 {showBack || groupView ? (
@@ -222,7 +222,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                                 if ((onClear)) onClear()
                             }
                         }}
-                        className="w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center flex-shrink-0"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
@@ -235,14 +235,14 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                             setFocused(true)
                             if (inputRef.current) inputRef.current.focus()
                         }}
-                        className="w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center flex-shrink-0"
                     >
                         <Xmark className="w-5 h-5" />
                     </button>
                 ) : (
                     <button
                         onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }}
-                        className="w-9 h-9 bg-transparent border border-transparent rounded-lg text-gray-600 dark:text-gray-400 flex items-center justify-center"
+                        className="w-8 h-8 md:w-9 md:h-9 bg-transparent border border-transparent rounded-lg text-gray-600 dark:text-gray-400 flex items-center justify-center flex-shrink-0"
                         aria-label="search"
                     >
                         <Magnifier className="w-5 h-5" />
@@ -250,7 +250,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 )}
                 <input
                     ref={inputRef}
-                    className="search-input flex-1 px-2 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-none rounded-full outline-none transition-all"
+                    className="search-input flex-1 px-2 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-none rounded-full outline-none transition-all text-sm md:text-base"
                     value={q}
                     onChange={e => { setQ(e.target.value); if (selected) setSelected(null); setFocused(true) }}
                     placeholder="Rechercher une salle..."
@@ -272,7 +272,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 {(!focused && !q) && (
                     <button
                         onClick={() => { if (typeof onOpenRoutePlanner === 'function') { onOpenRoutePlanner(); } }}
-                        className="w-9 h-9 ml-0.5 rounded-lg border-none bg-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors flex items-center justify-center"
+                        className="w-8 h-8 md:w-9 md:h-9 ml-0.5 rounded-lg border-none bg-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors flex items-center justify-center flex-shrink-0"
                         title="Itinéraire"
                         aria-label="Itinéraire"
                     >

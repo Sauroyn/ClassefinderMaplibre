@@ -14,12 +14,12 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
     const hasRealName = (originalName && typeof originalName === 'string' && originalName.trim().length > 0) || !!alias
 
     return (
-        <div className="mt-2 p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="p-2 md:p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex justify-between items-start gap-2">
-                <div>
-                    <div className="font-bold">{selected.name}</div>
+                <div className="min-w-0 flex-1">
+                    <div className="font-bold truncate">{selected.name}</div>
                     {alias && alias.originalName && (
-                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 truncate">
                             Alias de "{alias.originalName}"
                         </div>
                     )}
@@ -30,13 +30,13 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
                     )}
                 </div>
                 {selected.level != null && (
-                    <div className="px-2.5 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm flex-shrink-0">Étage {selected.level}</div>
+                    <div className="px-2 md:px-2.5 py-1 md:py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-xs md:text-sm flex-shrink-0 whitespace-nowrap">Étage {selected.level}</div>
                 )}
             </div>
-            <div className="mt-1.5 flex gap-2">
+            <div className="mt-2 flex gap-2">
                 {hasRealName && (
                     <button
-                        className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
+                        className="flex-1 px-2 md:px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1 md:gap-1.5 text-sm"
                         onClick={() => {
                             if (!onRoute) return
                             // Passer l'objet avec le nom effectif (alias ou original)
@@ -50,12 +50,12 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
                             })
                         }}
                     >
-                        <Route className="w-4 h-4" />
+                        <Route className="w-4 h-4 flex-shrink-0" />
                         <span>Itinéraire</span>
                     </button>
                 )}
                 <button
-                    className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
+                    className="flex-1 px-2 md:px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1 md:gap-1.5 text-sm"
                     onClick={() => {
                         if (onOpenAliasSettings) {
                             const originalName = feat?.properties?.name || ''
@@ -63,8 +63,8 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
                         }
                     }}
                 >
-                    <Pencil className="w-4 h-4" />
-                    <span>{alias ? 'Modifier alias' : 'Alias'}</span>
+                    <Pencil className="w-4 h-4 flex-shrink-0" />
+                    <span>{alias ? 'Mod. alias' : 'Alias'}</span>
                 </button>
             </div>
         </div>

@@ -24,18 +24,16 @@
 }
 
 /* Mobile responsive layout */
-@media (max-width: 720px) {
+@media (max-width: 768px) {
 
   .searchbar,
   .route-planner {
     position: fixed !important;
-    left: 10px !important;
-    right: 10px !important;
-    width: calc(100% - 20px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
     box-sizing: border-box;
     margin: 0 !important;
-    border-radius: 8px !important;
-    padding: 8px 12px !important;
     z-index: 30 !important;
   }
 
@@ -53,7 +51,6 @@
     /* position managed dynamically via JS (top set inline) */
     z-index: 29 !important;
     width: auto !important;
-    border-radius: 8px !important;
     left: auto !important;
     right: 10px !important;
     /* respect safe-area for iOS */
