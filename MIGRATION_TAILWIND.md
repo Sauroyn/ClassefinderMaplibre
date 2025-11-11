@@ -1,19 +1,38 @@
 # Guide de Migration Tailwind CSS + GravityUI Icons
 
-## ✅ Terminé
+## ✅ STATUS: Infrastructure complète + 13 composants migrés
 
-### Infrastructure
-- ✅ Tailwind CSS v3.4.17 installé
-- ✅ PostCSS configuré
-- ✅ @gravity-ui/icons v2.16.0 installé
-- ✅ `tailwind.config.js` avec couleurs et z-index personnalisés
-- ✅ `src/index.css` migré vers Tailwind
+**Build Status:** ✅ FONCTIONNE PARFAITEMENT  
+**Tailwind CSS:** v3.4.17 ✅  
+**GravityUI Icons:** v2.16.0 ✅  
+**Date:** 11 novembre 2025
 
-### Composants Migrés
+---
+
+## ✅ Composants Migrés (13/80+)
+
+### Composants Principaux ✅
 - ✅ `src/components/SettingsButton.tsx` - Utilise `Gear` icon
 - ✅ `src/components/UserGeolocate.tsx` - Utilise `LocationArrow`, `Sun`, `Moon` icons
+- ✅ `src/components/LevelSelector.tsx` - Classes Tailwind complètes
+- ✅ `src/components/SearchBar.tsx` - Utilise `Magnifier`, `Xmark`, `ArrowLeft`, `Route` icons
+- ✅ `src/components/ResultActions.tsx` - Utilise `Route`, `Pencil` icons
 
-## 📋 Composants à Migrer
+### Composants Search ✅
+- ✅ `src/components/search/SearchList.tsx`
+- ✅ `src/components/search/SearchSelected.tsx` - Utilise `Route`, `Pencil` icons
+- ✅ `src/components/search/GroupedResultsMenu.tsx` - Utilise `Xmark` icon
+
+### Composants Route-Planner ✅
+- ✅ `src/components/route-planner/Toast.tsx` - Utilise `TriangleExclamation` icon
+- ✅ `src/components/route-planner/Inputs.tsx` - Utilise `Xmark` icon
+- ✅ `src/components/route-planner/Suggestions.tsx`
+- ✅ `src/components/route-planner/RouteOption.tsx`
+- ✅ `src/components/route-planner/RoutesList.tsx`
+
+---
+
+## 📋 Composants Restants à Migrer (~70)
 
 ### Composants Principaux
 - ⏳ `src/components/LevelSelector.tsx`

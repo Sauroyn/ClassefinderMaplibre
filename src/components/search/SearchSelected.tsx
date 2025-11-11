@@ -1,5 +1,6 @@
 import { findByNormalizedId } from '../../utils/featureId'
 import { getAlias } from '../../utils/aliases'
+import { Route, Pencil } from '@gravity-ui/icons'
 
 type Item = { id: string | number; name: string; level?: string | number }
 
@@ -13,23 +14,23 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
     const hasRealName = (originalName && typeof originalName === 'string' && originalName.trim().length > 0) || !!alias
 
     return (
-        <div style={{ marginTop: 8, padding: 10, background: 'var(--panel-bg, #fbfbfb)', color: 'var(--panel-fg, #111)', borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--panel-border, #eee)' }}>
-            <div style={{ fontWeight: 700 }}>{selected.name}</div>
+        <div className="mt-2 p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="font-bold">{selected.name}</div>
             {alias && alias.originalName && (
-                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--chip-fg, #666)' }}>
+                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                     Alias de "{alias.originalName}"
                 </div>
             )}
             {alias && !alias.originalName && (
-                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--chip-fg, #666)' }}>
+                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                     Alias
                 </div>
             )}
-            <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
-                <div style={{ padding: '6px 10px', background: 'var(--chip-bg, #f1f3f5)', color: 'var(--chip-fg, #111)', borderRadius: 12 }}>{selected.level ?? '—'}</div>
+            <div className="mt-1.5 flex gap-2">
+                <div className="px-2.5 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm">{selected.level ?? '—'}</div>
                 {hasRealName && (
                     <button
-                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}
+                        className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
                         onClick={() => {
                             if (!onRoute) return
                             // Passer l'objet avec le nom effectif (alias ou original)
@@ -43,11 +44,12 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
                             })
                         }}
                     >
-                        Itinéraire
+                        <Route className="w-4 h-4" />
+                        <span>Itinéraire</span>
                     </button>
                 )}
                 <button
-                    style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}
+                    className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
                     onClick={() => {
                         if (onOpenAliasSettings) {
                             const originalName = feat?.properties?.name || ''
@@ -55,7 +57,8 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
                         }
                     }}
                 >
-                    {alias ? 'Modifier alias' : 'Alias'}
+                    <Pencil className="w-4 h-4" />
+                    <span>{alias ? 'Modifier alias' : 'Alias'}</span>
                 </button>
             </div>
         </div>

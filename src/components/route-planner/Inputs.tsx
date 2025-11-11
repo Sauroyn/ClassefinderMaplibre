@@ -1,3 +1,5 @@
+import { Xmark } from '@gravity-ui/icons'
+
 type NodeOption = { id: string, name: string }
 
 type Props = {
@@ -19,16 +21,48 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
         if (list.length === 1) { const n = list[0]; pick(n.id, n.name || String(n.id)); setFocusedField(null) }
     }
     return (
-        <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}><div>Départ</div></div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
-                <input value={startQuery} onChange={(e) => { setStartQuery(e.target.value); setFocusedField('start') }} onFocus={() => setFocusedField('start')} onBlur={() => setTimeout(() => setFocusedField(null), 150)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(startQuery, onPickStart) } }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher un départ..." />
-                {startQuery ? <button onClick={onClearStart} title="Clear start" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
+        <div className="relative flex-1 min-w-0">
+            <div className="text-xs flex items-center gap-2"><div>Départ</div></div>
+            <div className="flex gap-1.5 items-center mt-1.5">
+                <input
+                    value={startQuery}
+                    onChange={(e) => { setStartQuery(e.target.value); setFocusedField('start') }}
+                    onFocus={() => setFocusedField('start')}
+                    onBlur={() => setTimeout(() => setFocusedField(null), 150)}
+                    onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(startQuery, onPickStart) } }}
+                    className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Rechercher un départ..."
+                />
+                {startQuery ? (
+                    <button
+                        onClick={onClearStart}
+                        title="Clear start"
+                        className="p-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                    >
+                        <Xmark className="w-4 h-4" />
+                    </button>
+                ) : null}
             </div>
-            <div style={{ fontSize: 12, marginTop: 8 }}>Arrivée</div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
-                <input value={endQuery} onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }} onFocus={() => setFocusedField('end')} onBlur={() => setTimeout(() => setFocusedField(null), 150)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(endQuery, onPickEnd) } }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher une arrivée..." />
-                {endQuery ? <button onClick={onClearEnd} title="Clear end" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
+            <div className="text-xs mt-2">Arrivée</div>
+            <div className="flex gap-1.5 items-center mt-1.5">
+                <input
+                    value={endQuery}
+                    onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }}
+                    onFocus={() => setFocusedField('end')}
+                    onBlur={() => setTimeout(() => setFocusedField(null), 150)}
+                    onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(endQuery, onPickEnd) } }}
+                    className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Rechercher une arrivée..."
+                />
+                {endQuery ? (
+                    <button
+                        onClick={onClearEnd}
+                        title="Clear end"
+                        className="p-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                    >
+                        <Xmark className="w-4 h-4" />
+                    </button>
+                ) : null}
             </div>
         </div>
     )

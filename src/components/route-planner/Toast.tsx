@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { TriangleExclamation } from '@gravity-ui/icons'
 
 type ToastProps = {
     message: string
@@ -31,27 +32,10 @@ export default function Toast({ message, duration = 5000, onClose }: ToastProps)
 
     return (
         <div
-            style={{
-                position: 'fixed',
-                bottom: isMobile ? 80 : 120,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                background: 'rgba(255, 152, 0, 0.95)',
-                color: '#fff',
-                padding: '10px 16px',
-                borderRadius: 8,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-                maxWidth: '90%',
-                width: 'auto',
-                fontSize: 13,
-                zIndex: 99999,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                animation: 'slideUp 0.3s ease-out'
-            }}
+            className="fixed left-1/2 -translate-x-1/2 bg-orange-500/95 dark:bg-orange-600/95 text-white px-4 py-2.5 rounded-lg shadow-xl max-w-[90%] w-auto text-sm z-[99999] flex items-center gap-2 animate-[slideUp_0.3s_ease-out]"
+            style={{ bottom: isMobile ? 80 : 120 }}
         >
-            <span style={{ fontSize: 16 }}>⚠️</span>
+            <TriangleExclamation className="w-4 h-4" />
             <span>{message}</span>
             <style>{`
                 @keyframes slideUp {

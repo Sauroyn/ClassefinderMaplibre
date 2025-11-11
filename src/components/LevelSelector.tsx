@@ -101,21 +101,27 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
         return () => { ro.disconnect(); window.removeEventListener('resize', update); window.removeEventListener('orientationchange', update) }
     }, [levels, loading])
 
-    const baseStyle: React.CSSProperties = { position: 'absolute', zIndex: 10, right: 10, top: 10, background: 'var(--panel-bg, rgba(0,0,0,0.5))', padding: '8px', borderRadius: '8px', color: 'var(--panel-fg, white)', border: '1px solid var(--panel-border, transparent)', boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }
-    const mobileStyle: React.CSSProperties = mobileTop != null ? { position: 'fixed', right: 10, top: mobileTop, zIndex: 29, background: 'var(--panel-bg, rgba(0,0,0,0.5))', padding: '8px', borderRadius: 8, color: 'var(--panel-fg, white)', maxWidth: 420, width: 'calc(100% - 40px)', border: '1px solid var(--panel-border, transparent)', boxShadow: '0 2px 8px rgba(0,0,0,0.18)' } : baseStyle
+    const baseClasses = "absolute z-10 right-[10px] top-[10px] bg-black/50 dark:bg-black/60 backdrop-blur-sm p-2 rounded-lg text-white border border-transparent shadow-lg"
+    const mobileClasses = "fixed right-[10px] z-[29] bg-black/50 dark:bg-black/60 backdrop-blur-sm p-2 rounded-lg text-white max-w-[420px] w-[calc(100%-40px)] border border-transparent shadow-lg"
 
     return (
         <div
             ref={containerRef}
-            className="level-selector"
-            style={mobileTop != null ? mobileStyle : baseStyle}
+            className={`level-selector ${mobileTop != null ? mobileClasses : baseClasses}`}
+            style={mobileTop != null ? { top: mobileTop } : undefined}
             // wheel handled via non-passive listener above
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
         >
-            <label htmlFor="level-select">Niveau : </label>
-            <select id="level-select" value={level} onChange={e => onChange(Number(e.target.value))} disabled={loading || levels.length === 0} style={{ background: 'var(--panel-bg, rgba(0,0,0,0.5))', color: 'var(--panel-fg, white)', border: '1px solid var(--panel-border, transparent)', borderRadius: 6 }}>
+            <label htmlFor="level-select" className="text-sm font-medium">Niveau : </label>
+            <select
+                id="level-select"
+                value={level}
+                onChange={e => onChange(Number(e.target.value))}
+                disabled={loading || levels.length === 0}
+                className="bg-black/40 dark:bg-black/50 text-white border border-white/20 rounded-md px-2 py-1 ml-2 outline-none focus:ring-2 focus:ring-blue-500"
+            >
                 {loading ? (
                     <option>Chargement...</option>
                 ) : levels.length === 0 ? (

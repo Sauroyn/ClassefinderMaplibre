@@ -4,6 +4,7 @@ import SearchList from './search/SearchList'
 import SearchSelected from './search/SearchSelected'
 import { STORAGE_KEYS, getScopedKey, safeGetItem, safeSetItem } from '../utils/storage'
 import { searchWithAliases, getAlias } from '../utils/aliases'
+import { Magnifier, Xmark, ArrowLeft, Route as RouteIcon } from '@gravity-ui/icons'
 
 type Props = {
     data: GeoJSON.FeatureCollection | null
@@ -198,37 +199,58 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
     // On ne force plus setSelected(null) sur focus input, pour permettre la sélection ET la liste
     return (
-        <div className="searchbar" style={{ position: 'absolute', left: 12, top: 12, zIndex: 10, width: 360, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.18)', border: '1px solid var(--panel-border, #ddd)' }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="searchbar absolute left-3 top-3 z-10 w-[360px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600">
+            <div className="flex gap-2 items-center">
                 {/* left icon: back | clear | search */}
                 {showBack || groupView ? (
-                    <button onClick={() => {
-                        if (groupView) {
-                            // Si on est dans une vue de groupe, revenir à la liste de recherche
-                            setGroupView(null)
-                            try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
-                        } else {
-                            // Sinon, réinitialiser complètement
-                            setQ('')
-                            setFocused(false)
-                            setShowBack(false)
-                            setSelected(null)
-                            try { window.dispatchEvent(new CustomEvent('map:highlight-clear')) } catch { }
-                            if ((onClear)) onClear()
-                        }
-                    }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>←</button>
+                    <button
+                        onClick={() => {
+                            if (groupView) {
+                                // Si on est dans une vue de groupe, revenir à la liste de recherche
+                                setGroupView(null)
+                                try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
+                            } else {
+                                // Sinon, réinitialiser complètement
+                                setQ('')
+                                setFocused(false)
+                                setShowBack(false)
+                                setSelected(null)
+                                try { window.dispatchEvent(new CustomEvent('map:highlight-clear')) } catch { }
+                                if ((onClear)) onClear()
+                            }
+                        }}
+                        className="w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
                 ) : q.length > 0 ? (
-                    <button onClick={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setQ(''); setSelected(null); setFocused(true); if (inputRef.current) inputRef.current.focus() }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button>
+                    <button
+                        onClick={() => {
+                            if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }
+                            setQ('')
+                            setSelected(null)
+                            setFocused(true)
+                            if (inputRef.current) inputRef.current.focus()
+                        }}
+                        className="w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+                    >
+                        <Xmark className="w-5 h-5" />
+                    </button>
                 ) : (
-                    <button onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }} style={{ width: 36, height: 36, background: 'var(--btn-bg, transparent)', border: '1px solid var(--btn-border, transparent)', borderRadius: 8, color: 'var(--btn-fg, inherit)' }} aria-label="search">🔍</button>
+                    <button
+                        onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }}
+                        className="w-9 h-9 bg-transparent border border-transparent rounded-lg text-gray-600 dark:text-gray-400 flex items-center justify-center"
+                        aria-label="search"
+                    >
+                        <Magnifier className="w-5 h-5" />
+                    </button>
                 )}
                 <input
                     ref={inputRef}
-                    className="search-input"
+                    className="search-input flex-1 px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all"
                     value={q}
                     onChange={e => { setQ(e.target.value); if (selected) setSelected(null); setFocused(true) }}
                     placeholder="Rechercher une salle..."
-                    style={{ flex: 1, padding: '8px', background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #eee)', borderRadius: 8, outline: 'none' }}
                     onFocus={() => {
                         if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }
                         setFocused(true)
@@ -247,28 +269,18 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 {(!focused && !q) && (
                     <button
                         onClick={() => { if (typeof onOpenRoutePlanner === 'function') { onOpenRoutePlanner(); } }}
-                        style={{
-                            width: 36,
-                            height: 36,
-                            marginLeft: 2,
-                            borderRadius: 8,
-                            border: '1px solid var(--btn-border, #444)',
-                            background: 'var(--btn-bg, #222)',
-                            color: 'var(--btn-fg, #fff)',
-                            fontWeight: 700,
-                            transition: 'background 0.2s, color 0.2s',
-                            boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
-                        }}
+                        className="w-9 h-9 ml-0.5 rounded-lg border border-gray-700 dark:border-gray-500 bg-gray-800 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600 transition-all font-bold shadow-sm flex items-center justify-center"
                         title="Itinéraire"
                         aria-label="Itinéraire"
-                        className="itinerary-btn"
-                    >🗺️</button>
+                    >
+                        <RouteIcon className="w-5 h-5" />
+                    </button>
                 )}
             </div>
             {showList && (
                 <>
                     {groupView && (
-                        <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--panel-border, #eee)', fontWeight: 700, fontSize: 14 }}>
+                        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 font-bold text-sm">
                             {groupView.title} ({groupView.items.length})
                         </div>
                     )}

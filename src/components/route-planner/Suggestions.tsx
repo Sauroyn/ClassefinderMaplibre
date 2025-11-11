@@ -69,15 +69,21 @@ export default function Suggestions(props: {
             }
         }
 
-        return (<div style={{ width: '100%' }}>
-            <div key={`s-mapos`} onMouseDown={async () => {
-                try {
-                    await new Promise<void>((resolve) => {
-                        navigator.geolocation.getCurrentPosition(() => resolve(), () => resolve(), { enableHighAccuracy: true, maximumAge: 30000, timeout: 6000 })
-                    })
-                } catch { }
-                onSelectStart('USER_POSITION', 'Ma position')
-            }} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', fontWeight: 600 }}>Ma position</div>
+        return (<div className="w-full">
+            <div
+                key={`s-mapos`}
+                onMouseDown={async () => {
+                    try {
+                        await new Promise<void>((resolve) => {
+                            navigator.geolocation.getCurrentPosition(() => resolve(), () => resolve(), { enableHighAccuracy: true, maximumAge: 30000, timeout: 6000 })
+                        })
+                    } catch { }
+                    onSelectStart('USER_POSITION', 'Ma position')
+                }}
+                className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+                Ma position
+            </div>
             {uniqueList.map(n => {
                 const isGrouped = n.provisional && groupedMap.has(n.name.toLowerCase().trim()) && groupedMap.get(n.name.toLowerCase().trim())!.length > 1
                 return (
@@ -86,13 +92,13 @@ export default function Suggestions(props: {
                         onMouseEnter={() => n.provisional && n.featureIndex != null ? dispatchHover(n.featureIndex) : undefined}
                         onMouseLeave={() => dispatchHover(undefined)}
                         onMouseDown={() => handleSelect('start', n)}
-                        style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                        className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer flex justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
-                        <span>
+                        <span className="text-gray-900 dark:text-gray-100">
                             {n.name}
-                            {isGrouped && <span style={{ marginLeft: 6, fontSize: 12, opacity: 0.7 }}>({groupedMap.get(n.name.toLowerCase().trim())!.length})</span>}
+                            {isGrouped && <span className="ml-1.5 text-xs opacity-70">({groupedMap.get(n.name.toLowerCase().trim())!.length})</span>}
                         </span>
-                        <span style={{ color: '#666' }}>{n.level || ''}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{n.level || ''}</span>
                     </div>
                 )
             })}
@@ -119,15 +125,21 @@ export default function Suggestions(props: {
             }
         }
 
-        return (<div style={{ width: '100%' }}>
-            <div key={`e-mapos`} onMouseDown={async () => {
-                try {
-                    await new Promise<void>((resolve) => {
-                        navigator.geolocation.getCurrentPosition(() => resolve(), () => resolve(), { enableHighAccuracy: true, maximumAge: 30000, timeout: 6000 })
-                    })
-                } catch { }
-                onSelectEnd('USER_POSITION', 'Ma position')
-            }} style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', fontWeight: 600 }}>Ma position</div>
+        return (<div className="w-full">
+            <div
+                key={`e-mapos`}
+                onMouseDown={async () => {
+                    try {
+                        await new Promise<void>((resolve) => {
+                            navigator.geolocation.getCurrentPosition(() => resolve(), () => resolve(), { enableHighAccuracy: true, maximumAge: 30000, timeout: 6000 })
+                        })
+                    } catch { }
+                    onSelectEnd('USER_POSITION', 'Ma position')
+                }}
+                className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer font-semibold hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+                Ma position
+            </div>
             {uniqueList.map(n => {
                 const isGrouped = n.provisional && groupedMap.has(n.name.toLowerCase().trim()) && groupedMap.get(n.name.toLowerCase().trim())!.length > 1
                 return (
@@ -136,13 +148,13 @@ export default function Suggestions(props: {
                         onMouseEnter={() => n.provisional && n.featureIndex != null ? dispatchHover(n.featureIndex) : undefined}
                         onMouseLeave={() => dispatchHover(undefined)}
                         onMouseDown={() => handleSelect('end', n)}
-                        style={{ padding: 8, borderBottom: '1px solid #f2f2f2', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}
+                        className="p-2 border-b border-gray-100 dark:border-gray-700 cursor-pointer flex justify-between hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
-                        <span>
+                        <span className="text-gray-900 dark:text-gray-100">
                             {n.name}
-                            {isGrouped && <span style={{ marginLeft: 6, fontSize: 12, opacity: 0.7 }}>({groupedMap.get(n.name.toLowerCase().trim())!.length})</span>}
+                            {isGrouped && <span className="ml-1.5 text-xs opacity-70">({groupedMap.get(n.name.toLowerCase().trim())!.length})</span>}
                         </span>
-                        <span style={{ color: '#666' }}>{n.level || ''}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{n.level || ''}</span>
                     </div>
                 )
             })}

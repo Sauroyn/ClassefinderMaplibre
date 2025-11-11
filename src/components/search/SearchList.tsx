@@ -37,15 +37,15 @@ export default function SearchList({ items, onPick, onOpenGroup }: { items: List
                             onMouseEnter={() => dispatchHover(it.id)}
                             onMouseLeave={() => dispatchHover(undefined)}
                             onMouseDown={() => onPick(it.id, it.name)}
-                            style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', borderBottom: '1px solid var(--panel-border, #2a2d33)', cursor: 'pointer' }}
+                            className="flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
                             <div>
-                                <div style={{ fontWeight: 600 }}>{it.name}</div>
+                                <div className="font-semibold text-gray-900 dark:text-gray-100">{it.name}</div>
                             </div>
                             {it.level != null ? (
-                                <div style={{ alignSelf: 'center', opacity: 0.9, padding: '4px 8px', background: 'var(--chip-bg, #f1f3f5)', color: 'var(--chip-fg, #111)', borderRadius: 12 }}>{it.level}</div>
+                                <div className="self-center opacity-90 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm">{it.level}</div>
                             ) : (
-                                <div style={{ width: 36 }} />
+                                <div className="w-9" />
                             )}
                         </div>
                     )
@@ -56,13 +56,13 @@ export default function SearchList({ items, onPick, onOpenGroup }: { items: List
                             onMouseEnter={() => dispatchHoverMany(entry.items.map(i => i.id))}
                             onMouseLeave={() => dispatchHover(undefined)}
                             onMouseDown={() => { if (onOpenGroup) onOpenGroup(entry.name, entry.items) }}
-                            style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', borderBottom: '1px solid var(--panel-border, #2a2d33)', cursor: 'pointer' }}
+                            className="flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <div style={{ fontWeight: 700 }}>{entry.name}</div>
-                                <div style={{ opacity: 0.75, fontSize: 12 }}>({entry.items.length})</div>
+                            <div className="flex items-center gap-2">
+                                <div className="font-bold text-gray-900 dark:text-gray-100">{entry.name}</div>
+                                <div className="opacity-75 text-xs text-gray-600 dark:text-gray-400">({entry.items.length})</div>
                             </div>
-                            <div style={{ width: 36 }} />
+                            <div className="w-9" />
                         </div>
                     </div>
                 )
