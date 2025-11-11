@@ -400,54 +400,49 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
-        <div className={`route-planner absolute top-2.5 left-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-[15px] z-controls w-[360px] shadow-lg ${navigationActive ? 'hidden' : 'block'}`}>
-            {/* Bande gauche avec seulement le bouton fermer */}
-            <div className="flex gap-2 items-start">
-                <div className="flex flex-col">
-                    {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="w-7 h-7 rounded-lg bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
-                </div>
-
-                {/* Colonne principale */}
-                <div className="flex-1 flex flex-col">
-                    {/* Ligne avec inputs, boutons paramètres et swap */}
-                    <div className="flex gap-2 items-start">
-                        <div className="flex-1 flex flex-col">
-                            {/* Ligne départ avec bouton paramètres */}
-                            <div className="flex gap-2 items-start">
-                                <Inputs
-                                    startQuery={startQuery}
-                                    endQuery={endQuery}
-                                    setStartQuery={setStartQuery}
-                                    setEndQuery={setEndQuery}
-                                    nodeOptions={nodeOptions}
-                                    setFocusedField={setFocusedField}
-                                    onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
-                                    onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
-                                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
-                                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
-                                />
-                                <div className="flex flex-col justify-between pt-2 pb-2">
-                                    {/* Bouton paramètres aligné avec départ */}
-                                    <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="w-8 h-8 rounded-lg bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
-                                    {/* Bouton swap aligné avec arrivée */}
-                                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors flex items-center justify-center">⇄</button>
-                                </div>
-                            </div>
-                        </div>
+        <div className={`route-planner absolute top-2.5 left-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls w-[360px] shadow-lg overflow-hidden ${navigationActive ? 'hidden' : 'block'}`}>
+            <div className="p-4 pb-3">
+                {/* Ligne avec bouton fermer, inputs, et boutons paramètres/swap */}
+                <div className="flex gap-2 items-center">
+                    {/* Bouton fermer */}
+                    <div className="flex-shrink-0">
+                        {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="w-7 h-7 rounded-lg bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
                     </div>
 
-                    {showSettings && (
-                        <SettingsPopover
-                            excludeStairs={excludeStairs}
-                            coveredOnly={coveredOnly}
-                            showSecondary={showSecondary}
-                            onChangeExcludeStairs={setExcludeStairs}
-                            onChangeCoveredOnly={setCoveredOnly}
-                            onChangeShowSecondary={setShowSecondary}
-                            onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
+                    {/* Inputs avec icônes */}
+                    <div className="flex-1 min-w-0">
+                        <Inputs
+                            startQuery={startQuery}
+                            endQuery={endQuery}
+                            setStartQuery={setStartQuery}
+                            setEndQuery={setEndQuery}
+                            nodeOptions={nodeOptions}
+                            setFocusedField={setFocusedField}
+                            onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
+                            onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
+                            onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
+                            onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
                         />
-                    )}
+                    </div>
+
+                    {/* Boutons paramètres et swap */}
+                    <div className="flex flex-col gap-0 flex-shrink-0">
+                        <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
+                        <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center">⇄</button>
+                    </div>
                 </div>
+
+                {showSettings && (
+                    <SettingsPopover
+                        excludeStairs={excludeStairs}
+                        coveredOnly={coveredOnly}
+                        showSecondary={showSecondary}
+                        onChangeExcludeStairs={setExcludeStairs}
+                        onChangeCoveredOnly={setCoveredOnly}
+                        onChangeShowSecondary={setShowSecondary}
+                        onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
+                    />
+                )}
             </div>
 
             {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
