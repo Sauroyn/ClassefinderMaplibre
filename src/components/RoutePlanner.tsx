@@ -38,7 +38,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
         graph,
         input: { start, end, startQuery, endQuery, focusedField },
         routes: { list: routes, highlighted: highlightedRoute, selected: selectedRoute },
-        settings: { excludeStairs, coveredOnly, showSecondary, showSettings },
+        settings: { excludeStairs, coveredOnly, showSecondary },
         ui: { isMobile, mobileRoutesOpen, detailsOpen },
         navigation: { active: navigationActive, confirmOpen, confirmDistance, confirmUserCoord },
         suggestions: { nodeOptions, groupMenuField, groupMenuTitle, groupMenuItems },
@@ -63,10 +63,6 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     const setConfirmUserCoord = (payload: [number, number] | null) => dispatch({ type: 'SET_CONFIRM_USER_COORD', payload })
     const setToastMessage = (payload: string | null) => dispatch({ type: 'SET_TOAST_MESSAGE', payload })
     const setProvisionalNodes = (payload: Map<string, any>) => dispatch({ type: 'SET_PROVISIONAL_NODES', payload })
-    const setExcludeStairs = () => dispatch({ type: 'TOGGLE_EXCLUDE_STAIRS' })
-    const setCoveredOnly = () => dispatch({ type: 'TOGGLE_COVERED_ONLY' })
-    const setShowSecondary = () => dispatch({ type: 'TOGGLE_SHOW_SECONDARY' })
-    const setShowSettings = (payload: boolean) => dispatch({ type: 'SET_SHOW_SETTINGS', payload: payload })
     const setGroupMenuField = (payload: 'start' | 'end' | null) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: payload, title: groupMenuTitle, items: groupMenuItems } })
     const setGroupMenuTitle = (title: string) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title, items: groupMenuItems } })
     const setGroupMenuItems = (items: Array<{ id: string; name: string; level?: string }>) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title: groupMenuTitle, items } })
