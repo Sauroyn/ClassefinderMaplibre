@@ -1,15 +1,27 @@
+import { Gear } from '@gravity-ui/icons'
 
-export function NavigationSheetHeader({ totalDist, totalTime, isDark, onOpenSettings, onFinish }: { totalDist: string, totalTime: string, isDark: boolean, onOpenSettings?: () => void, onFinish: () => void }) {
+export function NavigationSheetHeader({ totalDist, totalTime, onOpenSettings, onFinish }: { totalDist: string, totalTime: string, onOpenSettings?: () => void, onFinish: () => void }) {
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                <div style={{ fontWeight: 700 }}>Trajet en cours</div>
-                <div style={{ fontSize: 12, color: isDark ? '#aaa' : '#666' }}>{totalDist} • {totalTime}</div>
+        <div className="flex items-center justify-between">
+            <div className="flex gap-2 items-baseline">
+                <div className="font-bold">Trajet en cours</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">{totalDist} • {totalTime}</div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-                <button aria-label="Paramètres" title="Paramètres" onClick={onOpenSettings}
-                    style={{ border: '1px solid ' + (isDark ? '#333' : '#e3e3e3'), background: 'transparent', color: 'inherit', borderRadius: 8, padding: '4px 8px' }}>⚙</button>
-                <button onClick={onFinish} style={{ border: 'none', background: '#e74c3c', color: '#fff', borderRadius: 8, padding: '6px 10px', fontWeight: 700 }}>Finir</button>
+            <div className="flex gap-2">
+                <button
+                    aria-label="Paramètres"
+                    title="Paramètres"
+                    onClick={onOpenSettings}
+                    className="border border-gray-300 dark:border-gray-700 bg-transparent rounded-lg px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                    <Gear className="w-4 h-4" />
+                </button>
+                <button
+                    onClick={onFinish}
+                    className="border-none bg-red-500 hover:bg-red-600 text-white rounded-lg px-2.5 py-1.5 font-bold transition-colors"
+                >
+                    Finir
+                </button>
             </div>
         </div>
     )

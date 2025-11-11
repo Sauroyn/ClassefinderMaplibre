@@ -14,13 +14,13 @@ const ConfigSelector: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
     }, [])
 
     const content = (
-        <div style={{ background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)', borderRadius: 6, padding: 8, minWidth: 220, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>Config</div>
+        <div className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md p-2 min-w-[220px] shadow-lg">
+            <div className="font-semibold mb-1.5">Config</div>
             {files.length === 0 ? (
-                <div style={{ fontSize: 12 }}>Aucun fichier .json trouvé</div>
+                <div className="text-xs">Aucun fichier .json trouvé</div>
             ) : (
                 <select
-                    style={{ width: '100%', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)', borderRadius: 6, padding: 6 }}
+                    className="w-full bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md p-1.5"
                     value={selected || ''}
                     onChange={(e) => {
                         const v = e.target.value || null
@@ -44,7 +44,7 @@ const ConfigSelector: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
 
     if (embedded) return content
     return (
-        <div style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 9999 }}>{content}</div>
+        <div className="fixed right-3 bottom-3 z-[9999]">{content}</div>
     )
 };
 

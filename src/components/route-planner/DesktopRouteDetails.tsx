@@ -1,3 +1,4 @@
+import { ArrowLeft } from '@gravity-ui/icons'
 import DesktopRouteStats from './DesktopRouteStats'
 import DesktopRouteSteps from './DesktopRouteSteps'
 
@@ -30,35 +31,18 @@ export default function DesktopRouteDetails({
     if (!route) return null
 
     return (
-        <div
-            style={{
-                width: '100%',
-                borderTop: '1px solid var(--muted, #eee)',
-                paddingTop: 12,
-                marginTop: 12,
-            }}
-        >
+        <div className="w-full border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
             {/* Header avec bouton retour */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+            <div className="flex items-center mb-3">
                 <button
                     onClick={onBack}
                     aria-label="Retour"
                     title="Retour"
-                    style={{
-                        marginRight: 8,
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--panel-fg, #111)',
-                        fontSize: 18,
-                        cursor: 'pointer',
-                        padding: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                    }}
+                    className="mr-2 bg-transparent border-none text-gray-900 dark:text-gray-100 text-lg cursor-pointer p-1 flex items-center hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
                 >
-                    <span style={{ fontWeight: 700 }}>&larr;</span>
+                    <ArrowLeft className="w-5 h-5 font-bold" />
                 </button>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>Détails de l'itinéraire</div>
+                <div className="font-bold text-[15px]">Détails de l'itinéraire</div>
             </div>
 
             {/* Stats de l'itinéraire */}

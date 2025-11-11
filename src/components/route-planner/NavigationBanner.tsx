@@ -1,24 +1,24 @@
 import type { NavigationState } from './NavigationController'
 
 function iconFor(type: string) {
-    const style: any = { width: 24, height: 24, display: 'inline-block', marginRight: 8 }
+    const className = "w-6 h-6 inline-block mr-2"
     switch (type) {
         case 'turn-right':
-            return (<span aria-hidden style={style}>↱</span>)
+            return (<span aria-hidden className={className}>↱</span>)
         case 'turn-left':
-            return (<span aria-hidden style={style}>↰</span>)
+            return (<span aria-hidden className={className}>↰</span>)
         case 'turn-slight-right':
-            return (<span aria-hidden style={style}>↗</span>)
+            return (<span aria-hidden className={className}>↗</span>)
         case 'turn-slight-left':
-            return (<span aria-hidden style={style}>↖</span>)
+            return (<span aria-hidden className={className}>↖</span>)
         case 'uturn':
-            return (<span aria-hidden style={style}>⤴</span>)
+            return (<span aria-hidden className={className}>⤴</span>)
         case 'floor-up':
-            return (<span aria-hidden style={style}>🧭⬆︎</span>)
+            return (<span aria-hidden className={className}>🧭⬆︎</span>)
         case 'floor-down':
-            return (<span aria-hidden style={style}>🧭⬇︎</span>)
+            return (<span aria-hidden className={className}>🧭⬇︎</span>)
         default:
-            return (<span aria-hidden style={style}>➡</span>)
+            return (<span aria-hidden className={className}>➡</span>)
     }
 }
 
@@ -48,17 +48,12 @@ export default function NavigationBanner({ nav }: { nav: NavigationState }) {
 
     // Float banner with rounded corners and some offset from the very top to avoid overlapping floor selector
     return (
-        <div className="nav-banner" style={{
-            position: 'fixed', top: 10, left: 10, right: 10, zIndex: 1200,
-            background: 'var(--panel-bg, #222)', color: 'var(--panel-fg, #fff)',
-            padding: '12px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            boxShadow: '0 6px 18px rgba(0,0,0,0.22)', borderRadius: 12,
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="nav-banner fixed top-2.5 left-2.5 right-2.5 z-[1200] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-3 flex items-center justify-between shadow-xl rounded-xl">
+            <div className="flex items-center">
                 {upcoming ? iconFor(upcoming.type) : null}
                 <div>
-                    <div style={{ fontWeight: 700, fontSize: 16 }}>Prochaine étape</div>
-                    <div style={{ fontSize: 14 }}>{upcoming ? formatInstruction(upcoming.type || 'continue', distanceTo) : '—'}</div>
+                    <div className="font-bold text-base">Prochaine étape</div>
+                    <div className="text-sm">{upcoming ? formatInstruction(upcoming.type || 'continue', distanceTo) : '—'}</div>
                 </div>
             </div>
             {/* Plus de croix dans la bannière */}

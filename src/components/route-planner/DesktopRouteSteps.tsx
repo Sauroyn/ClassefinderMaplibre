@@ -1,15 +1,15 @@
 function iconFor(type: string) {
-    const style: any = { width: 18, height: 18, display: 'inline-block', marginRight: 6 }
+    const className = "w-[18px] h-[18px] inline-block mr-1.5"
     switch (type) {
-        case 'turn-right': return (<span aria-hidden style={style}>↱</span>)
-        case 'turn-left': return (<span aria-hidden style={style}>↰</span>)
-        case 'turn-slight-right': return (<span aria-hidden style={style}>↗</span>)
-        case 'turn-slight-left': return (<span aria-hidden style={style}>↖</span>)
-        case 'uturn': return (<span aria-hidden style={style}>⤴</span>)
-        case 'floor-up': return (<span aria-hidden style={style}>🧭⬆︎</span>)
-        case 'floor-down': return (<span aria-hidden style={style}>🧭⬇︎</span>)
-        case 'arrive': return (<span aria-hidden style={style}>🏁</span>)
-        default: return (<span aria-hidden style={style}>➡</span>)
+        case 'turn-right': return (<span aria-hidden className={className}>↱</span>)
+        case 'turn-left': return (<span aria-hidden className={className}>↰</span>)
+        case 'turn-slight-right': return (<span aria-hidden className={className}>↗</span>)
+        case 'turn-slight-left': return (<span aria-hidden className={className}>↖</span>)
+        case 'uturn': return (<span aria-hidden className={className}>⤴</span>)
+        case 'floor-up': return (<span aria-hidden className={className}>🧭⬆︎</span>)
+        case 'floor-down': return (<span aria-hidden className={className}>🧭⬇︎</span>)
+        case 'arrive': return (<span aria-hidden className={className}>🏁</span>)
+        default: return (<span aria-hidden className={className}>➡</span>)
     }
 }
 
@@ -61,19 +61,8 @@ export default function DesktopRouteSteps({
 
     return (
         <div>
-            <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13 }}>Étapes</div>
-            <ol
-                style={{
-                    listStyle: 'decimal',
-                    paddingLeft: 20,
-                    margin: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 8,
-                    maxHeight: 300,
-                    overflow: 'auto',
-                }}
-            >
+            <div className="font-bold mb-2 text-[13px]">Étapes</div>
+            <ol className="list-decimal pl-5 m-0 flex flex-col gap-2 max-h-[300px] overflow-auto">
                 {displaySteps.map((s, i) => {
                     const manList: Array<any> = Array.isArray(maneuvers) ? maneuvers : []
                     const at = cumEnds[i]
@@ -90,12 +79,7 @@ export default function DesktopRouteSteps({
                     return (
                         <li
                             key={i}
-                            style={{
-                                fontSize: 12,
-                                color: 'var(--panel-fg, #333)',
-                                cursor: 'pointer',
-                                lineHeight: 1.4,
-                            }}
+                            className="text-xs text-gray-900 dark:text-gray-100 cursor-pointer leading-tight hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
                             onClick={() => {
                                 try {
                                     const bbox = (s as any).bbox as [[number, number], [number, number]] | undefined
@@ -120,7 +104,7 @@ export default function DesktopRouteSteps({
                                 } catch { }
                             }}
                         >
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <div className="flex items-center">
                                 {iconFor(t)}
                                 <span>{instructionFr(t, distanceTo)}</span>
                             </div>
