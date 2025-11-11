@@ -195,11 +195,14 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // Cacher les suggestions si un élément est sélectionné
     const showList = (!selected) && (focused || q.length > 0 || groupView) && list.length > 0
 
+    // Détermine si on doit afficher la forme pillule (fermée) ou les arrondis normaux (ouverte)
+    const isSearchClosed = !showList && !selected && !q && !focused
+
     // Ne pas masquer la liste lors d'une sélection, sauf si on sort du champ
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
     // On ne force plus setSelected(null) sur focus input, pour permettre la sélection ET la liste
     return (
-        <div className={`searchbar absolute left-3 top-[15px] md:top-3 z-search w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-0 shadow-lg border-none transition-all ${!showList && !selected ? 'rounded-full' : 'rounded-[15px]'}`}>
+        <div className={`searchbar absolute left-3 top-[15px] md:top-3 z-search w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-0 shadow-lg border-none transition-[width,height,background-color,box-shadow] duration-100 ${isSearchClosed ? 'rounded-full' : 'rounded-[15px]'}`}>
             <div className="flex gap-1 items-center px-3 py-2">
                 {/* left icon: back | clear | search */}
                 {showBack || groupView ? (
@@ -262,7 +265,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                             setFocused(false)
                             // Si pas de texte, on peut masquer la sélection
                             if (!q) setSelected(null)
-                        }, 150)
+                        }, 50)
                     }}
                 />
                 {/* Bouton accès direct itinéraire à droite de l'input */}
