@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { getAllAliases, setAlias, deleteAlias, getAvailableNamesForAliasSelector } from '../../utils/aliases'
 import type { FeatureAlias } from '../../utils/aliases'
+import SearchableSelect from './SearchableSelect'
 
 type Props = {
     data: GeoJSON.FeatureCollection | null
@@ -112,18 +113,12 @@ export default function AliasManager({ data, editingFeatureId, editingOriginalNa
                             {editingAlias.originalName || `Zone ${editingAlias.featureId}`}
                         </div>
                     ) : (
-                        <select
+                        <SearchableSelect
+                            options={availableFeatures}
                             value={selectedFeatureId}
-                            onChange={(e) => setSelectedFeatureId(e.target.value)}
-                            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }}
-                        >
-                            <option value="">-- Sélectionner une zone --</option>
-                            {availableFeatures.map(f => (
-                                <option key={f.id} value={f.id}>
-                                    {f.name} {f.level != null ? `(Niveau ${f.level})` : ''}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={setSelectedFeatureId}
+                            placeholder="-- Sélectionner une zone --"
+                        />
                     )}
                 </div>
 
