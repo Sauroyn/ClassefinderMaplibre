@@ -4,19 +4,23 @@ export default function RouteOption({ route, primary, highlighted, onHover, onLe
     const color = primary ? '#007bff' : (route.index === 1 ? '#999999' : '#cccccc')
 
     const bgClass = highlighted
-        ? 'bg-gray-700 dark:bg-gray-600'
-        : (primary ? 'bg-gray-800 dark:bg-gray-700' : 'bg-gray-900 dark:bg-gray-800')
+        ? 'bg-blue-50 dark:bg-blue-900/30'
+        : 'bg-white dark:bg-gray-800'
 
     const borderClass = highlighted
-        ? 'border-gray-600 dark:border-gray-500'
-        : (primary ? 'border-gray-700 dark:border-gray-600' : 'border-gray-800 dark:border-gray-700')
+        ? 'border-blue-200 dark:border-blue-700'
+        : 'border-gray-300 dark:border-gray-600'
+
+    const hoverClass = highlighted
+        ? 'hover:bg-blue-100 dark:hover:bg-blue-900/40'
+        : 'hover:bg-gray-50 dark:hover:bg-gray-700'
 
     return (
         <div
             onMouseEnter={() => onHover(route)}
             onMouseLeave={() => onLeave(route)}
             onClick={() => onGo(route)}
-            className={`flex justify-between items-center px-2 py-1.5 rounded-md cursor-pointer border ${bgClass} ${borderClass} hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors`}
+            className={`flex justify-between items-center px-2 py-1.5 rounded-md cursor-pointer border ${bgClass} ${borderClass} ${hoverClass} transition-colors`}
         >
             <div>
                 <div className="font-bold text-gray-900 dark:text-gray-100">{primary ? 'Plus court' : `Alternative ${route.index}`}</div>
