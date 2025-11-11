@@ -36,6 +36,8 @@ export default function App() {
   const [plannerEnd, setPlannerEnd] = useState<{ id: string, name: string } | null>(null)
   const { theme, setTheme } = useTheme()
   const [navActive, setNavActive] = useState(false)
+  const [editingAliasFeatureId, setEditingAliasFeatureId] = useState<string | number | null>(null)
+  const [editingAliasOriginalName, setEditingAliasOriginalName] = useState<string>('')
 
   // Settings modal draft states to avoid partial saves and allow cancel
   const { draftTheme, setDraftTheme, draftIcalUrl, setDraftIcalUrl, draftBufferMin, setDraftBufferMin, draftEventsEnabled, setDraftEventsEnabled, resetDraft } = useSettingsDraft({ theme, icalUrl, bufferMin, eventsEnabled })
@@ -101,6 +103,11 @@ export default function App() {
         onOpenRoutePlanner={() => {
           setShowPlanner(true)
         }}
+        onOpenAliasSettings={(featureId, originalName) => {
+          setEditingAliasFeatureId(featureId)
+          setEditingAliasOriginalName(originalName)
+          openSettings()
+        }}
       />}
       <MapView ref={mapRef} data={dataRef.current} level={level} theme={theme} onThemeChange={setTheme} />
       {showPlanner && <RoutePlanner
@@ -141,7 +148,14 @@ export default function App() {
           onChangeBufferMin={setDraftBufferMin}
           eventsEnabled={draftEventsEnabled}
           onChangeEventsEnabled={setDraftEventsEnabled}
-          onCancel={() => setShowSettings(false)}
+          data={dataRef.current}
+          editingAliasFeatureId={editingAliasFeatureId}
+          editingAliasOriginalName={editingAliasOriginalName}
+          onCancel={() => {
+            setShowSettings(false)
+            setEditingAliasFeatureId(null)
+            setEditingAliasOriginalName('')
+          }}
           onSave={() => {
             setTheme(draftTheme)
             setIcalUrl(draftIcalUrl)
@@ -152,6 +166,8 @@ export default function App() {
             try { localStorage.setItem(EVENTS_ENABLED_KEY, draftEventsEnabled ? '1' : '0') } catch { }
             if (!draftEventsEnabled) { try { mapRef.current?.clearRoute?.() } catch { } }
             setShowSettings(false)
+            setEditingAliasFeatureId(null)
+            setEditingAliasOriginalName('')
           }}
         />
       )}

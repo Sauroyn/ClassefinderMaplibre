@@ -1,4 +1,5 @@
 import ConfigSelector from '../ConfigSelector'
+import AliasManager from './AliasManager'
 
 export default function SettingsModal({
     theme,
@@ -11,6 +12,9 @@ export default function SettingsModal({
     onChangeEventsEnabled,
     onCancel,
     onSave,
+    data,
+    editingAliasFeatureId,
+    editingAliasOriginalName,
 }: {
     theme: 'light' | 'dark'
     onChangeTheme: (t: 'light' | 'dark') => void
@@ -22,6 +26,9 @@ export default function SettingsModal({
     onChangeEventsEnabled: (v: boolean) => void
     onCancel: () => void
     onSave: () => void
+    data?: GeoJSON.FeatureCollection | null
+    editingAliasFeatureId?: string | number | null
+    editingAliasOriginalName?: string
 }) {
     return (
         <div role="dialog" aria-modal="true" style={{ position: 'fixed', inset: 0, zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)' }}>
@@ -57,6 +64,13 @@ export default function SettingsModal({
                             Activer la fonctionnalité événements (sélecteur, iCal, pré‑calculs)
                         </label>
                     </div>
+
+                    {/* Alias Management */}
+                    <AliasManager
+                        data={data || null}
+                        editingFeatureId={editingAliasFeatureId}
+                        editingOriginalName={editingAliasOriginalName}
+                    />
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--panel-border, #ddd)', paddingTop: 12 }}>
                         <button onClick={onCancel} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'transparent', color: 'var(--panel-fg, #111)', cursor: 'pointer' }}>Annuler</button>

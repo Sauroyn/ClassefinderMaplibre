@@ -537,6 +537,49 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             }
         } catch (e) { }
     }, [level])
+
+    // Écouter les changements d'alias et régénérer les centroides
+    useEffect(() => {
+        const map = mapRef.current
+        if (!map) return
+
+        const onAliasesUpdated = () => {
+            console.log('[MapView] Alias mis à jour, régénération des centroides...')
+            try {
+                if (!data) return
+
+                // Régénérer les centroides avec les nouveaux alias
+                let themedData = data
+                try {
+                    if (theme === 'dark') {
+                        themedData = normalizeFeatureCollection(data, true)
+                    }
+                } catch { }
+
+                const centroids = generateCentroids(themedData)
+
+                // Mettre à jour la source des centroides
+                const source = map.getSource('buildings-centroids') as any
+                if (source && source.setData) {
+                    source.setData(centroids)
+                    console.log('[MapView] Centroides mis à jour avec succès')
+
+                    // Mettre à jour les labels aussi
+                    if (featureLabelsRef.current) {
+                        featureLabelsRef.current.update(level, theme)
+                    }
+                }
+            } catch (error) {
+                console.error('[MapView] Erreur lors de la mise à jour des centroides:', error)
+            }
+        }
+
+        window.addEventListener('aliases:updated', onAliasesUpdated as any)
+        return () => {
+            window.removeEventListener('aliases:updated', onAliasesUpdated as any)
+        }
+    }, [data, level, theme])
+
     useImperativeHandle(ref, () => ({
         getMap: () => mapRef.current,
         selectFeatureById: (id: number | string) => {
