@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import maplibre from 'maplibre-gl'
+import { LocationArrow, Sun, Moon } from '@gravity-ui/icons'
 
 type Props = { map?: maplibre.Map | null, theme?: 'light' | 'dark', onToggleTheme?: () => void }
 
@@ -125,16 +126,20 @@ const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme })
                 title="Me localiser"
                 aria-label="Me localiser"
                 onClick={trigger}
-                className="geolocate-button"
-                style={{ position: 'fixed', right: 10, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: visible ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-            >📍</button>
+                className="fixed right-[10px] z-[28] w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center"
+                style={{ top: top ?? 72, display: visible ? 'flex' : 'none' }}
+            >
+                <LocationArrow className="w-5 h-5" />
+            </button>
             <button
                 title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
                 aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
                 onClick={() => onToggleTheme && onToggleTheme()}
-                className="theme-toggle-button"
-                style={{ position: 'fixed', right: 10 + 44 + 8, top: top ?? 72, zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-            >{theme === 'dark' ? '☀️' : '🌙'}</button>
+                className="fixed z-[28] w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center"
+                style={{ right: 10 + 44 + 8, top: top ?? 72 }}
+            >
+                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
         </>
     )
 }
