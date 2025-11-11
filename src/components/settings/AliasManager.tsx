@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { Pencil, TrashBin } from '@gravity-ui/icons'
 import { getAllAliases, setAlias, deleteAlias, getAvailableNamesForAliasSelector } from '../../utils/aliases'
 import type { FeatureAlias } from '../../utils/aliases'
 import SearchableSelect from './SearchableSelect'
@@ -99,17 +100,17 @@ export default function AliasManager({ data, editingFeatureId, editingOriginalNa
     }
 
     return (
-        <div style={{ borderTop: '1px solid var(--panel-border, #ddd)', paddingTop: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Gestion des alias</div>
+        <div className="border-t border-gray-300 dark:border-gray-600 pt-3">
+            <div className="text-[13px] font-semibold mb-3 text-gray-900 dark:text-gray-100">Gestion des alias</div>
 
             {/* Form to create/edit alias */}
-            <div style={{ background: 'var(--muted, #f8f9fa)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
-                <div style={{ marginBottom: 8 }}>
-                    <label style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
+            <div className="bg-gray-100 dark:bg-gray-700/50 p-3 rounded-lg mb-3">
+                <div className="mb-2">
+                    <label className="block text-xs mb-1 text-gray-900 dark:text-gray-100">
                         Zone à renommer {editingAlias && '(modification)'}
                     </label>
                     {editingAlias ? (
-                        <div style={{ padding: 8, background: 'var(--panel-bg, white)', borderRadius: 6, border: '1px solid var(--panel-border, #ddd)' }}>
+                        <div className="p-2 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
                             {editingAlias.originalName || `Zone ${editingAlias.featureId}`}
                         </div>
                     ) : (
@@ -122,8 +123,8 @@ export default function AliasManager({ data, editingFeatureId, editingOriginalNa
                     )}
                 </div>
 
-                <div style={{ marginBottom: 8 }}>
-                    <label style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
+                <div className="mb-2">
+                    <label className="block text-xs mb-1 text-gray-900 dark:text-gray-100">
                         Nouveau nom (alias)
                     </label>
                     <input
@@ -131,33 +132,33 @@ export default function AliasManager({ data, editingFeatureId, editingOriginalNa
                         value={aliasName}
                         onChange={(e) => setAliasName(e.target.value)}
                         placeholder="Ex: Salle TP1"
-                        style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }}
+                        className="w-full p-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     />
                 </div>
 
-                <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <div className="mb-3">
+                    <label className="flex items-center gap-2 text-xs text-gray-900 dark:text-gray-100 cursor-pointer">
                         <input
                             type="checkbox"
                             checked={showOriginal}
                             onChange={(e) => setShowOriginal(e.target.checked)}
-                            style={{ accentColor: 'var(--btn-border, #777)' }}
+                            className="accent-blue-600 dark:accent-blue-500"
                         />
                         Afficher aussi le nom original dans la recherche
                     </label>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="flex gap-2">
                     <button
                         onClick={handleSave}
-                        style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', cursor: 'pointer', fontWeight: 500 }}
+                        className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-pointer font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                     >
                         {editingAlias ? 'Modifier' : 'Ajouter'}
                     </button>
                     {editingAlias && (
                         <button
                             onClick={handleCancel}
-                            style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--panel-border, #ddd)', background: 'transparent', color: 'var(--panel-fg, #111)', cursor: 'pointer' }}
+                            className="px-3 py-2 rounded-md border border-gray-300 dark:border-gray-600 bg-transparent text-gray-900 dark:text-gray-100 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                         >
                             Annuler
                         </button>
@@ -168,50 +169,42 @@ export default function AliasManager({ data, editingFeatureId, editingOriginalNa
             {/* List of existing aliases */}
             {aliases.length > 0 && (
                 <div>
-                    <div style={{ fontSize: 12, marginBottom: 6, color: 'var(--chip-fg, #666)' }}>
+                    <div className="text-xs mb-1.5 text-gray-600 dark:text-gray-400">
                         Alias existants ({aliases.length})
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="flex flex-col gap-1.5">
                         {aliases.map(alias => (
                             <div
                                 key={alias.featureId}
-                                style={{
-                                    padding: 10,
-                                    background: 'var(--panel-bg, white)',
-                                    borderRadius: 6,
-                                    border: '1px solid var(--panel-border, #ddd)',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center'
-                                }}
+                                className="p-2.5 bg-white dark:bg-gray-800 rounded-md border border-gray-300 dark:border-gray-600 flex justify-between items-center"
                             >
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{alias.aliasName}</div>
+                                <div className="flex-1">
+                                    <div className="font-semibold text-[13px] text-gray-900 dark:text-gray-100">{alias.aliasName}</div>
                                     {alias.originalName && (
-                                        <div style={{ fontSize: 11, color: 'var(--chip-fg, #666)', marginTop: 2 }}>
+                                        <div className="text-[11px] text-gray-600 dark:text-gray-400 mt-0.5">
                                             Original: {alias.originalName}
                                         </div>
                                     )}
                                     {!alias.showOriginalInSearch && (
-                                        <div style={{ fontSize: 11, color: 'var(--chip-fg, #999)', marginTop: 2 }}>
+                                        <div className="text-[11px] text-gray-500 dark:text-gray-500 mt-0.5">
                                             (nom original masqué)
                                         </div>
                                     )}
                                 </div>
-                                <div style={{ display: 'flex', gap: 4 }}>
+                                <div className="flex gap-1">
                                     <button
                                         onClick={() => handleEdit(alias)}
-                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--btn-border, #ddd)', background: 'transparent', color: 'var(--btn-fg, #111)', cursor: 'pointer', fontSize: 12 }}
+                                        className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-transparent text-gray-900 dark:text-gray-100 cursor-pointer text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                                         title="Modifier"
                                     >
-                                        ✏️
+                                        <Pencil className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(alias.featureId)}
-                                        style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid var(--btn-border, #ddd)', background: 'transparent', color: '#d32f2f', cursor: 'pointer', fontSize: 12 }}
+                                        className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-transparent text-red-600 dark:text-red-500 cursor-pointer text-xs hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                                         title="Supprimer"
                                     >
-                                        🗑️
+                                        <TrashBin className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
                             </div>
@@ -221,7 +214,7 @@ export default function AliasManager({ data, editingFeatureId, editingOriginalNa
             )}
 
             {aliases.length === 0 && (
-                <div style={{ padding: 16, textAlign: 'center', color: 'var(--chip-fg, #999)', fontSize: 12 }}>
+                <div className="p-4 text-center text-gray-500 dark:text-gray-500 text-xs">
                     Aucun alias défini pour le moment
                 </div>
             )}

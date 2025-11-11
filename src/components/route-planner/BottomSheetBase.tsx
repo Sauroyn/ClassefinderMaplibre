@@ -110,7 +110,7 @@ export function BottomSheetBase({
                 void _respectOutside
             }}
             header={header ? (
-                <div style={{ fontWeight: 700, color: 'var(--rsbs-color, #111)' }}>
+                <div className="font-bold text-gray-900 dark:text-gray-100">
                     {header}
                 </div>
             ) : undefined}
@@ -118,7 +118,7 @@ export function BottomSheetBase({
             snapPoints={snapPoints}
             expandOnContentDrag
         >
-            <div style={{ padding: 12 }}>{children}</div>
+            <div className="p-3">{children}</div>
         </BottomSheet>
     )
 }

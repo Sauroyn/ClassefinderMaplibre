@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { ArrowLeft } from '@gravity-ui/icons'
 import { BottomSheetBase } from './BottomSheetBase'
 import type { RouteItem } from './MobileSheets'
 import { formatEta, formatDistance } from './MobileSheets'
@@ -19,17 +20,17 @@ export function MobileRouteDetailsSheet({
     const dist = formatDistance(route.distance)
     const arrStr = useMemo(() => arrivalTime ? arrivalTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null, [arrivalTime])
     const iconFor = (type: string) => {
-        const style: any = { width: 18, height: 18, display: 'inline-block', marginRight: 6 }
+        const className = "w-[18px] h-[18px] inline-block mr-1.5"
         switch (type) {
-            case 'turn-right': return (<span aria-hidden style={style}>↱</span>)
-            case 'turn-left': return (<span aria-hidden style={style}>↰</span>)
-            case 'turn-slight-right': return (<span aria-hidden style={style}>↗</span>)
-            case 'turn-slight-left': return (<span aria-hidden style={style}>↖</span>)
-            case 'uturn': return (<span aria-hidden style={style}>⤴</span>)
-            case 'floor-up': return (<span aria-hidden style={style}>🧭⬆︎</span>)
-            case 'floor-down': return (<span aria-hidden style={style}>🧭⬇︎</span>)
-            case 'arrive': return (<span aria-hidden style={style}>🏁</span>)
-            default: return (<span aria-hidden style={style}>➡</span>)
+            case 'turn-right': return (<span aria-hidden className={className}>↱</span>)
+            case 'turn-left': return (<span aria-hidden className={className}>↰</span>)
+            case 'turn-slight-right': return (<span aria-hidden className={className}>↗</span>)
+            case 'turn-slight-left': return (<span aria-hidden className={className}>↖</span>)
+            case 'uturn': return (<span aria-hidden className={className}>⤴</span>)
+            case 'floor-up': return (<span aria-hidden className={className}>🧭⬆︎</span>)
+            case 'floor-down': return (<span aria-hidden className={className}>🧭⬇︎</span>)
+            case 'arrive': return (<span aria-hidden className={className}>🏁</span>)
+            default: return (<span aria-hidden className={className}>➡</span>)
         }
     }
     const instructionFr = (type: string, meters: number) => {
@@ -48,45 +49,54 @@ export function MobileRouteDetailsSheet({
     }
     return (
         <BottomSheetBase open={open} reduceOnOutsideClick={false} header={
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <button aria-label="Retour" title="Retour" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('route-details-back')) }}
-                        style={{ marginRight: 8, background: 'none', border: 'none', color: 'var(--rsbs-color, #111)', fontSize: 20, cursor: 'pointer', padding: 0, width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontWeight: 700 }}>&larr;</span>
+            <div className="flex items-center justify-start">
+                <div className="flex items-center">
+                    <button
+                        aria-label="Retour"
+                        title="Retour"
+                        onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('route-details-back')) }}
+                        className="mr-2 bg-transparent border-none text-gray-900 dark:text-gray-100 text-xl cursor-pointer p-0 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                        <ArrowLeft className="w-5 h-5 font-bold" />
                     </button>
-                    <div style={{ fontWeight: 700 }}>Trajet sélectionné</div>
+                    <div className="font-bold">Trajet sélectionné</div>
                 </div>
             </div>
         } initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>Durée</div>
-                        <div style={{ fontWeight: 700 }}>{eta}</div>
+            <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                    <div className="flex-1">
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Durée</div>
+                        <div className="font-bold">{eta}</div>
                     </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>Distance</div>
-                        <div style={{ fontWeight: 700 }}>{dist}</div>
+                    <div className="flex-1">
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Distance</div>
+                        <div className="font-bold">{dist}</div>
                     </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>Arrivée</div>
-                        <div style={{ fontWeight: 700 }}>{arrStr ?? '-'}</div>
+                    <div className="flex-1">
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Arrivée</div>
+                        <div className="font-bold">{arrStr ?? '-'}</div>
                     </div>
                 </div>
 
-                <button onClick={() => onStart(route)} style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: 'var(--btn-fg, #111)', color: 'var(--btn-bg, #fff)', fontWeight: 700 }}>Démarrer</button>
+                <button
+                    onClick={() => onStart(route)}
+                    className="px-4 py-3 rounded-xl border-none bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-bold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+                >
+                    Démarrer
+                </button>
 
                 {route.steps && route.steps.length > 0 && (
                     <div>
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>Étapes</div>
-                        <ol style={{ listStyle: 'decimal', paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div className="font-bold mb-1.5">Étapes</div>
+                        <ol className="list-decimal pl-[18px] m-0 flex flex-col gap-1.5">
                             {(() => {
                                 const steps = route.steps || []
                                 const cumEnds: number[] = []
                                 let run = 0
                                 for (let i = 0; i < steps.length; i++) { run += Math.max(0, Number(steps[i]?.distance || 0)); cumEnds.push(run) }
                                 return steps.slice(0, 12).map((s, i) => (
-                                    <li key={i} style={{ fontSize: 13, color: 'var(--panel-fg, #333)', cursor: 'pointer' }} onClick={() => {
+                                    <li key={i} className="text-[13px] text-gray-900 dark:text-gray-100 cursor-pointer hover:text-blue-500 dark:hover:text-blue-400 transition-colors" onClick={() => {
                                         try {
                                             const bbox = (s as any).bbox as [[number, number], [number, number]] | undefined
                                             if (bbox && Array.isArray(bbox[0]) && Array.isArray(bbox[1])) {
@@ -121,7 +131,7 @@ export function MobileRouteDetailsSheet({
                                             const distanceTo = Math.max(0, (man?.at || at) - prevAt)
                                             const t = man?.type || 'continue'
                                             return (
-                                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <div className="flex items-center">
                                                     {iconFor(t)}
                                                     <span>{instructionFr(t, distanceTo)}</span>
                                                 </div>
@@ -131,7 +141,7 @@ export function MobileRouteDetailsSheet({
                                 ))
                             })()}
                             {route.steps.length > 12 && (
-                                <li style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>… {route.steps.length - 12} étapes supplémentaires</li>
+                                <li className="text-xs text-gray-600 dark:text-gray-400">… {route.steps.length - 12} étapes supplémentaires</li>
                             )}
                         </ol>
                     </div>

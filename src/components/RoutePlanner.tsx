@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Xmark, Gear } from '@gravity-ui/icons'
 import ConfirmStartModal from './route-planner/ConfirmStartModal'
 import Toast from './route-planner/Toast'
 import GroupedResultsMenu from './search/GroupedResultsMenu'
@@ -399,13 +400,13 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
-        <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)', display: (navigationActive ? 'none' : 'block') }}>
-            <div style={{ position: 'relative', marginBottom: 6 }}>
-                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
-                <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
-                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
+        <div className={`route-planner absolute top-2.5 left-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-md z-controls w-[360px] border border-gray-300 dark:border-gray-600 shadow-lg ${navigationActive ? 'hidden' : 'block'}`}>
+            <div className="relative mb-1.5">
+                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="absolute left-1.5 top-1.5 w-7 h-7 rounded border-none bg-transparent text-base text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"><Xmark className="w-4 h-4" /></button>}
+                <div className="text-center font-semibold">Itinéraire</div>
+                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="absolute right-1.5 top-1.5 w-8 h-7 rounded border-none bg-transparent text-base text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors"><Gear className="w-4 h-4" /></button>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+            <div className="flex gap-2 mb-1.5 items-center">
                 <Inputs
                     startQuery={startQuery}
                     endQuery={endQuery}
@@ -418,8 +419,8 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
                     onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
                 />
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>
+                <div className="flex items-center">
+                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="px-2.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">⇄</button>
                 </div>
                 {showSettings && (
                     <SettingsPopover
@@ -434,8 +435,8 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                 )}
             </div>
             {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
-            <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
-                <div style={{ marginBottom: 8 }}>
+            <div className="w-full mt-1.5 border-t border-gray-200 dark:border-gray-700 pt-1.5 max-h-[220px] overflow-auto">
+                <div className="mb-2">
                     <Suggestions
                         focusedField={focusedField}
                         startQuery={startQuery}

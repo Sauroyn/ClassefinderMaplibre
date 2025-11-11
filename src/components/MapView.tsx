@@ -1,4 +1,5 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react'
+import { Sun, Moon, LocationArrow } from '@gravity-ui/icons'
 import maplibre from 'maplibre-gl'
 import UserGeolocate from './UserGeolocate'
 import { useNavigationActive } from '../hooks/useNavigationActive'
@@ -840,16 +841,22 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
-            style={{ position: 'fixed', right: 10, top: (navBtnsTopState ?? 110), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-        >{theme === 'dark' ? '☀️' : '🌙'}</button>
+            className="fixed right-2.5 z-selector w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-md flex items-center justify-center text-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+            style={{ top: navBtnsTopState ?? 110 }}
+        >
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
     )
     const recenterToMarker = (
         <button
             title={'Recentrer sur le marqueur'}
             aria-label={'Recentrer sur le marqueur'}
             onClick={recenterToNavMarker}
-            style={{ position: 'fixed', right: 10, top: ((navBtnsTopState ?? 110) + 50), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-        >🎯</button>
+            className="fixed right-2.5 z-selector w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-md flex items-center justify-center text-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+            style={{ top: (navBtnsTopState ?? 110) + 50 }}
+        >
+            <LocationArrow className="w-5 h-5" />
+        </button>
     )
 
     // When navigation starts, auto-trigger the same recenter + 3D orientation as the button
@@ -861,7 +868,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         }
     }, [navActive])
     return <>
-        <div id="map" ref={container} style={{ height: '100vh' }} onClick={(e) => {
+        <div id="map" ref={container} className="h-screen" onClick={(e) => {
             // Also relay click as custom event with lngLat if possible (dev aid)
             try {
                 const map = mapRef.current
