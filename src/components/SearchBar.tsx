@@ -3,6 +3,7 @@ import { normalizedFeatureId, coerceLevel, findByNormalizedId } from '../utils/f
 import SearchList from './search/SearchList'
 import SearchSelected from './search/SearchSelected'
 import { STORAGE_KEYS, getScopedKey, safeGetItem, safeSetItem } from '../utils/storage'
+import { searchWithAliases, getAlias } from '../utils/aliases'
 
 type Props = {
     data: GeoJSON.FeatureCollection | null
@@ -10,9 +11,10 @@ type Props = {
     onRouteRequest?: (feature: any) => void
     onClear?: () => void
     onOpenRoutePlanner?: () => void
+    onOpenAliasSettings?: (featureId: string | number, originalName: string) => void
 }
 
-export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onOpenRoutePlanner }: Props) {
+export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onOpenRoutePlanner, onOpenAliasSettings }: Props) {
     const [q, setQ] = useState('')
     const [focused, setFocused] = useState(false)
     const [showBack, setShowBack] = useState(false)
@@ -30,28 +32,52 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     const blurTimeout = useRef<number | null>(null)
     // Group navigation state
     const [groupView, setGroupView] = useState<{ title: string, items: Array<{ id: number | string, name: string, level?: number | string }> } | null>(null)
+    // Force re-render when aliases are updated
+    const [aliasVersion, setAliasVersion] = useState(0)
 
     const flatItems = useMemo(() => {
         if (!data) return []
-        const list: Array<{ id: number; name: string; level?: number | string }> = []
-        const feats = (data.features as any[]) || []
-        for (let i = 0; i < feats.length; i++) {
-            const f = feats[i]
-            const name = (f.properties?.name ?? '') as string
-            if (typeof name === 'string' && name.trim().length > 0) {
-                const id = normalizedFeatureId(f, i)
-                const level = coerceLevel(f.properties?.level)
-                list.push({ id, name, level })
+
+        // Utiliser searchWithAliases pour obtenir tous les résultats avec alias
+        const qn = q.trim()
+        if (qn.length > 0) {
+            // Mode recherche: utiliser la fonction de recherche avec alias
+            return searchWithAliases(data, qn, true).map(item => ({
+                id: item.id,
+                name: item.name,
+                level: item.level,
+                isAlias: item.isAlias,
+                originalName: item.originalName
+            }))
+        } else {
+            // Mode liste complète (sans recherche): afficher toutes les features avec leurs alias
+            const list: Array<{ id: number; name: string; level?: number | string; isAlias?: boolean; originalName?: string }> = []
+            const feats = (data.features as any[]) || []
+            for (let i = 0; i < feats.length; i++) {
+                const f = feats[i]
+                const originalName = (f.properties?.name ?? '') as string
+                // Ne pas filtrer ici, on laisse les features sans nom aussi
+                if (typeof originalName === 'string' && originalName.trim().length > 0) {
+                    const id = normalizedFeatureId(f, i)
+                    const level = coerceLevel(f.properties?.level)
+                    const alias = getAlias(id)
+                    list.push({
+                        id,
+                        name: alias ? alias.aliasName : originalName,
+                        level,
+                        isAlias: !!alias,
+                        originalName
+                    })
+                }
             }
+            return list
         }
-        const qn = q.trim().toLowerCase()
-        return list.filter(i => i.name.toLowerCase().includes(qn))
-    }, [data, q])
+    }, [data, q, aliasVersion])
 
     // Build grouped entries only when searching (q non vide). Recent list remains flat.
     const groupedEntries = useMemo(() => {
         if (!q) return [] as any[]
-        const byName = new Map<string, Array<{ id: number; name: string; level?: number | string }>>()
+        const byName = new Map<string, Array<{ id: number | string; name: string; level?: number | string; isAlias?: boolean; originalName?: string }>>()
         for (const it of flatItems) {
             const arr = byName.get(it.name) || []
             arr.push(it)
@@ -109,6 +135,15 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         }
         window.addEventListener('map:highlight-clear', onHighlightCleared as any)
         return () => { window.removeEventListener('map:highlight-clear', onHighlightCleared as any) }
+    }, [])
+
+    // Listen for alias updates to refresh search results
+    useEffect(() => {
+        function onAliasesUpdated() {
+            setAliasVersion(v => v + 1)
+        }
+        window.addEventListener('aliases:updated', onAliasesUpdated as any)
+        return () => { window.removeEventListener('aliases:updated', onAliasesUpdated as any) }
     }, [])
 
     const pick = (id: string | number, name: string) => {
@@ -246,7 +281,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
             )}
 
             {/* Selected details */}
-            <SearchSelected selected={selected as any} onRoute={(feat: any) => { if (onRouteRequest) onRouteRequest(feat) }} data={data} />
+            <SearchSelected selected={selected as any} onRoute={(feat: any) => { if (onRouteRequest) onRouteRequest(feat) }} data={data} onOpenAliasSettings={onOpenAliasSettings} />
         </div>
     )
 }

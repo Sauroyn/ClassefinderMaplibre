@@ -26,6 +26,7 @@ import { buildProvisionalGraph } from './route-planner/buildProvisionalGraph'
 import { getMapInstance, setPaintProperty, setLayoutProperty } from '../utils/mapHelpers'
 import { highlightRouteLayer } from './route-planner/utils'
 import { useRoutePlannerState } from '../hooks/useRoutePlannerState'
+import { getAlias } from '../utils/aliases'
 
 export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
 
@@ -83,11 +84,15 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                 if (g) {
                     dispatch({ type: 'SET_GRAPH', payload: g })
                     // Build node options for autocomplete
-                    const opts = g.nodes.map((n: any) => ({
-                        id: String(n.id),
-                        name: n.name || String(n.id),
-                        level: n.level != null ? String(n.level) : undefined
-                    }))
+                    const opts = g.nodes.map((n: any) => {
+                        // Utiliser l'alias si disponible pour les nodes du graphe
+                        const alias = getAlias(n.id)
+                        return {
+                            id: String(n.id),
+                            name: alias ? alias.aliasName : (n.name || String(n.id)),
+                            level: n.level != null ? String(n.level) : undefined
+                        }
+                    })
 
                     // Add provisional options for features without matching nodes
                     if (data && data.features) {
@@ -96,7 +101,12 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
 
                         for (let i = 0; i < features.length; i++) {
                             const feat = features[i]
-                            const name = feat.properties?.name
+                            const originalName = feat.properties?.name
+
+                            // Utiliser l'alias si disponible
+                            const alias = getAlias(i)
+                            const name = alias ? alias.aliasName : originalName
+
                             if (!name || typeof name !== 'string' || name.trim().length === 0) continue
 
                             const nameLower = name.toLowerCase().trim()

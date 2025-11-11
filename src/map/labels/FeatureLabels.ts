@@ -2,7 +2,7 @@ import maplibre from 'maplibre-gl'
 
 /**
  * FeatureLabels - Gère l'affichage des noms/labels des features GeoJSON sur la carte
- * Version simplifiée et robuste
+ * Version simplifiée et robuste avec support des alias
  */
 
 export interface LabelStyle {
