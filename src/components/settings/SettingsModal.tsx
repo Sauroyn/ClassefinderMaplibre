@@ -11,11 +11,18 @@ export default function SettingsModal({
     onChangeBufferMin,
     eventsEnabled,
     onChangeEventsEnabled,
+    excludeStairs,
+    onChangeExcludeStairs,
+    coveredOnly,
+    onChangeCoveredOnly,
+    showSecondary,
+    onChangeShowSecondary,
     onCancel,
     onSave,
     data,
     editingAliasFeatureId,
     editingAliasOriginalName,
+    initialTab,
 }: {
     theme: 'light' | 'dark'
     onChangeTheme: (t: 'light' | 'dark') => void
@@ -25,11 +32,18 @@ export default function SettingsModal({
     onChangeBufferMin: (n: number) => void
     eventsEnabled: boolean
     onChangeEventsEnabled: (v: boolean) => void
+    excludeStairs: boolean
+    onChangeExcludeStairs: (v: boolean) => void
+    coveredOnly: boolean
+    onChangeCoveredOnly: (v: boolean) => void
+    showSecondary: boolean
+    onChangeShowSecondary: (v: boolean) => void
     onCancel: () => void
     onSave: () => void
     data?: GeoJSON.FeatureCollection | null
     editingAliasFeatureId?: string | number | null
     editingAliasOriginalName?: string
+    initialTab?: 'general' | 'route' | 'alias' | 'calendar'
 }) {
     // Local draft state for config (only applied on save)
     const [draftConfig, setDraftConfig] = useState<string | null>(null)
@@ -74,11 +88,18 @@ export default function SettingsModal({
             onChangeBufferMin={onChangeBufferMin}
             eventsEnabled={eventsEnabled}
             onChangeEventsEnabled={onChangeEventsEnabled}
+            excludeStairs={excludeStairs}
+            onChangeExcludeStairs={onChangeExcludeStairs}
+            coveredOnly={coveredOnly}
+            onChangeCoveredOnly={onChangeCoveredOnly}
+            showSecondary={showSecondary}
+            onChangeShowSecondary={onChangeShowSecondary}
             onCancel={onCancel}
             onSave={handleSave}
             data={data || null}
             editingAliasFeatureId={editingAliasFeatureId}
             editingAliasOriginalName={editingAliasOriginalName}
+            initialTab={initialTab}
         />
     )
 }

@@ -39,11 +39,21 @@ export default function App() {
   const [navActive, setNavActive] = useState(false)
   const [editingAliasFeatureId, setEditingAliasFeatureId] = useState<string | number | null>(null)
   const [editingAliasOriginalName, setEditingAliasOriginalName] = useState<string>('')
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'route' | 'alias' | 'calendar'>('general')
+
+  // Route settings (stored in localStorage, read by RoutePlanner)
+  const [excludeStairs, setExcludeStairs] = useState(false)
+  const [coveredOnly, setCoveredOnly] = useState(false)
+  const [showSecondary, setShowSecondary] = useState(true)
 
   // Settings modal draft states to avoid partial saves and allow cancel
   const { draftTheme, setDraftTheme, draftIcalUrl, setDraftIcalUrl, draftBufferMin, setDraftBufferMin, draftEventsEnabled, setDraftEventsEnabled, resetDraft } = useSettingsDraft({ theme, icalUrl, bufferMin, eventsEnabled })
 
-  function openSettings() { resetDraft({ theme, icalUrl, bufferMin, eventsEnabled }); setShowSettings(true) }
+  function openSettings(initialTab: 'general' | 'route' | 'alias' | 'calendar' = 'general') {
+    resetDraft({ theme, icalUrl, bufferMin, eventsEnabled })
+    setSettingsInitialTab(initialTab)
+    setShowSettings(true)
+  }
 
   // data is now managed by useConfigData
 
@@ -135,7 +145,9 @@ export default function App() {
         onClose={() => {
           try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { }
           setShowPlanner(false); setPlannerDest(null); setPlannerStart(null); setPlannerEnd(null)
-        }} />}
+        }}
+        onOpenRouteSettings={() => openSettings('route')}
+      />}
       <SettingsButton onClick={openSettings} />
 
       {/* Event selector at bottom center (desktop); CSS positions; keep always mounted if events exist */}
@@ -162,9 +174,16 @@ export default function App() {
           onChangeBufferMin={setDraftBufferMin}
           eventsEnabled={draftEventsEnabled}
           onChangeEventsEnabled={setDraftEventsEnabled}
+          excludeStairs={excludeStairs}
+          onChangeExcludeStairs={setExcludeStairs}
+          coveredOnly={coveredOnly}
+          onChangeCoveredOnly={setCoveredOnly}
+          showSecondary={showSecondary}
+          onChangeShowSecondary={setShowSecondary}
           data={dataRef.current}
           editingAliasFeatureId={editingAliasFeatureId}
           editingAliasOriginalName={editingAliasOriginalName}
+          initialTab={settingsInitialTab}
           onCancel={() => {
             setShowSettings(false)
             setEditingAliasFeatureId(null)

@@ -3,8 +3,9 @@ import { Xmark, ArrowLeft } from '@gravity-ui/icons'
 import GeneralSettings from './GeneralSettings'
 import AliasSettings from './AliasSettings'
 import CalendarSettings from './CalendarSettings'
+import RouteSettings from './RouteSettings'
 
-type Tab = 'general' | 'alias' | 'calendar'
+type Tab = 'general' | 'alias' | 'calendar' | 'route'
 
 type Props = {
     // General settings
@@ -21,6 +22,14 @@ type Props = {
     eventsEnabled: boolean
     onChangeEventsEnabled: (v: boolean) => void
 
+    // Route settings
+    excludeStairs: boolean
+    onChangeExcludeStairs: (v: boolean) => void
+    coveredOnly: boolean
+    onChangeCoveredOnly: (v: boolean) => void
+    showSecondary: boolean
+    onChangeShowSecondary: (v: boolean) => void
+
     // Alias settings
     data?: GeoJSON.FeatureCollection | null
     editingAliasFeatureId?: string | number | null
@@ -29,16 +38,20 @@ type Props = {
     // Actions
     onCancel: () => void
     onSave: () => void
+
+    // Optional: initial tab to open
+    initialTab?: Tab
 }
 
 const tabs: Array<{ id: Tab; label: string; icon: string }> = [
     { id: 'general', label: 'Général', icon: '⚙️' },
+    { id: 'route', label: 'Itinéraire', icon: '🗺️' },
     { id: 'alias', label: 'Alias', icon: '🏷️' },
     { id: 'calendar', label: 'Calendrier', icon: '📅' }
 ]
 
 export default function SettingsLayout(props: Props) {
-    const [activeTab, setActiveTab] = useState<Tab>('general')
+    const [activeTab, setActiveTab] = useState<Tab>(props.initialTab || 'general')
     const [isMobile, setIsMobile] = useState(false)
     const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
 
@@ -51,6 +64,16 @@ export default function SettingsLayout(props: Props) {
         window.addEventListener('resize', checkMobile)
         return () => window.removeEventListener('resize', checkMobile)
     }, [])
+
+    // Update active tab when initialTab prop changes
+    useEffect(() => {
+        if (props.initialTab) {
+            setActiveTab(props.initialTab)
+            if (isMobile && props.initialTab !== 'general') {
+                setMobileDetailOpen(true)
+            }
+        }
+    }, [props.initialTab, isMobile])
 
     // Auto-open alias tab if editing
     useEffect(() => {
@@ -71,6 +94,17 @@ export default function SettingsLayout(props: Props) {
                         onChangeTheme={props.onChangeTheme}
                         selectedConfig={props.selectedConfig}
                         onChangeConfig={props.onChangeConfig}
+                    />
+                )
+            case 'route':
+                return (
+                    <RouteSettings
+                        excludeStairs={props.excludeStairs}
+                        onChangeExcludeStairs={props.onChangeExcludeStairs}
+                        coveredOnly={props.coveredOnly}
+                        onChangeCoveredOnly={props.onChangeCoveredOnly}
+                        showSecondary={props.showSecondary}
+                        onChangeShowSecondary={props.onChangeShowSecondary}
                     />
                 )
             case 'alias':
@@ -197,8 +231,8 @@ export default function SettingsLayout(props: Props) {
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`w-full p-3 mb-1 rounded-lg border-none flex items-center gap-2.5 cursor-pointer text-sm text-left transition-all ${activeTab === tab.id
-                                        ? 'bg-white dark:bg-gray-800 font-semibold shadow-md'
-                                        : 'bg-transparent font-normal hover:bg-white/50 dark:hover:bg-gray-800/50'
+                                    ? 'bg-white dark:bg-gray-800 font-semibold shadow-md'
+                                    : 'bg-transparent font-normal hover:bg-white/50 dark:hover:bg-gray-800/50'
                                     }`}
                             >
                                 <span className="text-lg">{tab.icon}</span>

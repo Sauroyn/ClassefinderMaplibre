@@ -16,7 +16,6 @@ import { MobileRouteDetailsSheet } from './route-planner/MobileRouteDetailsSheet
 import { useNavigationController } from './route-planner/NavigationController'
 import NavigationBanner from './route-planner/NavigationBanner'
 import NavigationBottomSheet from './route-planner/NavigationBottomSheet'
-import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 import { fitBoundsSmart } from '../map/viewport'
 import { haversine } from '../map/measure'
@@ -29,7 +28,7 @@ import { highlightRouteLayer } from './route-planner/utils'
 import { useRoutePlannerState } from '../hooks/useRoutePlannerState'
 import { getAlias } from '../utils/aliases'
 
-export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
+export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose, onOpenRouteSettings }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void, onOpenRouteSettings?: () => void }) {
 
     // Unified state management with useReducer
     const [state, dispatch] = useRoutePlannerState(isMobileViewport())
@@ -400,7 +399,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
-        <div className={`route-planner absolute top-[12px] left-[12px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls w-[360px] shadow-lg overflow-hidden ${navigationActive ? 'hidden' : 'block'}`}>
+        <div className={`route-planner absolute ${isMobile ? 'top-3 left-3 right-3 w-auto' : 'top-[12px] left-[12px] w-[360px]'} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls shadow-lg overflow-hidden ${navigationActive ? 'hidden' : 'block'}`}>
             <div className="p-[2px] pr-1">
                 {/* Ligne avec bouton fermer, inputs, et boutons paramètres/swap */}
                 <div className="flex gap-2 items-start">
@@ -429,7 +428,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     <div className="flex flex-col flex-shrink-0">
                         {/* Bouton paramètres aligné avec la première barre (40px de haut) */}
                         <div className="h-[40px] flex items-center">
-                            <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
+                            <button title="Paramètres itinéraire" onClick={() => onOpenRouteSettings && onOpenRouteSettings()} className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
                         </div>
                         {/* Séparateur de 1px pour correspondre au trait entre les barres */}
                         <div className="h-px" />
@@ -439,18 +438,6 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         </div>
                     </div>
                 </div>
-
-                {showSettings && (
-                    <SettingsPopover
-                        excludeStairs={excludeStairs}
-                        coveredOnly={coveredOnly}
-                        showSecondary={showSecondary}
-                        onChangeExcludeStairs={setExcludeStairs}
-                        onChangeCoveredOnly={setCoveredOnly}
-                        onChangeShowSecondary={setShowSecondary}
-                        onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
-                    />
-                )}
             </div>
 
             {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
