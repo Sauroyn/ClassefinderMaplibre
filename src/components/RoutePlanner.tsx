@@ -400,12 +400,12 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
-        <div className={`route-planner absolute top-2.5 left-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls w-[360px] shadow-lg overflow-hidden ${navigationActive ? 'hidden' : 'block'}`}>
-            <div className="p-4 pb-3">
+        <div className={`route-planner absolute top-[12px] left-[12px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls w-[360px] shadow-lg overflow-hidden ${navigationActive ? 'hidden' : 'block'}`}>
+            <div className="p-[2px] pr-1">
                 {/* Ligne avec bouton fermer, inputs, et boutons paramètres/swap */}
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-2 items-start">
                     {/* Bouton fermer */}
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 pt-1 pl-1">
                         {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="w-7 h-7 rounded-lg bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
                     </div>
 
@@ -425,10 +425,18 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         />
                     </div>
 
-                    {/* Boutons paramètres et swap */}
-                    <div className="flex flex-col gap-0 flex-shrink-0">
-                        <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
-                        <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center">⇄</button>
+                    {/* Boutons paramètres et swap positionnés pour s'aligner avec les barres de recherche */}
+                    <div className="flex flex-col flex-shrink-0">
+                        {/* Bouton paramètres aligné avec la première barre (40px de haut) */}
+                        <div className="h-[40px] flex items-center">
+                            <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
+                        </div>
+                        {/* Séparateur de 1px pour correspondre au trait entre les barres */}
+                        <div className="h-px" />
+                        {/* Bouton swap aligné avec la deuxième barre (40px de haut) */}
+                        <div className="h-[40px] flex items-center">
+                            <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center">⇄</button>
+                        </div>
                     </div>
                 </div>
 
