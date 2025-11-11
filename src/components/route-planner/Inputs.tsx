@@ -26,7 +26,7 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
             <div className="flex gap-2 items-start">
                 <div className="flex flex-col items-center pt-2 gap-1">
                     <LocationArrow className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <div className="w-0.5 h-16 border-l-2 border-dashed border-gray-400 dark:border-gray-500" />
+                    <div className="w-0.5 h-12 border-l-2 border-dashed border-gray-400 dark:border-gray-500" />
                     <MapPin className="w-5 h-5 text-red-600 dark:text-red-400" />
                 </div>
                 <div className="flex-1 flex flex-col gap-3">
@@ -37,14 +37,14 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
                             onFocus={() => setFocusedField('start')}
                             onBlur={() => setTimeout(() => setFocusedField(null), 150)}
                             onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(startQuery, onPickStart) } }}
-                            className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 p-2 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Rechercher un départ..."
                         />
                         {startQuery ? (
                             <button
                                 onClick={onClearStart}
                                 title="Clear start"
-                                className="p-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                className="p-1.5 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                             >
                                 <Xmark className="w-4 h-4" />
                             </button>
@@ -61,14 +61,14 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
                             onFocus={() => setFocusedField('end')}
                             onBlur={() => setTimeout(() => setFocusedField(null), 150)}
                             onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(endQuery, onPickEnd) } }}
-                            className="flex-1 p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 p-2 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Rechercher une arrivée..."
                         />
                         {endQuery ? (
                             <button
                                 onClick={onClearEnd}
                                 title="Clear end"
-                                className="p-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                className="p-1.5 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                             >
                                 <Xmark className="w-4 h-4" />
                             </button>

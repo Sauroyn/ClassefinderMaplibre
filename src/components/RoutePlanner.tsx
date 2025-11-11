@@ -401,43 +401,61 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
         <div className={`route-planner absolute top-2.5 left-2.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-md z-controls w-[360px] border border-gray-300 dark:border-gray-600 shadow-lg ${navigationActive ? 'hidden' : 'block'}`}>
-            <div className="relative mb-4">
-                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="absolute left-0 top-0 w-7 h-7 rounded bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
-                <div className="text-center font-semibold">Itinéraire</div>
-                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="absolute right-0 top-0 w-8 h-7 rounded bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
-            </div>
-            <div className="flex gap-2 mb-1.5 items-center">
-                <Inputs
-                    startQuery={startQuery}
-                    endQuery={endQuery}
-                    setStartQuery={setStartQuery}
-                    setEndQuery={setEndQuery}
-                    nodeOptions={nodeOptions}
-                    setFocusedField={setFocusedField}
-                    onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
-                    onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
-                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
-                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
-                />
-                <div className="flex items-center">
-                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="px-2.5 py-2 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">⇄</button>
+            {/* Bande gauche avec seulement le bouton fermer */}
+            <div className="flex gap-2 items-start">
+                <div className="flex flex-col">
+                    {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="w-7 h-7 rounded bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
                 </div>
-                {showSettings && (
-                    <SettingsPopover
-                        excludeStairs={excludeStairs}
-                        coveredOnly={coveredOnly}
-                        showSecondary={showSecondary}
-                        onChangeExcludeStairs={setExcludeStairs}
-                        onChangeCoveredOnly={setCoveredOnly}
-                        onChangeShowSecondary={setShowSecondary}
-                        onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
-                    />
-                )}
+
+                {/* Colonne principale */}
+                <div className="flex-1 flex flex-col">
+                    {/* Ligne avec inputs, boutons paramètres et swap */}
+                    <div className="flex gap-2 items-start">
+                        <div className="flex-1 flex flex-col gap-2">
+                            {/* Ligne départ avec bouton paramètres */}
+                            <div className="flex gap-2 items-start">
+                                <Inputs
+                                    startQuery={startQuery}
+                                    endQuery={endQuery}
+                                    setStartQuery={setStartQuery}
+                                    setEndQuery={setEndQuery}
+                                    nodeOptions={nodeOptions}
+                                    setFocusedField={setFocusedField}
+                                    onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
+                                    onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
+                                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
+                                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
+                                />
+                                <div className="flex flex-col gap-2 pt-2">
+                                    {/* Bouton paramètres aligné avec départ */}
+                                    <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} className="w-8 h-8 rounded bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
+                                    {/* Espace vertical pour la séparation */}
+                                    <div className="flex-1" />
+                                    {/* Bouton swap aligné avec arrivée */}
+                                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="px-2.5 py-2 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">⇄</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {showSettings && (
+                        <SettingsPopover
+                            excludeStairs={excludeStairs}
+                            coveredOnly={coveredOnly}
+                            showSecondary={showSecondary}
+                            onChangeExcludeStairs={setExcludeStairs}
+                            onChangeCoveredOnly={setCoveredOnly}
+                            onChangeShowSecondary={setShowSecondary}
+                            onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
+                        />
+                    )}
+                </div>
             </div>
+
             {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
             {/* Afficher le conteneur seulement si suggestions ou routes présentes */}
             {(focusedField || (routes && routes.length > 0 && !detailsOpen)) && (
-                <div className="w-full mt-1.5 border-t border-gray-200 dark:border-gray-700 pt-1.5 max-h-[220px] overflow-auto">
+                <div className="w-full border-t border-gray-200 dark:border-gray-700 pt-1.5 max-h-[220px] overflow-auto">
                     <div className="mb-2">
                         <Suggestions
                             focusedField={focusedField}
