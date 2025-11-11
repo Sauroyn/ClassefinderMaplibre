@@ -199,7 +199,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
     // On ne force plus setSelected(null) sur focus input, pour permettre la sélection ET la liste
     return (
-        <div className="searchbar absolute left-3 top-3 z-10 w-[360px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600">
+        <div className="searchbar absolute left-3 top-[15px] md:top-3 z-search w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600">
             <div className="flex gap-2 items-center">
                 {/* left icon: back | clear | search */}
                 {showBack || groupView ? (

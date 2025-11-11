@@ -38,21 +38,32 @@
   .route-planner-marker {
     @apply rounded-full shadow-md overflow-hidden bg-transparent border-0;
   }
+
+  /* Force searchbar mobile positioning */
+  .searchbar {
+    top: 15px !important;
+  }
+
+  @media (min-width: 768px) {
+    .searchbar {
+      top: 0.75rem !important;
+    }
+  }
 }
 
 [data-rsbs-root] {
   position: relative !important;
-  z-index: 2147483000 !important;
+  z-index: 40 !important;
 }
 
 [data-rsbs-overlay],
 [data-rsbs-backdrop],
 [data-rsbs-sibling] {
-  z-index: 2147483002 !important;
+  z-index: 42 !important;
 }
 
 [data-rsbs-backdrop] {
-  z-index: 2147483001 !important;
+  z-index: 41 !important;
   pointer-events: auto !important;
 }
 

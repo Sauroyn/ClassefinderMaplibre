@@ -102,7 +102,7 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
     }, [levels, loading])
 
     const baseClasses = "absolute z-10 right-[10px] top-[10px] bg-black/50 dark:bg-black/60 backdrop-blur-sm p-2 rounded-lg text-white border border-transparent shadow-lg"
-    const mobileClasses = "fixed right-[10px] z-[29] bg-black/50 dark:bg-black/60 backdrop-blur-sm p-2 rounded-lg text-white max-w-[420px] w-[calc(100%-40px)] border border-transparent shadow-lg"
+    const mobileClasses = "fixed right-[10px] z-selector bg-black/50 dark:bg-black/60 backdrop-blur-sm p-2 rounded-lg text-white max-w-[420px] w-[calc(100%-40px)] border border-transparent shadow-lg"
 
     return (
         <div
@@ -120,7 +120,7 @@ export default function LevelSelector({ level, levels, loading, onChange }: Prop
                 value={level}
                 onChange={e => onChange(Number(e.target.value))}
                 disabled={loading || levels.length === 0}
-                className="bg-black/40 dark:bg-black/50 text-white border border-white/20 rounded-md px-2 py-1 ml-2 outline-none focus:ring-2 focus:ring-blue-500"
+                className="bg-white/90 dark:bg-gray-800/90 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 ml-2 outline-none focus:ring-2 focus:ring-blue-500"
             >
                 {loading ? (
                     <option>Chargement...</option>
