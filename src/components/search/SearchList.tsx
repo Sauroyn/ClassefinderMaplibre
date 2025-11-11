@@ -1,8 +1,8 @@
+import { MapPin } from '@gravity-ui/icons'
 
-
-type Item = { id: string | number; name: string; level?: string | number }
+type Item = { id: string | number; name: string; level?: string | number; isRecent?: boolean }
 type ListEntry =
-    | { type: 'single'; item: Item }
+    | { type: 'single'; item: Item; isRecent?: boolean }
     | { type: 'group'; name: string; items: Item[] }
 
 function dispatchHover(id?: string | number) {
@@ -39,11 +39,14 @@ export default function SearchList({ items, onPick, onOpenGroup }: { items: List
                             onMouseDown={() => onPick(it.id, it.name)}
                             className="flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                         >
-                            <div>
-                                <div className="font-semibold text-gray-900 dark:text-gray-100">{it.name}</div>
+                            <div className="flex items-center gap-2 flex-1">
+                                <MapPin className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                                <div>
+                                    <div className="font-semibold text-gray-900 dark:text-gray-100">{it.name}</div>
+                                </div>
                             </div>
                             {it.level != null ? (
-                                <div className="self-center opacity-90 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm">{it.level}</div>
+                                <div className="self-center opacity-90 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm ml-2">Étage {it.level}</div>
                             ) : (
                                 <div className="w-9" />
                             )}

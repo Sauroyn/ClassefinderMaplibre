@@ -15,19 +15,25 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
 
     return (
         <div className="mt-2 p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="font-bold">{selected.name}</div>
-            {alias && alias.originalName && (
-                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                    Alias de "{alias.originalName}"
+            <div className="flex justify-between items-start gap-2">
+                <div>
+                    <div className="font-bold">{selected.name}</div>
+                    {alias && alias.originalName && (
+                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            Alias de "{alias.originalName}"
+                        </div>
+                    )}
+                    {alias && !alias.originalName && (
+                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            Alias
+                        </div>
+                    )}
                 </div>
-            )}
-            {alias && !alias.originalName && (
-                <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                    Alias
-                </div>
-            )}
+                {selected.level != null && (
+                    <div className="px-2.5 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm flex-shrink-0">Étage {selected.level}</div>
+                )}
+            </div>
             <div className="mt-1.5 flex gap-2">
-                <div className="px-2.5 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm">{selected.level ?? '—'}</div>
                 {hasRealName && (
                     <button
                         className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"

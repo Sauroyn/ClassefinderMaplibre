@@ -199,8 +199,8 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
     // On ne force plus setSelected(null) sur focus input, pour permettre la sélection ET la liste
     return (
-        <div className="searchbar absolute left-3 top-[15px] md:top-3 z-search w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-2 rounded-lg shadow-lg border border-gray-300 dark:border-gray-600">
-            <div className="flex gap-2 items-center">
+        <div className={`searchbar absolute left-3 top-[15px] md:top-3 z-search w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-0 shadow-lg border-none transition-all ${!showList && !selected ? 'rounded-full' : 'rounded-[15px]'}`}>
+            <div className="flex gap-1 items-center px-3 py-2">
                 {/* left icon: back | clear | search */}
                 {showBack || groupView ? (
                     <button
@@ -247,7 +247,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 )}
                 <input
                     ref={inputRef}
-                    className="search-input flex-1 px-2 py-2 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-700 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 transition-all"
+                    className="search-input flex-1 px-2 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-none rounded-full outline-none transition-all"
                     value={q}
                     onChange={e => { setQ(e.target.value); if (selected) setSelected(null); setFocused(true) }}
                     placeholder="Rechercher une salle..."
@@ -269,7 +269,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 {(!focused && !q) && (
                     <button
                         onClick={() => { if (typeof onOpenRoutePlanner === 'function') { onOpenRoutePlanner(); } }}
-                        className="w-9 h-9 ml-0.5 rounded-lg border border-gray-700 dark:border-gray-500 bg-gray-800 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600 transition-all font-bold shadow-sm flex items-center justify-center"
+                        className="w-9 h-9 ml-0.5 rounded-lg border-none bg-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors flex items-center justify-center"
                         title="Itinéraire"
                         aria-label="Itinéraire"
                     >
