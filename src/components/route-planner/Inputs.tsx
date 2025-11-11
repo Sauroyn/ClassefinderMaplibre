@@ -26,11 +26,11 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
             <div className="flex gap-2 items-start">
                 <div className="flex flex-col items-center pt-2 gap-1">
                     <LocationArrow className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <div className="w-0.5 h-12 border-l-2 border-dashed border-gray-400 dark:border-gray-500" />
+                    <div className="w-0.5 h-4 border-l-2 border-dashed border-gray-400 dark:border-gray-500" />
                     <MapPin className="w-5 h-5 text-red-600 dark:text-red-400" />
                 </div>
-                <div className="flex-1 flex flex-col gap-3">
-                    <div className="flex gap-1.5 items-center">
+                <div className="flex-1 flex flex-col">
+                    <div className="flex items-center min-h-[40px]">
                         <input
                             value={startQuery}
                             onChange={(e) => { setStartQuery(e.target.value); setFocusedField('start') }}
@@ -44,17 +44,17 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
                             <button
                                 onClick={onClearStart}
                                 title="Clear start"
-                                className="p-1.5 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                className="p-1.5 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                             >
                                 <Xmark className="w-4 h-4" />
                             </button>
-                        ) : null}
+                        ) : <div className="w-9" />}
                     </div>
 
                     {/* Trait horizontal de séparation */}
                     <div className="h-px bg-gray-200 dark:bg-gray-700" />
 
-                    <div className="flex gap-1.5 items-center">
+                    <div className="flex items-center min-h-[40px]">
                         <input
                             value={endQuery}
                             onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }}
@@ -68,11 +68,11 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
                             <button
                                 onClick={onClearEnd}
                                 title="Clear end"
-                                className="p-1.5 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                className="p-1.5 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                             >
                                 <Xmark className="w-4 h-4" />
                             </button>
-                        ) : null}
+                        ) : <div className="w-9" />}
                     </div>
                 </div>
             </div>
