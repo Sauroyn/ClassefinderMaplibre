@@ -6,6 +6,7 @@ import SearchBar from './components/SearchBar'
 import RoutePlanner from './components/RoutePlanner'
 import SettingsButton from './components/SettingsButton'
 import EventBar from './components/events/EventBar'
+import MobileControlsBar from './components/MobileControlsBar'
 import { loadGraphFromConfigOrFallback } from './utils/graph'
 import SettingsModal from './components/settings/SettingsModal.tsx'
 import { useConfigData } from './hooks/useConfigData'
@@ -77,7 +78,20 @@ export default function App() {
 
   return (
     <>
+      {/* Desktop level selector */}
       <LevelSelector levels={levels} level={level} loading={loading} onChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }} />
+
+      {/* Mobile controls bar (level, geolocate, dark mode) - only visible on mobile and not during navigation */}
+      {!navActive && <MobileControlsBar
+        map={mapRef.current}
+        theme={theme}
+        onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+        level={level}
+        levels={levels}
+        loading={loading}
+        onLevelChange={(n) => { setLevel(n); try { window.dispatchEvent(new CustomEvent('ui:set-level', { detail: n })) } catch { } }}
+      />}
+
       {!navActive && !showPlanner && <SearchBar
         data={dataRef.current}
         onSelect={(id, lvl) => {
