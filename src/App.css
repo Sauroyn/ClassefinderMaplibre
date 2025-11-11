@@ -29,9 +29,9 @@
   .searchbar,
   .route-planner {
     position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
     box-sizing: border-box;
     margin: 0 !important;
     z-index: 30 !important;
