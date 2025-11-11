@@ -6,18 +6,62 @@ type Graph = { nodes: Node[], edges: Edge[] }
 import { MinHeap } from './heap'
 import { heuristic } from './heuristic'
 
-export function shortestPath(graph: Graph, startId: string | number, endId: string | number, excludeTags: string[] = [], excludedEdgeIds: Set<string | number> | null = null) {
-    const nodesById = new Map<string | number, Node>()
-    for (const n of graph.nodes) nodesById.set(n.id, n)
-    const edgesOut = new Map<string | number, Edge[]>()
+// Caches for graph indices to avoid rebuilding on each call
+const nodesByIdCache: WeakMap<Graph, Map<string | number, Node>> = new WeakMap()
+const edgesOutCache: WeakMap<Graph, Map<string | number, Edge[]>> = new WeakMap()
+const shortestPrimaryCache: WeakMap<Graph, Map<string, { path: Array<string | number>, cost: number } | null>> = new WeakMap()
+
+function getNodesById(graph: Graph): Map<string | number, Node> {
+    let m = nodesByIdCache.get(graph)
+    if (m) return m
+    m = new Map<string | number, Node>()
+    for (const n of graph.nodes) m.set(n.id, n)
+    nodesByIdCache.set(graph, m)
+    return m
+}
+
+function getEdgesOut(graph: Graph): Map<string | number, Edge[]> {
+    let m = edgesOutCache.get(graph)
+    if (m) return m
+    m = new Map<string | number, Edge[]>()
     for (const e of graph.edges) {
-        if (excludeTags && excludeTags.length && e.tags && e.tags.some(t => excludeTags.includes(t))) continue
-        if (excludedEdgeIds && excludedEdgeIds.has(e.id)) continue
-        if (!edgesOut.has(e.from)) edgesOut.set(e.from, [])
-        edgesOut.get(e.from)!.push(e)
-        if (!edgesOut.has(e.to)) edgesOut.set(e.to, [])
-        edgesOut.get(e.to)!.push({ ...e, from: e.to, to: e.from })
+        if (!m.has(e.from)) m.set(e.from, [])
+        m.get(e.from)!.push(e)
+        // also add reverse edge reference for undirected traversal
+        if (!m.has(e.to)) m.set(e.to, [])
+        m.get(e.to)!.push({ ...e, from: e.to, to: e.from })
     }
+    edgesOutCache.set(graph, m)
+    return m
+}
+
+
+export function shortestPath(graph: Graph, startId: string | number, endId: string | number, excludeTags: string[] = [], excludedEdgeIds: Set<string | number> | null = null) {
+    const nodesById = getNodesById(graph)
+    const edgesOut = getEdgesOut(graph)
+    // Fast-path cache only for primary (no excluded edges)
+    const canUseCache = !excludedEdgeIds || excludedEdgeIds.size === 0
+    if (canUseCache) {
+        let gCache = shortestPrimaryCache.get(graph)
+        if (!gCache) { gCache = new Map(); shortestPrimaryCache.set(graph, gCache) }
+        const key = `${startId}|${endId}|${(excludeTags || []).slice().sort().join(',')}`
+        if (gCache.has(key)) return gCache.get(key) || null
+        // compute and store below
+        const res = _shortestPathCore(nodesById, edgesOut, startId, endId, excludeTags, null)
+        gCache.set(key, res)
+        return res
+    }
+    return _shortestPathCore(nodesById, edgesOut, startId, endId, excludeTags, excludedEdgeIds)
+}
+
+function _shortestPathCore(
+    nodesById: Map<string | number, Node>,
+    edgesOut: Map<string | number, Edge[]>,
+    startId: string | number,
+    endId: string | number,
+    excludeTags: string[] = [],
+    excludedEdgeIds: Set<string | number> | null = null
+) {
     const start = nodesById.get(startId)
     const end = nodesById.get(endId)
     if (!start || !end) return null
@@ -38,6 +82,8 @@ export function shortestPath(graph: Graph, startId: string | number, endId: stri
         closed.add(current)
         const neighbors = edgesOut.get(current) || []
         for (const edge of neighbors) {
+            if (excludedEdgeIds && excludedEdgeIds.has(edge.id)) continue
+            if (excludeTags && excludeTags.length && edge.tags && edge.tags.some(t => excludeTags.includes(t))) continue
             const neighbor = edge.to
             if (closed.has(neighbor)) continue
             const currentG = g.get(current) ?? Infinity
@@ -58,11 +104,15 @@ export function shortestPath(graph: Graph, startId: string | number, endId: stri
     while (cur !== undefined && cur !== startId) { path.push(cur); cur = came.get(cur) }
     path.push(startId)
     path.reverse()
+    // Compute cost using precomputed pair weights
     let cost = 0
+    // We no longer rely on graph object here; cost computed from edgesOut snapshot.
+    const pairWeight = _getPairWeightLookupFromEdgesOut(edgesOut)
     for (let i = 1; i < path.length; i++) {
         const a = path[i - 1], b = path[i]
-        const edge = graph.edges.find((ee: any) => ((String(ee.from) === String(a) && String(ee.to) === String(b)) || (String(ee.from) === String(b) && String(ee.to) === String(a))))
-        if (edge) cost += edge.weight ?? 0
+        const key = `${a}->${b}`
+        const w = pairWeight.get(key)
+        cost += (w != null ? w : 0)
     }
     return { path, cost }
 }
@@ -76,10 +126,19 @@ export function kShortestPaths(graph: Graph, startId: string | number, endId: st
     const keyOf = (p: any) => (p.path || p).join('->')
     seen.add(keyOf(primary))
     const edgesToTry: Array<{ a: string | number, b: string | number, id?: string | number }> = []
+    // Precompute quick pair->edgeId lookup from cached edgesOut
+    const edgesOut = getEdgesOut(graph)
+    const pairToEdgeId = new Map<string, string | number>()
+    for (const [from, arr] of edgesOut.entries()) {
+        for (const e of arr) {
+            const key = `${from}->${e.to}`
+            if (!pairToEdgeId.has(key)) pairToEdgeId.set(key, e.id)
+        }
+    }
     for (let i = 1; i < primary.path.length; i++) {
         const a = primary.path[i - 1], b = primary.path[i]
-        const edge = graph.edges.find((ee: any) => ((String(ee.from) === String(a) && String(ee.to) === String(b)) || (String(ee.from) === String(b) && String(ee.to) === String(a))))
-        edgesToTry.push({ a, b, id: edge ? edge.id : undefined })
+        const id = pairToEdgeId.get(`${a}->${b}`) || pairToEdgeId.get(`${b}->${a}`)
+        edgesToTry.push({ a, b, id })
     }
     for (const toRemove of edgesToTry) {
         if (results.length >= k) break
@@ -89,4 +148,16 @@ export function kShortestPaths(graph: Graph, startId: string | number, endId: st
         if (alt) { const key = keyOf(alt); if (!seen.has(key)) { results.push(alt); seen.add(key) } }
     }
     return results
+}
+
+// Build a quick lookup of weights from edgesOut map without iterating original graph every time
+function _getPairWeightLookupFromEdgesOut(edgesOut: Map<string | number, Edge[]>): Map<string, number> {
+    const m = new Map<string, number>()
+    for (const [from, arr] of edgesOut.entries()) {
+        for (const e of arr) {
+            const key = `${from}->${e.to}`
+            if (!m.has(key)) m.set(key, e.weight)
+        }
+    }
+    return m
 }

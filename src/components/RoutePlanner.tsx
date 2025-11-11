@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import ConfirmStartModal from './route-planner/ConfirmStartModal'
 import Toast from './route-planner/Toast'
 import GroupedResultsMenu from './search/GroupedResultsMenu'
@@ -18,39 +18,59 @@ import NavigationBottomSheet from './route-planner/NavigationBottomSheet'
 import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 import { fitBoundsSmart } from '../map/viewport'
+import { haversine } from '../map/measure'
+import { getCurrentPosition } from '../utils/geolocation'
 import { loadGraphFromConfigOrFallback } from '../utils/graph'
-import { findByNormalizedId } from '../utils/featureId'
-import { createProvisionalNode } from '../map/provisionalNode'
+// Provisional helpers now wrapped by buildProvisionalGraph
+import { buildProvisionalGraph } from './route-planner/buildProvisionalGraph'
+import { getMapInstance, setPaintProperty, setLayoutProperty } from '../utils/mapHelpers'
+import { highlightRouteLayer } from './route-planner/utils'
+import { useRoutePlannerState } from '../hooks/useRoutePlannerState'
 
 export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
 
-    // Bloc unique de hooks d'état
-    const [graph, setGraph] = useState<Graph | null>(null)
-    const [start, setStart] = useState<string>('')
-    const [end, setEnd] = useState<string>('')
-    const [nodeOptions, setNodeOptions] = useState<Array<{ id: string, name: string, level?: string }>>([])
-    const [startQuery, setStartQuery] = useState<string>('')
-    const [endQuery, setEndQuery] = useState<string>('')
-    const [focusedField, setFocusedField] = useState<'start' | 'end' | null>(null)
-    const [routes, setRoutes] = useState<Array<any>>([])
-    const [highlightedRoute, setHighlightedRoute] = useState<string | null>(null)
-    const [excludeStairs, setExcludeStairs] = useState<boolean>(false)
-    const [coveredOnly, setCoveredOnly] = useState<boolean>(false)
-    const [showSecondary, setShowSecondary] = useState<boolean>(true)
-    const [showSettings, setShowSettings] = useState<boolean>(false)
-    const [isMobile] = useState<boolean>(() => isMobileViewport())
-    const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false)
-    const [selectedRoute, setSelectedRoute] = useState<any | null>(null)
-    const [detailsOpen, setDetailsOpen] = useState(false)
-    const [navigationActive, setNavigationActive] = useState(false)
-    const [confirmOpen, setConfirmOpen] = useState(false)
-    const [confirmDistance, setConfirmDistance] = useState(0)
-    const [confirmUserCoord, setConfirmUserCoord] = useState<[number, number] | null>(null)
-    const [toastMessage, setToastMessage] = useState<string | null>(null)
-    const [_provisionalNodes, setProvisionalNodes] = useState<Map<string, any>>(new Map())
-    const [groupMenuField, setGroupMenuField] = useState<'start' | 'end' | null>(null)
-    const [groupMenuTitle, setGroupMenuTitle] = useState<string>('')
-    const [groupMenuItems, setGroupMenuItems] = useState<Array<{ id: string, name: string, level?: string }>>([])
+    // Unified state management with useReducer
+    const [state, dispatch] = useRoutePlannerState(isMobileViewport())
+
+    // Destructure state for easier access
+    const {
+        graph,
+        input: { start, end, startQuery, endQuery, focusedField },
+        routes: { list: routes, highlighted: highlightedRoute, selected: selectedRoute },
+        settings: { excludeStairs, coveredOnly, showSecondary, showSettings },
+        ui: { isMobile, mobileRoutesOpen, detailsOpen },
+        navigation: { active: navigationActive, confirmOpen, confirmDistance, confirmUserCoord },
+        suggestions: { nodeOptions, groupMenuField, groupMenuTitle, groupMenuItems },
+        toastMessage
+    } = state
+
+    // Helper functions to update state (wrapper around dispatch for cleaner code)
+    // Removed unused setGraph helper (direct dispatch used where needed)
+    const setStart = (payload: string) => dispatch({ type: 'SET_START', payload })
+    const setEnd = (payload: string) => dispatch({ type: 'SET_END', payload })
+    const setStartQuery = (payload: string) => dispatch({ type: 'SET_START_QUERY', payload })
+    const setEndQuery = (payload: string) => dispatch({ type: 'SET_END_QUERY', payload })
+    const setFocusedField = (payload: 'start' | 'end' | null) => dispatch({ type: 'SET_FOCUSED_FIELD', payload })
+    const setRoutes = (payload: Array<any>) => dispatch({ type: 'SET_ROUTES', payload })
+    const setHighlightedRoute = (payload: string | null) => dispatch({ type: 'SET_HIGHLIGHTED_ROUTE', payload })
+    const setSelectedRoute = (payload: any | null) => dispatch({ type: 'SET_SELECTED_ROUTE', payload })
+    const setMobileRoutesOpen = (payload: boolean) => dispatch({ type: 'SET_MOBILE_ROUTES_OPEN', payload })
+    const setDetailsOpen = (payload: boolean) => dispatch({ type: 'SET_DETAILS_OPEN', payload })
+    const setNavigationActive = (payload: boolean) => dispatch({ type: 'SET_NAVIGATION_ACTIVE', payload })
+    const setConfirmOpen = (payload: boolean) => dispatch({ type: 'SET_CONFIRM_OPEN', payload })
+    const setConfirmDistance = (payload: number) => dispatch({ type: 'SET_CONFIRM_DISTANCE', payload })
+    const setConfirmUserCoord = (payload: [number, number] | null) => dispatch({ type: 'SET_CONFIRM_USER_COORD', payload })
+    const setToastMessage = (payload: string | null) => dispatch({ type: 'SET_TOAST_MESSAGE', payload })
+    const setProvisionalNodes = (payload: Map<string, any>) => dispatch({ type: 'SET_PROVISIONAL_NODES', payload })
+    const setExcludeStairs = () => dispatch({ type: 'TOGGLE_EXCLUDE_STAIRS' })
+    const setCoveredOnly = () => dispatch({ type: 'TOGGLE_COVERED_ONLY' })
+    const setShowSecondary = () => dispatch({ type: 'TOGGLE_SHOW_SECONDARY' })
+    const setShowSettings = (payload: boolean) => dispatch({ type: 'SET_SHOW_SETTINGS', payload: payload })
+    const setGroupMenuField = (payload: 'start' | 'end' | null) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: payload, title: groupMenuTitle, items: groupMenuItems } })
+    const setGroupMenuTitle = (title: string) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title, items: groupMenuItems } })
+    const setGroupMenuItems = (items: Array<{ id: string; name: string; level?: string }>) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title: groupMenuTitle, items } })
+    // setGroupMenu & clearGroupMenu helpers removed (unused); individual setters retained
+
     // Keep the last computed workingGraph (with provisional nodes) so we can reuse it for onAdjust
     const workingGraphRef = useRef<Graph | null>(null)
 
@@ -61,7 +81,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             try {
                 const g = await loadGraphFromConfigOrFallback()
                 if (g) {
-                    setGraph(g)
+                    dispatch({ type: 'SET_GRAPH', payload: g })
                     // Build node options for autocomplete
                     const opts = g.nodes.map((n: any) => ({
                         id: String(n.id),
@@ -96,16 +116,16 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         }
                     }
 
-                    setNodeOptions(opts)
+                    dispatch({ type: 'SET_NODE_OPTIONS', payload: opts })
 
                     // Initialize start/end if provided
                     if (initialStartId && initialStartName) {
-                        setStart(initialStartId)
-                        setStartQuery(initialStartName)
+                        dispatch({ type: 'SET_START', payload: initialStartId })
+                        dispatch({ type: 'SET_START_QUERY', payload: initialStartName })
                     }
                     if (initialEndId && initialEndName) {
-                        setEnd(initialEndId)
-                        setEndQuery(initialEndName)
+                        dispatch({ type: 'SET_END', payload: initialEndId })
+                        dispatch({ type: 'SET_END_QUERY', payload: initialEndName })
                     }
                     // Handle initialDestination if provided
                     if (initialDestination) {
@@ -113,8 +133,8 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         const fid = initialDestination.id ?? initialDestination.properties?.id ?? name
                         const match = opts.find((n: any) => String(n.id) === String(fid) || String((n.name || '')).toLowerCase() === String(name).toLowerCase())
                         const setId = match ? String(match.id) : String(fid)
-                        setEnd(setId)
-                        setEndQuery(String(match?.name ?? name))
+                        dispatch({ type: 'SET_END', payload: setId })
+                        dispatch({ type: 'SET_END_QUERY', payload: String(match?.name ?? name) })
                     }
                 }
             } catch (err) {
@@ -127,14 +147,19 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     // Gestion du bouton retour sur le menu de détails mobile
     useEffect(() => {
         function onBack() {
-            setDetailsOpen(false)
-            setMobileRoutesOpen(true)
+            dispatch({ type: 'SET_DETAILS_OPEN', payload: false })
+            dispatch({ type: 'SET_MOBILE_ROUTES_OPEN', payload: true })
         }
         window.addEventListener('route-details-back', onBack)
         return () => window.removeEventListener('route-details-back', onBack)
     }, [])
+
     // Contrôleur de navigation (mobile)
-    const nav = useNavigationController(navigationActive ? selectedRoute : null, () => setNavigationActive(false), mapRef)
+    const nav = useNavigationController(
+        state.navigation.active ? state.routes.selected : null,
+        () => dispatch({ type: 'SET_NAVIGATION_ACTIVE', payload: false }),
+        mapRef
+    )
 
     // Dev-only override: click on map sets user position when navigating
     useEffect(() => {
@@ -149,7 +174,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             window.dispatchEvent(new CustomEvent('navigation:dev-set-user-position', { detail: p }))
         }
         // Option 1: listen to maplibre click
-        const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+        const map = getMapInstance(mapRef)
         const onNativeClick = (ev: any) => {
             if (import.meta.env && import.meta.env.DEV !== true) return
             try {
@@ -202,7 +227,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             try {
                 const bounds = e?.detail as [[number, number], [number, number]]
                 if (!bounds || !Array.isArray(bounds[0]) || !Array.isArray(bounds[1])) return
-                const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                const map = getMapInstance(mapRef)
                 if (map) fitBoundsSmart(map, bounds)
             } catch { }
         }
@@ -228,106 +253,25 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             let e = end
             const nearestToUser = async (): Promise<string | null> => {
                 try {
-                    const user = await new Promise<{ lng: number, lat: number }>((resolve, reject) => {
-                        navigator.geolocation.getCurrentPosition((pos) => resolve({ lng: pos.coords.longitude, lat: pos.coords.latitude }), (err) => reject(err), { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })
-                    })
+                    const pos = await getCurrentPosition()
+                    const user: [number, number] = [pos.coords.longitude, pos.coords.latitude]
                     let bestId: string | null = null
                     let bestD = Infinity
-                    const toRad = (v: number) => v * Math.PI / 180
-                    const hav = (a: [number, number], b: [number, number]) => {
-                        const R = 6371000
-                        const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
-                        const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
-                        const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
-                        const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
-                        return R * c
-                    }
                     for (const n of graph.nodes) {
-                        const d = hav([user.lng, user.lat], n.coord as [number, number])
+                        const d = haversine(user, n.coord as [number, number])
                         if (d < bestD) { bestD = d; bestId = String(n.id) }
                     }
                     return bestId
                 } catch { return null }
             }
             let userCoord: [number, number] | null = null
-            if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { s = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
-            if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 })); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
+            if (s === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { s = nid; try { const pos = await getCurrentPosition(); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
+            if (e === 'USER_POSITION') { const nid = await nearestToUser(); if (nid) { e = nid; try { const pos = await getCurrentPosition(); userCoord = [pos.coords.longitude, pos.coords.latitude] } catch { } } }
 
-            // Handle provisional nodes: create temporary graph with provisional nodes/edges
-            let workingGraph = graph
-            let hasProvisional = false
-            const newProvisionalNodes = new Map<string, any>()
-
-            if (s.startsWith('PROVISIONAL_') || e.startsWith('PROVISIONAL_')) {
-                workingGraph = { ...graph, nodes: [...graph.nodes], edges: [...graph.edges] }
-
-                const edgesToRemove: Array<{ from: string; to: string }> = []
-                const provisionalsList: any[] = []
-
-                // First pass: create all provisional nodes and collect info
-                for (const id of [s, e]) {
-                    if (!id.startsWith('PROVISIONAL_')) continue
-
-                    // Find the corresponding feature
-                    const opt = nodeOptions.find((n: any) => n.id === id) as any
-                    if (!opt || !opt.featureIndex || !data) continue
-
-                    const feature = findByNormalizedId(data, opt.featureIndex)
-                    if (!feature) continue
-
-                    // Create provisional node, passing all features for intersection checking
-                    const allFeatures = data.features as any[]
-                    const provisional = createProvisionalNode(feature, graph, id, allFeatures)
-                    if (!provisional) continue
-
-                    provisionalsList.push(provisional)
-
-                    // Collect edges to remove if intermediate node was created
-                    if (provisional.intermediateNode && provisional.edgeToRemove) {
-                        const splitEdge = provisional.connectionEdges.find((e: any) =>
-                            e.id && e.id.includes('-split-1') && !e.id.includes('-reverse')
-                        )
-
-                        if (splitEdge) {
-                            const fromNodeId = splitEdge.from
-                            const toNodeId = provisional.connectionEdges.find((e: any) =>
-                                e.id && e.id.includes('-split-2') && !e.id.includes('-reverse')
-                            )?.to
-
-                            if (toNodeId) {
-                                edgesToRemove.push({ from: String(fromNodeId), to: String(toNodeId) })
-                            }
-                        }
-                    }
-
-                    newProvisionalNodes.set(id, provisional)
-                    hasProvisional = true
-                }
-
-                // Second pass: remove original edges that were split
-                if (edgesToRemove.length > 0) {
-                    workingGraph.edges = workingGraph.edges.filter((e: any) => {
-                        // Check if this edge matches any edge to remove
-                        return !edgesToRemove.some(toRemove =>
-                            (String(e.from) === toRemove.from && String(e.to) === toRemove.to) ||
-                            (String(e.from) === toRemove.to && String(e.to) === toRemove.from)
-                        )
-                    })
-                }
-
-                // Third pass: add all new nodes and edges
-                for (const provisional of provisionalsList) {
-                    workingGraph.nodes.push(provisional.node)
-                    if (provisional.intermediateNode) {
-                        workingGraph.nodes.push(provisional.intermediateNode)
-                    }
-                    for (const edge of provisional.connectionEdges) {
-                        workingGraph.edges.push(edge)
-                    }
-                }
-
-                setProvisionalNodes(newProvisionalNodes)
-            } const k = showSecondary ? 3 : 1
+            // Handle provisional nodes via utility
+            const { workingGraph, hasProvisional, provisionalNodes } = buildProvisionalGraph({ graph, startId: s, endId: e, data: data || null, nodeOptions })
+            if (provisionalNodes.size) setProvisionalNodes(provisionalNodes)
+            const k = showSecondary ? 3 : 1
             const res = await computeAndDrawRoute({ graph: workingGraph, start: s, end: e, excludeStairs, coveredOnly, mapRef, k, userOriginLngLat: userCoord || undefined })
             // Save the working graph (with any provisional nodes) for follow-up actions like onAdjust
             try { workingGraphRef.current = workingGraph as any } catch { }
@@ -396,22 +340,13 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         let userCoord: [number, number] | undefined = undefined
                         if (s === 'USER_POSITION') {
                             try {
-                                const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30000, timeout: 8000 }))
+                                const pos = await getCurrentPosition()
                                 userCoord = [pos.coords.longitude, pos.coords.latitude]
                                 // find nearest node id
                                 let bestId: string | null = null
                                 let bestD = Infinity
-                                const toRad = (v: number) => v * Math.PI / 180
-                                const hav = (a: [number, number], b: [number, number]) => {
-                                    const R = 6371000
-                                    const dLat = toRad(b[1] - a[1]); const dLon = toRad(b[0] - a[0])
-                                    const lat1 = toRad(a[1]); const lat2 = toRad(b[1])
-                                    const s1 = Math.sin(dLat / 2), s2 = Math.sin(dLon / 2)
-                                    const c = 2 * Math.atan2(Math.sqrt(s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2), Math.sqrt(1 - (s1 * s1 + Math.cos(lat1) * Math.cos(lat2) * s2 * s2)))
-                                    return R * c
-                                }
                                 for (const n of graph.nodes) {
-                                    const d = hav([pos.coords.longitude, pos.coords.latitude], n.coord as [number, number])
+                                    const d = haversine([pos.coords.longitude, pos.coords.latitude], n.coord as [number, number])
                                     if (d < bestD) { bestD = d; bestId = String(n.id) }
                                 }
                                 if (bestId) s = bestId
@@ -430,26 +365,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }, [focusedField, start, end, nodeOptions, mapRef])
 
     // route selector UI helpers: highlight route on map when hovering an item
-    function highlightRouteLayer(layerId: string | null) {
-        const map = mapRef && mapRef.current && (mapRef.current.getMap ? mapRef.current.getMap() : (mapRef.current.map ? mapRef.current.map : mapRef.current))
-        if (!map) return
-        // reset all route layers to default opacity and width
-        const primaryCovered = 'route-planner-0-covered-line'
-        const primaryRemaining = 'route-planner-0-remaining-line'
-        routes.forEach((r) => {
-            const isPrimary = r.layerId === 'route-planner-0-line'
-            const isSelected = r.layerId === layerId
-            if (isPrimary) {
-                try { map.setPaintProperty(primaryCovered, 'line-width', isSelected ? 22 : 18) } catch { }
-                try { map.setPaintProperty(primaryRemaining, 'line-width', isSelected ? 18 : 18) } catch { }
-                try { map.setPaintProperty(primaryCovered, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
-                try { map.setPaintProperty(primaryRemaining, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
-            } else {
-                try { map.setPaintProperty(r.layerId, 'line-width', isSelected ? 22 : 12) } catch { }
-                try { map.setPaintProperty(r.layerId, 'line-opacity', isSelected ? 1 : 0.6) } catch { }
-            }
-        })
-    }
+    // highlightRouteLayer extracted to utils for reuse
 
     // En mode navigation, on masque le planner et on affiche la bannière + le panneau bas d'info
     if (navigationActive) {
@@ -467,7 +383,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
             <div style={{ position: 'relative', marginBottom: 6 }}>
                 {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
                 <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
-                <button title="Paramètres itinéraire" onClick={() => setShowSettings(s => !s)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
+                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
                 <Inputs
@@ -519,13 +435,13 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         <RoutesList
                             routes={routes}
                             highlightedRoute={highlightedRoute}
-                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(rt.layerId) }}
-                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(null) }}
+                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(mapRef, routes, rt.layerId) }}
+                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(mapRef, routes, null) }}
                             onGo={(rt: any) => {
                                 setSelectedRoute(rt)
                                 setDetailsOpen(true)
                                 setHighlightedRoute(rt.layerId)
-                                highlightRouteLayer(rt.layerId)
+                                highlightRouteLayer(mapRef, routes, rt.layerId)
                             }}
                         />
                     )}
@@ -554,29 +470,22 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                         setMobileRoutesOpen(false)
                         setDetailsOpen(true)
                         // hide other routes on map leaving only selected
-                        try {
-                            const map = mapRef?.current?.getMap ? mapRef.current.getMap() : (mapRef?.current?.map ?? mapRef?.current)
+                        const map = getMapInstance(mapRef)
+                        if (map) {
                             const primaryCovered = 'route-planner-0-covered-line'
                             const primaryRemaining = 'route-planner-0-remaining-line'
                             routes.forEach((r) => {
                                 const isPrimary = r.layerId === 'route-planner-0-line'
-                                if (r.layerId !== rt.layerId) {
-                                    if (isPrimary) {
-                                        try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'none') } catch { }
-                                        try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'none') } catch { }
-                                    } else {
-                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
-                                    }
+                                const visibility = r.layerId === rt.layerId ? 'visible' : 'none'
+
+                                if (isPrimary) {
+                                    setLayoutProperty(map, primaryCovered, 'visibility', visibility)
+                                    setLayoutProperty(map, primaryRemaining, 'visibility', visibility)
                                 } else {
-                                    if (isPrimary) {
-                                        try { map?.setLayoutProperty?.(primaryCovered, 'visibility', 'visible') } catch { }
-                                        try { map?.setLayoutProperty?.(primaryRemaining, 'visibility', 'visible') } catch { }
-                                    } else {
-                                        try { map?.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
-                                    }
+                                    setLayoutProperty(map, r.layerId, 'visibility', visibility)
                                 }
                             })
-                        } catch { }
+                        }
                     }}
                 />
             )}
@@ -587,7 +496,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     onStart={async () => {
                         // Avant de démarrer, vérifier la distance utilisateur -> départ de l'itinéraire
                         try {
-                            const pos = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 20000, timeout: 8000 }))
+                            const pos = await getCurrentPosition({ enableHighAccuracy: true, maximumAge: 20000, timeout: 8000 })
                             const user: [number, number] = [pos.coords.longitude, pos.coords.latitude]
                             if (selectedRoute && graph) {
                                 try {
@@ -613,21 +522,21 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                                         const isPrimary = r.layerId === 'route-planner-0-line'
                                         if (selectedRoute && r.layerId === selectedRoute.layerId) {
                                             if (isPrimary) {
-                                                try { map.setPaintProperty?.(primaryCovered, 'line-width', 20) } catch { }
-                                                try { map.setPaintProperty?.(primaryRemaining, 'line-width', 18) } catch { }
-                                                try { map.setLayoutProperty?.(primaryCovered, 'visibility', 'visible') } catch { }
-                                                try { map.setLayoutProperty?.(primaryRemaining, 'visibility', 'visible') } catch { }
+                                                setPaintProperty(map, primaryCovered, 'line-width', 20)
+                                                setPaintProperty(map, primaryRemaining, 'line-width', 18)
+                                                setLayoutProperty(map, primaryCovered, 'visibility', 'visible')
+                                                setLayoutProperty(map, primaryRemaining, 'visibility', 'visible')
                                             } else {
-                                                try { map.setPaintProperty?.(r.layerId, 'line-opacity', 1) } catch { }
-                                                try { map.setPaintProperty?.(r.layerId, 'line-width', 20) } catch { }
-                                                try { map.setLayoutProperty?.(r.layerId, 'visibility', 'visible') } catch { }
+                                                setPaintProperty(map, r.layerId, 'line-opacity', 1)
+                                                setPaintProperty(map, r.layerId, 'line-width', 20)
+                                                setLayoutProperty(map, r.layerId, 'visibility', 'visible')
                                             }
                                         } else {
                                             if (isPrimary) {
-                                                try { map.setLayoutProperty?.(primaryCovered, 'visibility', 'none') } catch { }
-                                                try { map.setLayoutProperty?.(primaryRemaining, 'visibility', 'none') } catch { }
+                                                setLayoutProperty(map, primaryCovered, 'visibility', 'none')
+                                                setLayoutProperty(map, primaryRemaining, 'visibility', 'none')
                                             } else {
-                                                try { map.setLayoutProperty?.(r.layerId, 'visibility', 'none') } catch { }
+                                                setLayoutProperty(map, r.layerId, 'visibility', 'none')
                                             }
                                         }
                                     })

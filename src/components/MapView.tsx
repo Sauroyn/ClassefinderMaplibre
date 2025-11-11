@@ -10,10 +10,14 @@ import { addInteractions } from '../map/interactions'
 // Connector styling is now handled by combined covered/remaining layers; no direct import needed
 import { fitBoundsSmart } from '../map/viewport'
 import { haversine } from '../map/measure'
+import { normalizeFeatureCollection } from '../utils/featureNormalization'
+import { deriveDarkColor } from '../utils/colors'
+import { STORAGE_KEYS } from '../utils/storage'
+import { removeLayer, removeSource, getLayersWithPrefix, getSourcesWithPrefix, setFeatureState, setFilter } from '../utils/mapHelpers'
+import { getFeatureBounds } from '../utils/geometryBounds'
+import { getMapStyleUrl } from '../utils/mapStyles'
 
 type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
-
-const CONFIG_STORAGE_KEY = 'site_config_file'
 
 export default forwardRef(function MapView({ data, level, theme = 'light', onThemeChange }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
@@ -157,7 +161,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             let center: [number, number] = [2.3522, 48.8566]
             let zoom = 12
             try {
-                const sel = (typeof window !== 'undefined') ? (localStorage.getItem(CONFIG_STORAGE_KEY) || null) : null
+                const sel = (typeof window !== 'undefined') ? (localStorage.getItem(STORAGE_KEYS.CONFIG_FILE) || null) : null
                 if (sel) {
                     try {
                         const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
@@ -176,9 +180,12 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 }
             } catch (e) { /* ignore localStorage errors */ }
 
-            const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const map = new maplibre.Map({ container: container.current!, style: theme === 'dark' ? darkStyle : lightStyle, center, zoom })
+            const map = new maplibre.Map({
+                container: container.current!,
+                style: getMapStyleUrl(theme),
+                center,
+                zoom
+            })
             mapRef.current = map
                 // Exposer la map globalement pour le debug
                 ; (window as any).__debugMap = map
@@ -218,17 +225,17 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 const setHover = (id: number | null) => {
                     try {
                         if (uiHoverIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHoverIdRef.current }, { hover: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHoverIdRef.current, { hover: false })
                         }
                         // clear any previous multi-hover
                         if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
                             for (const pid of uiHoverIdsRef.current) {
-                                try { map.setFeatureState({ source: 'buildings', id: pid }, { hover: false }) } catch { }
+                                setFeatureState(map, 'buildings', pid, { hover: false })
                             }
                             uiHoverIdsRef.current = null
                         }
                         if (id != null) {
-                            try { map.setFeatureState({ source: 'buildings', id }, { hover: true }) } catch { }
+                            setFeatureState(map, 'buildings', id, { hover: true })
                         }
                         uiHoverIdRef.current = id
                     } catch { }
@@ -237,13 +244,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     try {
                         // clear previous single
                         if (uiHoverIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHoverIdRef.current }, { hover: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHoverIdRef.current, { hover: false })
                             uiHoverIdRef.current = null
                         }
                         // clear previous many
                         if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
                             for (const pid of uiHoverIdsRef.current) {
-                                try { map.setFeatureState({ source: 'buildings', id: pid }, { hover: false }) } catch { }
+                                setFeatureState(map, 'buildings', pid, { hover: false })
                             }
                         }
                         uiHoverIdsRef.current = null
@@ -253,7 +260,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                 const n = parseInt(String(raw), 10)
                                 const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
                                 if (id != null) {
-                                    try { map.setFeatureState({ source: 'buildings', id }, { hover: true }) } catch { }
+                                    setFeatureState(map, 'buildings', id, { hover: true })
                                     out.push(id as number)
                                 }
                             }
@@ -284,14 +291,14 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         if (!map) return
                         // Clear previous highlight
                         if (uiHighlightIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHighlightIdRef.current }, { highlight: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHighlightIdRef.current, { highlight: false })
                         }
                         // Set new highlight
                         const raw = e?.detail
                         const n = parseInt(String(raw), 10)
                         const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
                         if (id != null) {
-                            try { map.setFeatureState({ source: 'buildings', id }, { highlight: true }) } catch { }
+                            setFeatureState(map, 'buildings', id, { highlight: true })
                             uiHighlightIdRef.current = id as number
                         } else {
                             uiHighlightIdRef.current = null
@@ -303,7 +310,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         const map = mapRef.current
                         if (!map) return
                         if (uiHighlightIdRef.current != null) {
-                            try { map.setFeatureState({ source: 'buildings', id: uiHighlightIdRef.current }, { highlight: false }) } catch { }
+                            setFeatureState(map, 'buildings', uiHighlightIdRef.current, { highlight: false })
                             uiHighlightIdRef.current = null
                         }
                     } catch { }
@@ -410,86 +417,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 let themedData = data
                 try {
                     if (data && data.type === 'FeatureCollection') {
-                        // first normalize
-                        const normalized = {
-                            ...data,
-                            features: data.features.map((f: any, idx: number) => {
-                                try {
-                                    const p = { ...(f.properties || {}) }
-                                    // coerce level: accept string or number; if missing but "levels" array exists, keep as-is
-                                    if (p.level != null) {
-                                        const n = typeof p.level === 'string' ? parseInt(p.level, 10) : p.level
-                                        p.level = Number.isFinite(n) ? n : p.level
-                                    }
-                                    // set a stable id if missing (prefer existing id, then properties.fid/name, else index)
-                                    const fid = (f.id != null ? f.id : (p.fid != null ? p.fid : (p.id != null ? p.id : undefined)))
-                                    let newId: number
-                                    if (fid != null) {
-                                        if (typeof fid === 'number' && Number.isFinite(fid)) newId = fid
-                                        else {
-                                            const n = parseInt(String(fid), 10)
-                                            newId = Number.isFinite(n) ? n : idx
-                                        }
-                                    } else {
-                                        newId = idx
-                                    }
-                                    return { ...f, id: newId, properties: p }
-                                } catch { return { ...f, id: (f.id ?? idx) } }
-                            })
-                        }
-                        const deriveDark = (hex: string): string => {
-                            // convert to HSL and shift towards darker/desaturated tone
-                            const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
-                            if (!m) return hex
-                            const h = hex.replace('#', '')
-                            const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
-                            const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
-                            const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
-                            const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
-                            const rn = r / 255, gn = g / 255, bn = b / 255
-                            const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
-                            let hdeg = 0, s = 0, l = (max + min) / 2
-                            if (max !== min) {
-                                const d = max - min
-                                s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                                switch (max) {
-                                    case rn: hdeg = (gn - bn) / d + (gn < bn ? 6 : 0); break
-                                    case gn: hdeg = (bn - rn) / d + 2; break
-                                    case bn: hdeg = (rn - gn) / d + 4; break
-                                }
-                                hdeg = hdeg * 60
-                            }
-                            // Dark mode adjustment: reduce lightness, reduce saturation slightly
-                            const l2 = Math.max(0, l * 0.55)
-                            const s2 = Math.max(0, s * 0.85)
-                            // HSL -> RGB
-                            const C = (1 - Math.abs(2 * l2 - 1)) * s2
-                            const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
-                            const m2 = l2 - C / 2
-                            let r1 = 0, g1 = 0, b1 = 0
-                            if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
-                            else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
-                            else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
-                            else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
-                            else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
-                            else { r1 = C; g1 = 0; b1 = X }
-                            const R = Math.round((r1 + m2) * 255)
-                            const G = Math.round((g1 + m2) * 255)
-                            const B = Math.round((b1 + m2) * 255)
-                            const toHex = (n: number) => n.toString(16).padStart(2, '0')
-                            return `#${toHex(R)}${toHex(G)}${toHex(B)}`
-                        }
-                        const next = {
-                            ...normalized,
-                            features: normalized.features.map((f: any) => {
-                                try {
-                                    const p = { ...(f.properties || {}) }
-                                    if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
-                                    return { ...f, properties: p }
-                                } catch { return f }
-                            })
-                        }
-                        themedData = next
+                        // Use centralized normalization utility
+                        themedData = normalizeFeatureCollection(data, theme === 'dark')
                     }
                 } catch { }
                 addBuildingsSource(map, themedData)
@@ -498,46 +427,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 const cfg = (() => {
                     if (!cfg0) return cfg0
                     if (!cfg0.fillColor || theme !== 'dark') return cfg0
-                    const deriveDark = (hex: string): string => {
-                        const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
-                        if (!m) return hex
-                        const h = hex.replace('#', '')
-                        const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
-                        const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
-                        const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
-                        const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
-                        const rn = r / 255, gn = g / 255, bn = b / 255
-                        const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
-                        let hdeg = 0, s = 0, l = (max + min) / 2
-                        if (max !== min) {
-                            const d = max - min
-                            s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
-                            switch (max) {
-                                case rn: hdeg = (gn - bn) / d + (gn < bn ? 6 : 0); break
-                                case gn: hdeg = (bn - rn) / d + 2; break
-                                case bn: hdeg = (rn - gn) / d + 4; break
-                            }
-                            hdeg = hdeg * 60
-                        }
-                        const l2 = Math.max(0, l * 0.55)
-                        const s2 = Math.max(0, s * 0.85)
-                        const C = (1 - Math.abs(2 * l2 - 1)) * s2
-                        const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
-                        const m2 = l2 - C / 2
-                        let r1 = 0, g1 = 0, b1 = 0
-                        if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
-                        else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
-                        else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
-                        else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
-                        else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
-                        else { r1 = C; g1 = 0; b1 = X }
-                        const R = Math.round((r1 + m2) * 255)
-                        const G = Math.round((g1 + m2) * 255)
-                        const B = Math.round((b1 + m2) * 255)
-                        const toHex = (n: number) => n.toString(16).padStart(2, '0')
-                        return `#${toHex(R)}${toHex(G)}${toHex(B)}`
-                    }
-                    return { ...cfg0, fillColor: deriveDark(cfg0.fillColor) }
+                    // Use centralized color utility
+                    return { ...cfg0, fillColor: deriveDarkColor(cfg0.fillColor) }
                 })()
                 addFillLayers(map, level, cfg, theme)
                 const centroids = generateCentroids(themedData)
@@ -581,7 +472,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     ]
                     for (const lyr of layers) {
                         if (lyr && typeof lyr.id === 'string' && lyr.id.startsWith('route-planner-')) {
-                            try { map.setFilter(lyr.id, routeFilter as any) } catch (e) { }
+                            setFilter(map, lyr.id, routeFilter as any)
                         }
                     }
                 } catch (e) { }
@@ -657,21 +548,21 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const features = map.querySourceFeatures('buildings', { sourceLayer: undefined, filter: ['==', ['id'], id] })
             const feat = features && features[0]
             if (feat && feat.geometry) {
+                const bbox = getFeatureBounds(feat)
+                if (bbox) { fitBoundsSmart(map, bbox); return }
+                // fallback manual (should rarely hit)
                 if (feat.geometry.type === 'Polygon') {
                     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                    const coords = feat.geometry.coordinates[0]
+                    const coords = (feat.geometry as any).coordinates[0]
                     for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
                     if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
                 } else if (feat.geometry.type === 'MultiPolygon') {
-                    let best: { area: number, bounds: [number, number, number, number] } | null = null
-                    for (const poly of feat.geometry.coordinates) {
+                    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+                    for (const poly of (feat.geometry as any).coordinates) {
                         const ring = poly[0]
-                        let a = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                        for (let i = 0; i < ring.length - 1; i++) { const x0 = ring[i][0], y0 = ring[i][1], x1 = ring[i + 1][0], y1 = ring[i + 1][1]; a += (x0 * y1 - x1 * y0); if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0 }
-                        a = Math.abs(a) / 2
-                        if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
+                        for (const p of ring) { const x = p[0], y = p[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
                     }
-                    if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
+                    if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
                 }
             }
             // if feature wasn't found in the source, try to find it in latestDataRef (search results when data not yet added)
@@ -680,23 +571,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 if (d && d.features && d.features.length) {
                     const found = d.features.find((f: any) => (f.id ?? f.properties?.id ?? f.properties?.name) === id || (f.properties && f.properties.name) === id)
                     if (found && found.geometry) {
-                        const geom = found.geometry
-                        if (geom.type === 'Polygon') {
-                            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                            const coords = geom.coordinates[0]
-                            for (const c of coords) { const x = c[0], y = c[1]; if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y }
-                            if (isFinite(minX)) { fitBoundsSmart(map, [[minX, minY], [maxX, maxY]]); return }
-                        } else if (geom.type === 'MultiPolygon') {
-                            let best: { area: number, bounds: [number, number, number, number] } | null = null
-                            for (const poly of geom.coordinates) {
-                                const ring = poly[0]
-                                let a = 0, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-                                for (let i = 0; i < ring.length - 1; i++) { const x0 = ring[i][0], y0 = ring[i][1], x1 = ring[i + 1][0], y1 = ring[i + 1][1]; a += (x0 * y1 - x1 * y0); if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (x0 > maxX) maxX = x0; if (y0 > maxY) maxY = y0 }
-                                a = Math.abs(a) / 2
-                                if (!best || a > best.area) best = { area: a, bounds: [minX, minY, maxX, maxY] }
-                            }
-                            if (best) { fitBoundsSmart(map, [[best.bounds[0], best.bounds[1]], [best.bounds[2], best.bounds[3]]]); return }
-                        }
+                        const bbox = getFeatureBounds(found)
+                        if (bbox) { fitBoundsSmart(map, bbox); return }
                     }
                 }
             } catch (e) { }
@@ -704,8 +580,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             // ensure feature-state selection is applied
             try {
                 const all = map.querySourceFeatures('buildings') || []
-                for (const f of all) try { map.setFeatureState({ source: 'buildings', id: f.id }, { selected: false, hover: false }) } catch (e) { }
-                try { map.setFeatureState({ source: 'buildings', id }, { selected: true }) } catch (e) { }
+                for (const f of all) setFeatureState(map, 'buildings', f.id as number, { selected: false, hover: false })
+                setFeatureState(map, 'buildings', id, { selected: true })
             } catch (e) { }
         }
         ,
@@ -731,7 +607,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             // try to unset any selected feature state by querying source features
             try {
                 const features = map.querySourceFeatures('buildings')
-                for (const f of features) try { map.setFeatureState({ source: 'buildings', id: f.id }, { selected: false, hover: false }) } catch (e) { }
+                for (const f of features) setFeatureState(map, 'buildings', f.id as number, { selected: false, hover: false })
             } catch (e) { }
         }
         ,
@@ -739,35 +615,28 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             const map = mapRef.current
             if (!map) return
             try {
-                // remove any layer/source created for route-planner (route-planner-0, -1, ...)
-                try {
-                    const style = map.getStyle && map.getStyle()
-                    const layers = (style && style.layers) || []
-                    for (const l of layers) {
-                        if (typeof l.id === 'string' && l.id.startsWith('route-planner-')) {
-                            try { if (map.getLayer && map.getLayer(l.id)) map.removeLayer(l.id) } catch (e) { }
-                        }
-                    }
-                } catch (e) { }
-                try {
-                    const style = map.getStyle && map.getStyle()
-                    const sources = (style && style.sources) || {}
-                    for (const s of Object.keys(sources)) {
-                        if (s.startsWith('route-planner-')) {
-                            try { if (map.getSource && map.getSource(s)) map.removeSource(s) } catch (e) { }
-                        }
-                    }
-                } catch (e) { }
+                // Remove layers with 'route-planner-' prefix using helper
+                const layers = getLayersWithPrefix(map, 'route-planner-')
+                for (const layerId of layers) {
+                    removeLayer(map, layerId)
+                }
+
+                // Remove sources with 'route-planner-' prefix using helper
+                const sources = getSourcesWithPrefix(map, 'route-planner-')
+                for (const sourceId of sources) {
+                    removeSource(map, sourceId)
+                }
+
                 // also remove start/end symbol and circle layers/sources if present
-                try { if (map.getLayer && map.getLayer('route-planner-start-symbol')) map.removeLayer('route-planner-start-symbol') } catch (e) { }
-                try { if (map.getLayer && map.getLayer('route-planner-start-circle')) map.removeLayer('route-planner-start-circle') } catch (e) { }
-                try { if (map.getLayer && map.getLayer('route-planner-end-symbol')) map.removeLayer('route-planner-end-symbol') } catch (e) { }
-                try { if (map.getLayer && map.getLayer('route-planner-end-circle')) map.removeLayer('route-planner-end-circle') } catch (e) { }
+                removeLayer(map, 'route-planner-start-symbol')
+                removeLayer(map, 'route-planner-start-circle')
+                removeLayer(map, 'route-planner-end-symbol')
+                removeLayer(map, 'route-planner-end-circle')
                 // remove user connector
-                try { if (map.getLayer && map.getLayer('route-planner-user-connector-line')) map.removeLayer('route-planner-user-connector-line') } catch (e) { }
-                try { if (map.getSource && map.getSource('route-planner-user-connector')) map.removeSource('route-planner-user-connector') } catch (e) { }
-                try { if (map.getSource && map.getSource('route-planner-start')) map.removeSource('route-planner-start') } catch (e) { }
-                try { if (map.getSource && map.getSource('route-planner-end')) map.removeSource('route-planner-end') } catch (e) { }
+                removeLayer(map, 'route-planner-user-connector-line')
+                removeSource(map, 'route-planner-user-connector')
+                removeSource(map, 'route-planner-start')
+                removeSource(map, 'route-planner-end')
                 // also remove any DOM markers created by route planner
                 try {
                     const m = (map as any).__routePlannerMarkers
@@ -791,9 +660,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             if ((map as any)[swappingKey]) return
                 ; (map as any)[swappingKey] = true
 
-            const lightStyle = 'https://api.maptiler.com/maps/basic-v2/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const darkStyle = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=BiyHHi8FTQZ233ADqskZ'
-            const target = theme === 'dark' ? darkStyle : lightStyle
+            const target = getMapStyleUrl(theme)
             // Always setStyle; preserve camera
             const cam = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }
             // Snapshot current route sources' data so we can restore them after the style reload
@@ -823,85 +690,8 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     let themedDataForAll: any = d
                     // add sources if missing
                     if (!map.getSource('buildings')) {
-                        // regenerate normalized + themed data
-                        themedDataForAll = (() => {
-                            try {
-                                if (d && d.type === 'FeatureCollection') {
-                                    const normalized = {
-                                        ...d,
-                                        features: d.features.map((f: any, idx: number) => {
-                                            try {
-                                                const p = { ...(f.properties || {}) }
-                                                if (p.level != null) {
-                                                    const n = typeof p.level === 'string' ? parseInt(p.level, 10) : p.level
-                                                    p.level = Number.isFinite(n) ? n : p.level
-                                                }
-                                                const fid = (f.id != null ? f.id : (p.fid != null ? p.fid : (p.id != null ? p.id : undefined)))
-                                                let newId: number
-                                                if (fid != null) {
-                                                    if (typeof fid === 'number' && Number.isFinite(fid)) newId = fid
-                                                    else {
-                                                        const n = parseInt(String(fid), 10)
-                                                        newId = Number.isFinite(n) ? n : idx
-                                                    }
-                                                } else {
-                                                    newId = idx
-                                                }
-                                                return { ...f, id: newId, properties: p }
-                                            } catch { return { ...f, id: (f.id ?? idx) } }
-                                        })
-                                    }
-                                    const deriveDark = (hex: string): string => {
-                                        const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
-                                        if (!m) return hex
-                                        const h = hex.replace('#', '')
-                                        const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
-                                        const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
-                                        const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
-                                        const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
-                                        const rn = r / 255, gn = g / 255, bn = b / 255
-                                        const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
-                                        let hdeg = 0, s = 0, l = (max + min) / 2
-                                        if (max !== min) {
-                                            const dlt = max - min
-                                            s = l > 0.5 ? dlt / (2 - max - min) : dlt / (max + min)
-                                            switch (max) {
-                                                case rn: hdeg = (gn - bn) / dlt + (gn < bn ? 6 : 0); break
-                                                case gn: hdeg = (bn - rn) / dlt + 2; break
-                                                case bn: hdeg = (rn - gn) / dlt + 4; break
-                                            }
-                                            hdeg = hdeg * 60
-                                        }
-                                        const l2 = Math.max(0, l * 0.55)
-                                        const s2 = Math.max(0, s * 0.85)
-                                        const C = (1 - Math.abs(2 * l2 - 1)) * s2
-                                        const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
-                                        const m2 = l2 - C / 2
-                                        let r1 = 0, g1 = 0, b1 = 0
-                                        if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
-                                        else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
-                                        else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
-                                        else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
-                                        else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
-                                        else { r1 = C; g1 = 0; b1 = X }
-                                        const R = Math.round((r1 + m2) * 255)
-                                        const G = Math.round((g1 + m2) * 255)
-                                        const B = Math.round((b1 + m2) * 255)
-                                        const toHex = (n: number) => n.toString(16).padStart(2, '0')
-                                        return `#${toHex(R)}${toHex(G)}${toHex(B)}`
-                                    }
-                                    return {
-                                        ...normalized,
-                                        features: normalized.features.map((f: any) => {
-                                            const p = { ...(f.properties || {}) }
-                                            if (p.color && typeof p.color === 'string') p.darkColor = deriveDark(p.color)
-                                            return { ...f, properties: p }
-                                        })
-                                    }
-                                }
-                            } catch { }
-                            return d
-                        })()
+                        // Use centralized normalization utility
+                        themedDataForAll = normalizeFeatureCollection(d, theme === 'dark')
                         addBuildingsSource(map, themedDataForAll)
                     }
                     // layers (derive cfg for dark)
@@ -909,55 +699,19 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     const cfgb = (() => {
                         if (!cfg0b) return cfg0b
                         if (!cfg0b.fillColor || theme !== 'dark') return cfg0b
-                        const deriveDark = (hex: string): string => {
-                            const m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex || '')
-                            if (!m) return hex
-                            const h = hex.replace('#', '')
-                            const parse = (c: string) => c.length === 1 ? parseInt(c + c, 16) : parseInt(c, 16)
-                            const r = parse(h.substring(0, h.length === 3 ? 1 : 2))
-                            const g = parse(h.substring(h.length === 3 ? 1 : 2, h.length === 3 ? 2 : 4))
-                            const b = parse(h.substring(h.length === 3 ? 2 : 4, h.length === 3 ? 3 : 6))
-                            const rn = r / 255, gn = g / 255, bn = b / 255
-                            const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
-                            let hdeg = 0, s = 0, l = (max + min) / 2
-                            if (max !== min) {
-                                const dlt = max - min
-                                s = l > 0.5 ? dlt / (2 - max - min) : dlt / (max + min)
-                                switch (max) {
-                                    case rn: hdeg = (gn - bn) / dlt + (gn < bn ? 6 : 0); break
-                                    case gn: hdeg = (bn - rn) / dlt + 2; break
-                                    case bn: hdeg = (rn - gn) / dlt + 4; break
-                                }
-                                hdeg = hdeg * 60
-                            }
-                            const l2 = Math.max(0, l * 0.55)
-                            const s2 = Math.max(0, s * 0.85)
-                            const C = (1 - Math.abs(2 * l2 - 1)) * s2
-                            const X = C * (1 - Math.abs(((hdeg / 60) % 2) - 1))
-                            const m2 = l2 - C / 2
-                            let r1 = 0, g1 = 0, b1 = 0
-                            if (hdeg < 60) { r1 = C; g1 = X; b1 = 0 }
-                            else if (hdeg < 120) { r1 = X; g1 = C; b1 = 0 }
-                            else if (hdeg < 180) { r1 = 0; g1 = C; b1 = X }
-                            else if (hdeg < 240) { r1 = 0; g1 = X; b1 = C }
-                            else if (hdeg < 300) { r1 = X; g1 = 0; b1 = C }
-                            else { r1 = C; g1 = 0; b1 = X }
-                            const R = Math.round((r1 + m2) * 255)
-                            const G = Math.round((g1 + m2) * 255)
-                            const B = Math.round((b1 + m2) * 255)
-                            const toHex = (n: number) => n.toString(16).padStart(2, '0')
-                            return `#${toHex(R)}${toHex(G)}${toHex(B)}`
-                        }
-                        return { ...cfg0b, fillColor: deriveDark(cfg0b.fillColor) }
+                        // Use centralized color utility
+                        return { ...cfg0b, fillColor: deriveDarkColor(cfg0b.fillColor) }
                     })()
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
                     // Generate centroids from the normalized/themed data to ensure coerced numeric levels
                     const centroids = generateCentroids(themedDataForAll)
-                    console.log('[MapView] Centroïdes générés:', centroids.features.length, 'features')
-                    if (centroids.features.length > 0) {
-                        console.log('[MapView] Premier centroïde:', centroids.features[0])
-                        console.log('[MapView] Propriétés du premier centroïde:', centroids.features[0].properties)
-                        console.log('[MapView] Propriété name:', centroids.features[0].properties?.name)
+                    if (import.meta && (import.meta as any).env && (import.meta as any).env.DEV) {
+                        console.log('[MapView] Centroïdes générés:', centroids.features.length, 'features')
+                        if (centroids.features.length > 0) {
+                            console.log('[MapView] Premier centroïde:', centroids.features[0])
+                            console.log('[MapView] Propriétés du premier centroïde:', centroids.features[0].properties)
+                            console.log('[MapView] Propriété name:', centroids.features[0].properties?.name)
+                        }
                     }
                     // Toujours recréer la source centroids après un swap de style (force=true)
                     addCentroidsSource(map, centroids, true)
@@ -1005,7 +759,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                     map.addLayer({ id: layerId, type: 'line', source: saved.id, paint, layout: { 'line-cap': 'round', 'line-join': 'round' } })
                                 }
                             } catch { }
-                            try { if (map.getLayer(layerId)) map.setFilter(layerId, routeFilter) } catch { }
+                            setFilter(map, layerId, routeFilter)
                         }
                         // Primary route is now split into covered/remaining; ordering handled when drawing
                     } catch { }

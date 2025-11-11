@@ -169,3 +169,26 @@ export function getSourcesWithPrefix(map: maplibre.Map | null, prefix: string): 
         return []
     }
 }
+
+/**
+ * Safely set feature state
+ * @param map - MapLibre map instance
+ * @param source - Source ID
+ * @param id - Feature ID
+ * @param state - State object to set
+ */
+export function setFeatureState(
+    map: maplibre.Map | null,
+    source: string,
+    id: number | string,
+    state: Record<string, any>
+): void {
+    if (!map) return
+    try {
+        if (map.setFeatureState) {
+            map.setFeatureState({ source, id }, state)
+        }
+    } catch {
+        // Ignore errors
+    }
+}
