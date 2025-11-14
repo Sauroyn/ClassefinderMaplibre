@@ -14,7 +14,7 @@ function dispatchHover(id?: string | number) {
 
 export default function GroupedResultsMenu({ title, items, onPick, onClose }: { title: string; items: Item[]; onPick: (id: string | number, name: string) => void; onClose: () => void }) {
   return (
-    <div className="absolute left-3 top-[60px] z-[11] w-[360px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl">
+    <div className="absolute left-3 right-3 md:right-auto top-[60px] z-[45] w-[calc(100%-24px)] md:w-[360px] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-lg shadow-xl">
       <div className="flex items-center justify-between p-2.5 border-b border-gray-200 dark:border-gray-700">
         <div className="font-extrabold">{title}</div>
         <button
@@ -30,7 +30,10 @@ export default function GroupedResultsMenu({ title, items, onPick, onClose }: { 
             key={`group-menu-${String(it.id)}`}
             onMouseEnter={() => dispatchHover(it.id)}
             onMouseLeave={() => dispatchHover(undefined)}
-            onMouseDown={() => { onPick(it.id, it.name); onClose() }}
+            onClick={() => { onPick(it.id, it.name); onClose() }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(it.id, it.name); onClose() } }}
+            role="button"
+            tabIndex={0}
             className="flex justify-between p-2.5 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <div className="flex flex-col">

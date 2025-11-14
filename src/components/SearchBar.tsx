@@ -281,7 +281,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 )}
             </div>
             {showList && (
-                <>
+                <div className="max-h-[280px] md:max-h-[320px] overflow-auto">
                     {groupView && (
                         <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 font-bold text-sm">
                             {groupView.title} ({groupView.items.length})
@@ -297,7 +297,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                         setGroupView({ title: name, items })
                         setFocused(true) // Keep focus to show the list
                     }} />
-                </>
+                </div>
             )}
 
             {/* Selected details */}

@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import { Xmark, Gear } from '@gravity-ui/icons'
 import ConfirmStartModal from './route-planner/ConfirmStartModal'
 import Toast from './route-planner/Toast'
-import GroupedResultsMenu from './search/GroupedResultsMenu'
 
 import { getUserStartDistance } from './route-planner/getStartProximity'
 import { computeAndDrawRoute } from '../map/computeRoute'
@@ -63,10 +62,19 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     const setConfirmUserCoord = (payload: [number, number] | null) => dispatch({ type: 'SET_CONFIRM_USER_COORD', payload })
     const setToastMessage = (payload: string | null) => dispatch({ type: 'SET_TOAST_MESSAGE', payload })
     const setProvisionalNodes = (payload: Map<string, any>) => dispatch({ type: 'SET_PROVISIONAL_NODES', payload })
-    const setGroupMenuField = (payload: 'start' | 'end' | null) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: payload, title: groupMenuTitle, items: groupMenuItems } })
-    const setGroupMenuTitle = (title: string) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title, items: groupMenuItems } })
-    const setGroupMenuItems = (items: Array<{ id: string; name: string; level?: string }>) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title: groupMenuTitle, items } })
-    // setGroupMenu & clearGroupMenu helpers removed (unused); individual setters retained
+    const openGroupMenu = (field: 'start' | 'end', title: string, items: Array<{ id: string; name: string; level?: string }>) =>
+        dispatch({ type: 'SET_GROUP_MENU', payload: { field, title, items } })
+    const closeGroupMenu = () => dispatch({ type: 'CLEAR_GROUP_MENU' })
+    const dismissGroupMenu = () => {
+        closeGroupMenu()
+        try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
+    }
+
+    const showSuggestionsPanel = Boolean(
+        focusedField ||
+        (groupMenuField && groupMenuItems.length > 0) ||
+        (routes && routes.length > 0 && !detailsOpen)
+    )
 
     // Keep the last computed workingGraph (with provisional nodes) so we can reuse it for onAdjust
     const workingGraphRef = useRef<Graph | null>(null)
@@ -395,7 +403,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
-        <div className={`route-planner absolute ${isMobile ? 'top-3 left-3 right-3 w-auto' : 'top-[12px] left-[12px] w-[360px]'} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls shadow-lg overflow-hidden ${navigationActive ? 'hidden' : 'block'}`}>
+        <div className={`route-planner absolute ${isMobile ? 'top-3 left-3 right-3 w-auto' : 'top-[12px] left-[12px] w-[360px]'} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls shadow-lg ${groupMenuField ? 'overflow-visible' : 'overflow-hidden'} ${navigationActive ? 'hidden' : 'block'}`}>
             <div className="p-[2px] pr-1">
                 {/* Ligne avec bouton fermer, inputs, et boutons paramètres/swap */}
                 <div className="flex gap-2 items-start">
@@ -438,7 +446,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
 
             {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
             {/* Afficher le conteneur seulement si suggestions ou routes présentes */}
-            {(focusedField || (routes && routes.length > 0 && !detailsOpen)) && (
+            {showSuggestionsPanel && (
                 <div className="w-full border-t border-gray-200 dark:border-gray-700 max-h-[220px] overflow-auto">
                     <div>
                         <Suggestions
@@ -449,11 +457,11 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                             onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }}
                             onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }}
                             onRequestGroup={(field, name, items) => {
-                                setGroupMenuField(field)
-                                setGroupMenuTitle(name)
-                                setGroupMenuItems(items)
-                                setFocusedField(null)
+                                openGroupMenu(field, name, items)
+                                setFocusedField(field)
                             }}
+                            groupView={groupMenuField && groupMenuItems.length > 0 ? { field: groupMenuField, title: groupMenuTitle, items: groupMenuItems } : null}
+                            onCloseGroup={dismissGroupMenu}
                         />
                         {/* Liste visible seulement si détail non ouvert */}
                         {!isMobile && routes && routes.length > 0 && !detailsOpen && (
@@ -656,27 +664,6 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                 />
             )}
             {/* Group menu for multiple features with same name */}
-            {groupMenuField && groupMenuItems.length > 0 && (
-                <GroupedResultsMenu
-                    title={groupMenuTitle}
-                    items={groupMenuItems}
-                    onPick={(id, name) => {
-                        console.log('[RoutePlanner] GroupedResultsMenu onPick:', { field: groupMenuField, id, name })
-                        if (groupMenuField === 'start') {
-                            setStart(String(id))
-                            setStartQuery(name)
-                        } else {
-                            setEnd(String(id))
-                            setEndQuery(name)
-                        }
-                        setGroupMenuField(null)
-                    }}
-                    onClose={() => {
-                        setGroupMenuField(null)
-                        try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
-                    }}
-                />
-            )}
         </div>
     )
 }
