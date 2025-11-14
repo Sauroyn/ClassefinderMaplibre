@@ -44,7 +44,7 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
                             <button
                                 onClick={onClearStart}
                                 title="Clear start"
-                                className="p-1.5 ml-1 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                                className="p-1.5 ml-1 rounded-lg bg-transparent text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                             >
                                 <Xmark className="w-4 h-4" />
                             </button>
@@ -68,7 +68,7 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
                             <button
                                 onClick={onClearEnd}
                                 title="Clear end"
-                                className="p-1.5 ml-1 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                                className="p-1.5 ml-1 rounded-lg bg-transparent text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                             >
                                 <Xmark className="w-4 h-4" />
                             </button>

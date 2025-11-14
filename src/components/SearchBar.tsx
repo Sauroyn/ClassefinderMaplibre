@@ -222,7 +222,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                                 if ((onClear)) onClear()
                             }
                         }}
-                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center flex-shrink-0"
+                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-transparent bg-transparent text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center flex-shrink-0"
                     >
                         <ArrowLeft className="w-5 h-5" />
                     </button>
@@ -235,14 +235,14 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                             setFocused(true)
                             if (inputRef.current) inputRef.current.focus()
                         }}
-                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center flex-shrink-0"
+                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-transparent bg-transparent text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center flex-shrink-0"
                     >
                         <Xmark className="w-5 h-5" />
                     </button>
                 ) : (
                     <button
                         onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }}
-                        className="w-8 h-8 md:w-9 md:h-9 bg-transparent border border-transparent rounded-lg text-gray-600 dark:text-gray-400 flex items-center justify-center flex-shrink-0"
+                        className="w-8 h-8 md:w-9 md:h-9 bg-transparent border border-transparent rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors flex items-center justify-center flex-shrink-0"
                         aria-label="search"
                     >
                         <Magnifier className="w-5 h-5" />
@@ -281,7 +281,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 )}
             </div>
             {showList && (
-                <div className="max-h-[280px] md:max-h-[320px] overflow-auto">
+                <div className="max-h-[220px] md:max-h-[260px] overflow-auto">
                     {groupView && (
                         <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 font-bold text-sm">
                             {groupView.title} ({groupView.items.length})

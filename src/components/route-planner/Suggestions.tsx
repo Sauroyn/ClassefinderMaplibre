@@ -47,16 +47,16 @@ export default function Suggestions(props: {
         const { field, title, items } = groupView
         return (
             <div className="w-full">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-                    <div className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">{title} ({items.length})</div>
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700">
                     <button
-                        className="w-8 h-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
+                        className="w-8 h-8 rounded-lg border border-transparent bg-transparent text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
                         onClick={() => { if (onCloseGroup) onCloseGroup() }}
                         title="Retour"
                         aria-label="Retour"
                     >
                         <ArrowLeft className="w-4 h-4" />
                     </button>
+                    <div className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate flex-1">{title} ({items.length})</div>
                 </div>
                 <div>
                     {items.map((item, idx) => (
