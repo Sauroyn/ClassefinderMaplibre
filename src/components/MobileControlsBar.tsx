@@ -27,12 +27,14 @@ export default function MobileControlsBar({
     loading,
     onLevelChange
 }: Props) {
+    // Retain map prop for parity with desktop but not used directly after refactor.
+    void map
     const navActive = useNavigationActive()
     const containerRef = useRef<HTMLDivElement | null>(null)
     const [topPosition, setTopPosition] = useState<number>(75)
     // Only hide the geolocate button on specific UI events; never hide the whole bar
-    const [hideGeo, setHideGeo] = useState<boolean>(false)
-    const geolocateControlRef = useRef<maplibre.GeolocateControl | null>(null)
+    // Removed local geolocate control; we now delegate to the desktop component's single control
+    // to ensure identical behavior. Mobile button simply dispatches the same trigger event.
 
     // Touch handling for level selector swipe
     const touchStartY = useRef<number | null>(null)
@@ -53,31 +55,8 @@ export default function MobileControlsBar({
         if (next !== idx) onLevelChangeRef.current(lvls[next])
     }
 
-    // Install hidden geolocate control
-    useEffect(() => {
-        if (!map) return
-        if (!geolocateControlRef.current) {
-            geolocateControlRef.current = new maplibre.GeolocateControl({
-                positionOptions: { enableHighAccuracy: true },
-                trackUserLocation: true
-            })
-            try {
-                map.addControl(geolocateControlRef.current, 'top-right')
-            } catch (e) { }
-            // Hide the default control UI
-            try {
-                const container = (map as any).getContainer ? (map as any).getContainer() : null
-                const el = container ? container.querySelector('.maplibregl-ctrl-top-right .maplibregl-ctrl-geolocate') as HTMLElement | null : null
-                if (el) el.style.display = 'none'
-            } catch (e) { }
-        }
-        return () => {
-            if (geolocateControlRef.current) {
-                try { map.removeControl(geolocateControlRef.current) } catch (e) { }
-                geolocateControlRef.current = null
-            }
-        }
-    }, [map])
+    // NOTE: Desktop component `UserGeolocate` mounts regardless of screen size and installs the single
+    // GeolocateControl instance. We no longer create a second control here to avoid conflicts.
 
     // Calculate position below SearchBar
     useEffect(() => {
@@ -172,37 +151,9 @@ export default function MobileControlsBar({
         }
     }, [])
 
-    // React to UI show/hide events (navigation mode)
-    useEffect(() => {
-        const hide = () => {
-            setHideGeo(true)
-            // Hide native geolocate dot/accuracy circle
-            try {
-                const container = (map as any)?.getContainer?.() as HTMLElement | null
-                if (container) container.setAttribute('data-hide-geolocate', '1')
-            } catch { }
-        }
-        const show = () => {
-            setHideGeo(false)
-            try {
-                const container = (map as any)?.getContainer?.() as HTMLElement | null
-                if (container) container.removeAttribute('data-hide-geolocate')
-            } catch { }
-        }
-        window.addEventListener('ui:hide-geolocate', hide as any)
-        window.addEventListener('ui:show-geolocate', show as any)
-        return () => {
-            window.removeEventListener('ui:hide-geolocate', hide as any)
-            window.removeEventListener('ui:show-geolocate', show as any)
-        }
-    }, [map])
+    // Removed legacy hide/show logic so the geolocate button matches desktop behavior (always available).
 
-    // Listen for external geolocate trigger
-    useEffect(() => {
-        const onTrigger = () => triggerGeolocate()
-        window.addEventListener('ui:trigger-geolocate', onTrigger as any)
-        return () => window.removeEventListener('ui:trigger-geolocate', onTrigger as any)
-    }, [])
+    // No need to mirror trigger events; desktop component already listens for 'ui:trigger-geolocate'.
 
     // Install non-passive wheel listener for level selector
     useEffect(() => {
@@ -225,15 +176,8 @@ export default function MobileControlsBar({
     }, [])
 
     const triggerGeolocate = () => {
-        try {
-            (geolocateControlRef.current as any)?.trigger?.()
-        } catch { }
-        // Fallback: click hidden control button
-        try {
-            const container = (map as any)?.getContainer?.()
-            const btn = container ? container.querySelector('.maplibregl-ctrl-top-right .maplibregl-ctrl-geolocate button') as HTMLButtonElement | null : null
-            if (btn) btn.click()
-        } catch { }
+        // Delegate to existing desktop control instance
+        try { window.dispatchEvent(new CustomEvent('ui:trigger-geolocate')) } catch { }
     }
 
     const triggerRecenterNav = () => {
@@ -302,50 +246,33 @@ export default function MobileControlsBar({
 
             {/* Buttons row */}
             <div className="flex flex-row items-center gap-2">
-                {navActive ? (
-                    <>
-                        {/* Recenter button (navigation) */}
-                        <button
-                            title="Recentrer sur le trajet"
-                            aria-label="Recentrer sur le trajet"
-                            onClick={triggerRecenterNav}
-                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
-                        >
-                            <LocationArrow className="w-5 h-5" />
-                        </button>
-                        {/* Dark Mode */}
-                        <button
-                            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-                            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-                            onClick={() => onToggleTheme && onToggleTheme()}
-                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
-                        >
-                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        {/* Geolocate (non-navigation) */}
-                        <button
-                            title="Me localiser"
-                            aria-label="Me localiser"
-                            onClick={triggerGeolocate}
-                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
-                            style={{ display: hideGeo ? 'none' : 'flex' }}
-                        >
-                            <LocationArrow className="w-5 h-5" />
-                        </button>
-                        {/* Dark Mode */}
-                        <button
-                            title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-                            aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-                            onClick={() => onToggleTheme && onToggleTheme()}
-                            className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
-                        >
-                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                    </>
+                {/* Match desktop order: Geolocate then Theme. Keep geolocate visible even in navigation. */}
+                <button
+                    title="Me localiser"
+                    aria-label="Me localiser"
+                    onClick={triggerGeolocate}
+                    className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
+                >
+                    <LocationArrow className="w-5 h-5" />
+                </button>
+                {navActive && (
+                    <button
+                        title="Recentrer sur le trajet"
+                        aria-label="Recentrer sur le trajet"
+                        onClick={triggerRecenterNav}
+                        className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
+                    >
+                        <LocationArrow className="w-5 h-5" />
+                    </button>
                 )}
+                <button
+                    title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                    aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                    onClick={() => onToggleTheme && onToggleTheme()}
+                    className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
+                >
+                    {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </button>
             </div>
         </div>
     )
