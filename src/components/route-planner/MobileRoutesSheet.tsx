@@ -12,22 +12,22 @@ export function MobileRoutesSheet({
     onSelect: (rt: RouteItem) => void
 }) {
     return (
-        <BottomSheetBase open={open} header={<div style={{ fontWeight: 700 }}>Itinéraires</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <BottomSheetBase open={open} header={<div className="font-bold">Itinéraires</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
+            <div className="flex flex-col gap-2">
                 {routes.map((r, i) => {
                     const primary = i === 0
-                    const color = primary ? '#007bff' : (i === 1 ? 'var(--list-item-muted, #999)' : 'var(--panel-border, #ccc)')
+                    const color = primary ? '#007bff' : (i === 1 ? 'rgb(153 153 153 / 1)' : 'rgb(204 204 204 / 1)')
                     return (
-                        <button key={r.id} onClick={() => onSelect(r)} style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 12,
-                            border: '1px solid var(--panel-border, #e3e3e3)',
-                            background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)'
-                        }}>
-                            <div style={{ textAlign: 'left' }}>
-                                <div style={{ fontWeight: 700 }}>{primary ? 'Plus court' : `Alternative ${i}`}</div>
-                                <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>{formatDistance(r.distance)} • {formatEta(r.time)}</div>
+                        <button
+                            key={r.id}
+                            onClick={() => onSelect(r)}
+                            className="flex justify-between items-center px-3 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            <div className="text-left">
+                                <div className="font-bold">{primary ? 'Plus court' : `Alternative ${i}`}</div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400">{formatDistance(r.distance)} • {formatEta(r.time)}</div>
                             </div>
-                            <div style={{ width: 14, height: 14, borderRadius: 7, background: color }} />
+                            <div className="w-3.5 h-3.5 rounded-full" style={{ background: color }} />
                         </button>
                     )
                 })}

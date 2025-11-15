@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Gear } from '@gravity-ui/icons'
 
 export default function SettingsButton({ onClick }: { onClick: () => void }) {
     const [bottom, setBottom] = useState<number>(12)
@@ -42,13 +43,13 @@ export default function SettingsButton({ onClick }: { onClick: () => void }) {
 
     return (
         <button
-            className="settings-button"
+            className="fixed right-3 z-[900] w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center"
             aria-label="Paramètres"
             title="Paramètres"
             onClick={onClick}
-            style={{ position: 'fixed', right: 12, bottom, zIndex: 900, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}
+            style={{ bottom }}
         >
-            ⚙
+            <Gear className="w-5 h-5" />
         </button>
     )
 }

@@ -10,5 +10,7 @@
     "graphGeojson": "Paris-graph.geojson",
     "fillColor": "#ffffff",
     "fillHeight": 50,
-    "transitionZoom": 17
+    "transitionZoom": 17,
+    "labelZoomThreshold": 17,
+    "labelMinZoom": 15
 }

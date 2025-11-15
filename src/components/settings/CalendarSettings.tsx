@@ -17,38 +17,26 @@ export default function CalendarSettings({
 }: Props) {
     return (
         <div>
-            <h2 style={{ marginTop: 0, marginBottom: 8, fontSize: 22, fontWeight: 700 }}>
+            <h2 className="mt-0 mb-2 text-[22px] font-bold">
                 Connexion calendrier
             </h2>
-            <p style={{ marginTop: 0, marginBottom: 24, fontSize: 14, opacity: 0.8, lineHeight: 1.5 }}>
+            <p className="mt-0 mb-6 text-sm opacity-80 leading-relaxed">
                 Connectez votre calendrier iCal pour afficher vos événements sur la carte et recevoir des
                 alertes de départ.
             </p>
 
             {/* Enable/disable events */}
-            <div style={{ marginBottom: 32 }}>
-                <label
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        cursor: 'pointer',
-                        userSelect: 'none'
-                    }}
-                >
+            <div className="mb-8">
+                <label className="flex items-center gap-3 cursor-pointer select-none">
                     <input
                         type="checkbox"
                         checked={eventsEnabled}
                         onChange={(e) => onChangeEventsEnabled(e.target.checked)}
-                        style={{
-                            width: 20,
-                            height: 20,
-                            cursor: 'pointer'
-                        }}
+                        className="w-5 h-5 cursor-pointer"
                     />
                     <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>Activer les événements</div>
-                        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
+                        <div className="font-semibold text-sm">Activer les événements</div>
+                        <div className="text-xs opacity-70 mt-0.5">
                             Afficher les événements de votre calendrier sur la carte
                         </div>
                     </div>
@@ -56,16 +44,10 @@ export default function CalendarSettings({
             </div>
 
             {/* iCal URL */}
-            <div style={{ marginBottom: 24 }}>
+            <div className="mb-6">
                 <label
                     htmlFor="ical-url"
-                    style={{
-                        display: 'block',
-                        marginBottom: 8,
-                        fontWeight: 600,
-                        fontSize: 14,
-                        color: 'var(--panel-fg, #111)'
-                    }}
+                    className="block mb-2 font-semibold text-sm text-gray-900 dark:text-gray-100"
                 >
                     URL iCal
                 </label>
@@ -76,39 +58,25 @@ export default function CalendarSettings({
                     onChange={(e) => onChangeIcalUrl(e.target.value)}
                     placeholder="https://calendar.google.com/calendar/ical/..."
                     disabled={!eventsEnabled}
-                    style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        borderRadius: 8,
-                        border: '1px solid var(--panel-border, #ddd)',
-                        background: eventsEnabled ? 'var(--panel-bg, white)' : 'var(--muted, #f8f9fa)',
-                        color: 'var(--panel-fg, #111)',
-                        fontSize: 14,
-                        fontFamily: 'inherit',
-                        opacity: eventsEnabled ? 1 : 0.6,
-                        cursor: eventsEnabled ? 'text' : 'not-allowed'
-                    }}
+                    className={`w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-inherit ${eventsEnabled
+                            ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-text'
+                            : 'bg-gray-100 dark:bg-gray-700 opacity-60 cursor-not-allowed'
+                        }`}
                 />
-                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
+                <div className="mt-1.5 text-xs opacity-70">
                     L'URL de votre calendrier au format iCal (.ics)
                 </div>
             </div>
 
             {/* Buffer minutes */}
-            <div style={{ marginBottom: 24 }}>
+            <div className="mb-6">
                 <label
                     htmlFor="buffer-min"
-                    style={{
-                        display: 'block',
-                        marginBottom: 8,
-                        fontWeight: 600,
-                        fontSize: 14,
-                        color: 'var(--panel-fg, #111)'
-                    }}
+                    className="block mb-2 font-semibold text-sm text-gray-900 dark:text-gray-100"
                 >
                     Temps de trajet supplémentaire
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="flex items-center gap-3">
                     <input
                         id="buffer-min"
                         type="number"
@@ -117,40 +85,24 @@ export default function CalendarSettings({
                         value={bufferMin}
                         onChange={(e) => onChangeBufferMin(Number(e.target.value))}
                         disabled={!eventsEnabled}
-                        style={{
-                            width: 80,
-                            padding: '10px 12px',
-                            borderRadius: 8,
-                            border: '1px solid var(--panel-border, #ddd)',
-                            background: eventsEnabled ? 'var(--panel-bg, white)' : 'var(--muted, #f8f9fa)',
-                            color: 'var(--panel-fg, #111)',
-                            fontSize: 14,
-                            fontFamily: 'inherit',
-                            opacity: eventsEnabled ? 1 : 0.6,
-                            cursor: eventsEnabled ? 'text' : 'not-allowed'
-                        }}
+                        className={`w-20 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-inherit ${eventsEnabled
+                                ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 cursor-text'
+                                : 'bg-gray-100 dark:bg-gray-700 opacity-60 cursor-not-allowed'
+                            }`}
                     />
-                    <span style={{ fontSize: 14, opacity: 0.8 }}>minutes</span>
+                    <span className="text-sm opacity-80">minutes</span>
                 </div>
-                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>
+                <div className="mt-1.5 text-xs opacity-70">
                     Temps de marge ajouté avant le début de vos événements
                 </div>
             </div>
 
             {/* Info box */}
-            <div
-                style={{
-                    padding: 16,
-                    borderRadius: 12,
-                    background: 'rgba(0, 122, 255, 0.05)',
-                    border: '1px solid rgba(0, 122, 255, 0.2)',
-                    marginTop: 24
-                }}
-            >
-                <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 mt-6">
+                <div className="text-sm leading-relaxed">
                     <strong>💡 Comment obtenir votre URL iCal ?</strong>
-                    <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                        <li style={{ marginBottom: 4 }}>
+                    <ul className="mt-2 mb-0 pl-5">
+                        <li className="mb-1">
                             <strong>Google Calendar :</strong> Paramètres → Intégrer l'agenda → Adresse secrète
                             au format iCal
                         </li>

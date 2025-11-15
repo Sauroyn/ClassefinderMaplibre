@@ -27,18 +27,18 @@ export default function DesktopRouteStats({
     )
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div className="grid grid-cols-3 gap-3 mb-3">
             <div>
-                <div style={{ fontSize: 11, color: 'var(--list-item-muted, #666)', marginBottom: 2 }}>Durée</div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{eta}</div>
+                <div className="text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Durée</div>
+                <div className="font-bold text-sm">{eta}</div>
             </div>
             <div>
-                <div style={{ fontSize: 11, color: 'var(--list-item-muted, #666)', marginBottom: 2 }}>Distance</div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{dist}</div>
+                <div className="text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Distance</div>
+                <div className="font-bold text-sm">{dist}</div>
             </div>
             <div>
-                <div style={{ fontSize: 11, color: 'var(--list-item-muted, #666)', marginBottom: 2 }}>Arrivée</div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{arrStr ?? '-'}</div>
+                <div className="text-[11px] text-gray-600 dark:text-gray-400 mb-0.5">Arrivée</div>
+                <div className="font-bold text-sm">{arrStr ?? '-'}</div>
             </div>
         </div>
     )

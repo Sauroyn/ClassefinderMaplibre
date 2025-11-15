@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
+import { Xmark, ArrowLeft } from '@gravity-ui/icons'
 import GeneralSettings from './GeneralSettings'
 import AliasSettings from './AliasSettings'
 import CalendarSettings from './CalendarSettings'
+import RouteSettings from './RouteSettings'
+import BuildingSettings from './BuildingSettings'
+import type { BuildingFiltersState, BuildingFilterSettings, BuildingMeta } from '../../hooks/useConfigData'
 
-type Tab = 'general' | 'alias' | 'calendar'
+type Tab = 'general' | 'alias' | 'calendar' | 'route' | 'buildings'
 
 type Props = {
     // General settings
@@ -20,24 +24,48 @@ type Props = {
     eventsEnabled: boolean
     onChangeEventsEnabled: (v: boolean) => void
 
+    // Route settings
+    excludeStairs: boolean
+    onChangeExcludeStairs: (v: boolean) => void
+    coveredOnly: boolean
+    onChangeCoveredOnly: (v: boolean) => void
+    showSecondary: boolean
+    onChangeShowSecondary: (v: boolean) => void
+
     // Alias settings
     data?: GeoJSON.FeatureCollection | null
     editingAliasFeatureId?: string | number | null
     editingAliasOriginalName?: string
 
     // Actions
-    onCancel: () => void
-    onSave: () => void
+    onClose: () => void
+
+    // Optional: initial tab to open
+    initialTab?: Tab
+
+    // Buildings management
+    buildingsMeta: BuildingMeta[]
+    buildingFilters: BuildingFiltersState
+    onChangeBuildingFilter: (buildingId: string, next: BuildingFilterSettings) => void
+    onResetBuildingFilter: (buildingId: string) => void
+    onResetAllBuildingFilters: () => void
 }
 
-const tabs: Array<{ id: Tab; label: string; icon: string }> = [
-    { id: 'general', label: 'Général', icon: '⚙️' },
-    { id: 'alias', label: 'Alias', icon: '🏷️' },
-    { id: 'calendar', label: 'Calendrier', icon: '📅' }
+const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'general', label: 'Général' },
+    { id: 'buildings', label: 'Bâtiments' },
+    { id: 'route', label: 'Itinéraire' },
+    { id: 'alias', label: 'Alias' },
+    { id: 'calendar', label: 'Calendrier' }
 ]
 
 export default function SettingsLayout(props: Props) {
-    const [activeTab, setActiveTab] = useState<Tab>('general')
+    // Initialiser l'onglet actif depuis la prop `initialTab` si fournie, sinon 'general'
+    const [activeTab, setActiveTab] = useState<Tab>(() => {
+        const initial = props.initialTab ?? 'general'
+        console.log('[SettingsLayout] Initial activeTab:', initial)
+        return initial
+    })
     const [isMobile, setIsMobile] = useState(false)
     const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
 
@@ -51,6 +79,14 @@ export default function SettingsLayout(props: Props) {
         return () => window.removeEventListener('resize', checkMobile)
     }, [])
 
+    // Reset activeTab when initialTab prop changes (e.g., when modal reopens)
+    useEffect(() => {
+        if (props.initialTab !== undefined) {
+            console.log('[SettingsLayout] Setting activeTab to:', props.initialTab)
+            setActiveTab(props.initialTab)
+        }
+    }, [props.initialTab])
+
     // Auto-open alias tab if editing
     useEffect(() => {
         if (props.editingAliasFeatureId != null) {
@@ -62,6 +98,7 @@ export default function SettingsLayout(props: Props) {
     }, [props.editingAliasFeatureId, isMobile])
 
     const renderTabContent = () => {
+        console.log('[SettingsLayout] renderTabContent called with activeTab:', activeTab)
         switch (activeTab) {
             case 'general':
                 return (
@@ -70,6 +107,17 @@ export default function SettingsLayout(props: Props) {
                         onChangeTheme={props.onChangeTheme}
                         selectedConfig={props.selectedConfig}
                         onChangeConfig={props.onChangeConfig}
+                    />
+                )
+            case 'route':
+                return (
+                    <RouteSettings
+                        excludeStairs={props.excludeStairs}
+                        onChangeExcludeStairs={props.onChangeExcludeStairs}
+                        coveredOnly={props.coveredOnly}
+                        onChangeCoveredOnly={props.onChangeCoveredOnly}
+                        showSecondary={props.showSecondary}
+                        onChangeShowSecondary={props.onChangeShowSecondary}
                     />
                 )
             case 'alias':
@@ -91,6 +139,26 @@ export default function SettingsLayout(props: Props) {
                         onChangeEventsEnabled={props.onChangeEventsEnabled}
                     />
                 )
+            case 'buildings':
+                return (
+                    <BuildingSettings
+                        buildingsMeta={props.buildingsMeta}
+                        filters={props.buildingFilters}
+                        onChangeFilter={props.onChangeBuildingFilter}
+                        onResetFilter={props.onResetBuildingFilter}
+                        onResetAll={props.onResetAllBuildingFilters}
+                    />
+                )
+            default:
+                // Fallback: si activeTab n'est pas reconnu, afficher Général
+                return (
+                    <GeneralSettings
+                        theme={props.theme}
+                        onChangeTheme={props.onChangeTheme}
+                        selectedConfig={props.selectedConfig}
+                        onChangeConfig={props.onChangeConfig}
+                    />
+                )
         }
     }
 
@@ -100,71 +168,37 @@ export default function SettingsLayout(props: Props) {
             <div
                 role="dialog"
                 aria-modal="true"
-                style={{
-                    position: 'fixed',
-                    inset: 0,
-                    zIndex: 10001,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    background: 'var(--panel-bg, white)',
-                    color: 'var(--panel-fg, #111)'
-                }}
+                className="fixed inset-0 z-[10001] flex flex-col bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             >
                 {/* Header */}
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: 16,
-                        borderBottom: '1px solid var(--panel-border, #ddd)',
-                        position: 'sticky',
-                        top: 0,
-                        background: 'var(--panel-bg, white)',
-                        zIndex: 10
-                    }}
-                >
+                <div className="flex items-center justify-between p-4 border-b border-gray-300 dark:border-gray-600 sticky top-0 bg-white dark:bg-gray-800 z-10">
                     {mobileDetailOpen && (
                         <button
                             onClick={() => setMobileDetailOpen(false)}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                fontSize: 20,
-                                color: 'var(--panel-fg, #111)',
-                                cursor: 'pointer',
-                                padding: 4
-                            }}
+                            className="bg-transparent border-none text-xl text-gray-900 dark:text-gray-100 cursor-pointer p-1 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
                             aria-label="Retour"
                         >
-                            ←
+                            <ArrowLeft className="w-5 h-5" />
                         </button>
                     )}
-                    <div style={{ fontWeight: 700, fontSize: 18, flex: 1 }}>
+                    <div className="font-bold text-lg flex-1">
                         {mobileDetailOpen ? tabs.find(t => t.id === activeTab)?.label : 'Paramètres'}
                     </div>
                     <button
-                        onClick={props.onCancel}
+                        onClick={props.onClose}
                         aria-label="Fermer"
                         title="Fermer"
-                        style={{
-                            background: 'transparent',
-                            border: 'none',
-                            fontSize: 24,
-                            color: 'var(--panel-fg, #111)',
-                            cursor: 'pointer',
-                            padding: 4
-                        }}
+                        className="bg-transparent border-none text-2xl text-gray-900 dark:text-gray-100 cursor-pointer p-1 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
                     >
-                        ✕
+                        <Xmark className="w-6 h-6" />
                     </button>
                 </div>
 
                 {/* Content */}
-                <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div className="flex-1 overflow-y-auto">
                     {!mobileDetailOpen ? (
                         // Tabs list
-                        <div style={{ padding: 16 }}>
+                        <div className="p-4">
                             {tabs.map(tab => (
                                 <button
                                     key={tab.id}
@@ -172,78 +206,21 @@ export default function SettingsLayout(props: Props) {
                                         setActiveTab(tab.id)
                                         setMobileDetailOpen(true)
                                     }}
-                                    style={{
-                                        width: '100%',
-                                        padding: 16,
-                                        marginBottom: 12,
-                                        borderRadius: 12,
-                                        border: '1px solid var(--panel-border, #ddd)',
-                                        background: 'var(--panel-bg, white)',
-                                        color: 'var(--panel-fg, #111)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                        cursor: 'pointer',
-                                        fontSize: 16,
-                                        textAlign: 'left',
-                                        transition: 'all 0.2s'
-                                    }}
+                                    className="w-full p-3 mb-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center gap-2 cursor-pointer text-sm text-left transition-colors duration-150 hover:bg-gray-50 dark:hover:bg-gray-700"
                                 >
-                                    <span style={{ fontSize: 24 }}>{tab.icon}</span>
-                                    <span style={{ flex: 1, fontWeight: 500 }}>{tab.label}</span>
-                                    <span style={{ fontSize: 18, opacity: 0.5 }}>›</span>
+                                    <span className="flex-1 font-medium">{tab.label}</span>
+                                    <span className="text-sm opacity-50">›</span>
                                 </button>
                             ))}
                         </div>
                     ) : (
                         // Tab content
-                        <div style={{ padding: 16 }}>{renderTabContent()}</div>
+                        <div className="p-4">{renderTabContent()}</div>
                     )}
                 </div>
 
                 {/* Footer actions - only show when not in detail view */}
-                {!mobileDetailOpen && (
-                    <div
-                        style={{
-                            display: 'flex',
-                            gap: 12,
-                            padding: 16,
-                            borderTop: '1px solid var(--panel-border, #ddd)',
-                            background: 'var(--panel-bg, white)'
-                        }}
-                    >
-                        <button
-                            onClick={props.onCancel}
-                            style={{
-                                flex: 1,
-                                padding: '12px 16px',
-                                borderRadius: 8,
-                                border: '1px solid var(--panel-border, #ddd)',
-                                background: 'transparent',
-                                color: 'var(--panel-fg, #111)',
-                                cursor: 'pointer',
-                                fontWeight: 500
-                            }}
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            onClick={props.onSave}
-                            style={{
-                                flex: 1,
-                                padding: '12px 16px',
-                                borderRadius: 8,
-                                border: '1px solid var(--btn-border, #ddd)',
-                                background: 'var(--btn-bg, #007AFF)',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontWeight: 500
-                            }}
-                        >
-                            Enregistrer
-                        </button>
-                    </div>
-                )}
+                {/* Mobile view: closing handled via header button */}
             </div>
         )
     }
@@ -253,147 +230,52 @@ export default function SettingsLayout(props: Props) {
         <div
             role="dialog"
             aria-modal="true"
-            style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 10001,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(0,0,0,0.5)',
-                backdropFilter: 'blur(4px)'
-            }}
-            onClick={props.onCancel}
+            className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={props.onClose}
         >
             <div
                 onClick={(e) => e.stopPropagation()}
-                style={{
-                    position: 'relative',
-                    background: 'var(--panel-bg, white)',
-                    color: 'var(--panel-fg, #111)',
-                    borderRadius: 16,
-                    width: 'min(90vw, 900px)',
-                    height: 'min(85vh, 650px)',
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-                    display: 'flex',
-                    overflow: 'hidden'
-                }}
+                className="relative bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl w-[min(90vw,900px)] h-[min(85vh,650px)] shadow-2xl flex overflow-hidden"
             >
                 {/* Sidebar */}
-                <div
-                    style={{
-                        width: 240,
-                        borderRight: '1px solid var(--panel-border, #ddd)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        background: 'var(--muted, #f8f9fa)'
-                    }}
-                >
-                    <div style={{ padding: 20, borderBottom: '1px solid var(--panel-border, #ddd)' }}>
-                        <div style={{ fontWeight: 700, fontSize: 20 }}>Paramètres</div>
+                <div className="w-60 border-r border-gray-300 dark:border-gray-600 flex flex-col bg-gray-100 dark:bg-gray-700/50">
+                    <div className="p-5 border-b border-gray-300 dark:border-gray-600">
+                        <div className="font-bold text-xl">Paramètres</div>
                     </div>
-                    <div style={{ flex: 1, padding: 12, overflowY: 'auto' }}>
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                style={{
-                                    width: '100%',
-                                    padding: 12,
-                                    marginBottom: 4,
-                                    borderRadius: 8,
-                                    border: 'none',
-                                    background: activeTab === tab.id ? 'var(--panel-bg, white)' : 'transparent',
-                                    color: 'var(--panel-fg, #111)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    cursor: 'pointer',
-                                    fontSize: 14,
-                                    textAlign: 'left',
-                                    transition: 'all 0.2s',
-                                    fontWeight: activeTab === tab.id ? 600 : 400,
-                                    boxShadow: activeTab === tab.id ? '0 2px 8px rgba(0,0,0,0.1)' : 'none'
-                                }}
-                            >
-                                <span style={{ fontSize: 18 }}>{tab.icon}</span>
-                                <span>{tab.label}</span>
-                            </button>
-                        ))}
+                    <div className="flex-1 p-3 overflow-y-auto">
+                        {tabs.map(tab => {
+                            const isActive = activeTab === tab.id
+                            console.log('[SettingsLayout] Tab', tab.id, 'isActive:', isActive, 'activeTab:', activeTab)
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`w-full p-2.5 mb-1 rounded-lg border-none flex items-center cursor-pointer text-sm text-left transition-colors duration-150 ${isActive
+                                        ? 'bg-white dark:bg-gray-800 font-semibold shadow-sm'
+                                        : 'bg-transparent font-normal hover:bg-white/50 dark:hover:bg-gray-800/50'
+                                        }`}
+                                >
+                                    <span>{tab.label}</span>
+                                </button>
+                            )
+                        })}
                     </div>
                 </div>
 
                 {/* Content area */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="flex-1 flex flex-col">
                     {/* Close button */}
                     <button
-                        onClick={props.onCancel}
+                        onClick={props.onClose}
                         aria-label="Fermer"
                         title="Fermer"
-                        style={{
-                            position: 'absolute',
-                            right: 16,
-                            top: 16,
-                            background: 'var(--muted, #f1f3f5)',
-                            border: 'none',
-                            width: 32,
-                            height: 32,
-                            borderRadius: 8,
-                            fontSize: 18,
-                            color: 'var(--panel-fg, #111)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'background 0.2s'
-                        }}
+                        className="absolute right-4 top-4 bg-gray-100 dark:bg-gray-700 border-none w-8 h-8 rounded-lg text-lg text-gray-900 dark:text-gray-100 cursor-pointer flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
                     >
-                        ✕
+                        <Xmark className="w-5 h-5" />
                     </button>
 
                     {/* Tab content */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: 32 }}>{renderTabContent()}</div>
-
-                    {/* Footer actions */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'flex-end',
-                            gap: 12,
-                            padding: 20,
-                            borderTop: '1px solid var(--panel-border, #ddd)',
-                            background: 'var(--panel-bg, white)'
-                        }}
-                    >
-                        <button
-                            onClick={props.onCancel}
-                            style={{
-                                padding: '10px 20px',
-                                borderRadius: 8,
-                                border: '1px solid var(--panel-border, #ddd)',
-                                background: 'transparent',
-                                color: 'var(--panel-fg, #111)',
-                                cursor: 'pointer',
-                                fontWeight: 500
-                            }}
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            onClick={props.onSave}
-                            style={{
-                                padding: '10px 24px',
-                                borderRadius: 8,
-                                border: 'none',
-                                background: '#007AFF',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontWeight: 500
-                            }}
-                        >
-                            Enregistrer
-                        </button>
-                    </div>
+                    <div className="flex-1 overflow-y-auto p-8">{renderTabContent()}</div>
                 </div>
             </div>
         </div>

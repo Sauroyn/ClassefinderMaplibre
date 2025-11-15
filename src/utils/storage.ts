@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
     TRAVEL_BUFFER_MIN: 'cf:travel_buffer_min',
     EVENTS_ENABLED: 'cf:events_enabled',
     RECENT_SEARCHES_BASE: 'cf:recent_searches',
+    BUILDING_FILTERS: 'cf:building_filters',
     THEME: 'user_theme',
 } as const
 

@@ -128,7 +128,7 @@ export function BottomSheetBase({
                 void _respectOutside
             }}
             header={header ? (
-                <div style={{ fontWeight: 700, color: 'var(--rsbs-color, #111)' }}>
+                <div className="font-bold text-gray-900 dark:text-gray-100">
                     {header}
                 </div>
             ) : undefined}
@@ -136,7 +136,7 @@ export function BottomSheetBase({
             snapPoints={snapPoints}
             expandOnContentDrag
         >
-            <div style={{ padding: 12 }}>{children}</div>
+            <div className="p-3">{children}</div>
         </BottomSheet>
     )
 }
@@ -179,22 +179,22 @@ export function RoutesBottomSheet({
 }) {
     // Colors via CSS vars
     return (
-        <BottomSheetBase open={open} header={<div style={{ fontWeight: 700 }}>Itinéraires</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <BottomSheetBase open={open} header={<div className="font-bold">Itinéraires</div>} initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
+            <div className="flex flex-col gap-2">
                 {routes.map((r, i) => {
                     const primary = i === 0
                     const color = primary ? '#007bff' : (i === 1 ? 'var(--list-item-muted, #999)' : 'var(--panel-border, #ccc)')
                     return (
-                        <button key={r.id} onClick={() => onSelect(r)} style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 12,
-                            border: '1px solid var(--panel-border, #e3e3e3)',
-                            background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)'
-                        }}>
-                            <div style={{ textAlign: 'left' }}>
-                                <div style={{ fontWeight: 700 }}>{primary ? 'Plus court' : `Alternative ${i}`}</div>
-                                <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>{formatDistance(r.distance)} • {formatEta(r.time)}</div>
+                        <button
+                            key={r.id}
+                            onClick={() => onSelect(r)}
+                            className="flex justify-between items-center px-3 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            <div className="text-left">
+                                <div className="font-bold">{primary ? 'Plus court' : `Alternative ${i}`}</div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400">{formatDistance(r.distance)} • {formatEta(r.time)}</div>
                             </div>
-                            <div style={{ width: 14, height: 14, borderRadius: 7, background: color }} />
+                            <div className="w-3.5 h-3.5 rounded-full" style={{ background: color }} />
                         </button>
                     )
                 })}
@@ -249,46 +249,55 @@ export function RouteDetailsBottomSheet({
     // Colors via CSS vars
     return (
         <BottomSheetBase open={open} reduceOnOutsideClick={false} header={
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
+            <div className="flex items-center justify-start">
                 {/* Bouton retour */}
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <button aria-label="Retour" title="Retour" onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('route-details-back')) }}
-                        style={{ marginRight: 8, background: 'none', border: 'none', color: 'var(--rsbs-color, #111)', fontSize: 20, cursor: 'pointer', padding: 0, width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ fontWeight: 700 }}>&larr;</span>
+                <div className="flex items-center">
+                    <button
+                        aria-label="Retour"
+                        title="Retour"
+                        onClick={() => { if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('route-details-back')) }}
+                        className="mr-2 bg-transparent border-none text-gray-900 dark:text-gray-100 text-xl cursor-pointer p-0 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                        <span className="font-bold">&larr;</span>
                     </button>
-                    <div style={{ fontWeight: 700 }}>Trajet sélectionné</div>
+                    <div className="font-bold">Trajet sélectionné</div>
                 </div>
             </div>
         } initialSnap={0.5} snapPercents={[0.05, 0.2, 0.5, 0.9]} minPeekPx={40}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>Durée</div>
-                        <div style={{ fontWeight: 700 }}>{eta}</div>
+            <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                    <div className="flex-1">
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Durée</div>
+                        <div className="font-bold text-gray-900 dark:text-gray-100">{eta}</div>
                     </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>Distance</div>
-                        <div style={{ fontWeight: 700 }}>{dist}</div>
+                    <div className="flex-1">
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Distance</div>
+                        <div className="font-bold text-gray-900 dark:text-gray-100">{dist}</div>
                     </div>
-                    <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>Arrivée</div>
-                        <div style={{ fontWeight: 700 }}>{arrStr ?? '-'}</div>
+                    <div className="flex-1">
+                        <div className="text-xs text-gray-600 dark:text-gray-400">Arrivée</div>
+                        <div className="font-bold text-gray-900 dark:text-gray-100">{arrStr ?? '-'}</div>
                     </div>
                 </div>
 
-                <button onClick={() => onStart(route)} style={{ padding: '12px 16px', borderRadius: 12, border: 'none', background: 'var(--btn-fg, #111)', color: 'var(--btn-bg, #fff)', fontWeight: 700 }}>Démarrer</button>
+                <button
+                    onClick={() => onStart(route)}
+                    className="px-4 py-3 rounded-xl border-none bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-bold hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+                >
+                    Démarrer
+                </button>
 
                 {route.steps && route.steps.length > 0 && (
                     <div>
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>Étapes</div>
-                        <ol style={{ listStyle: 'decimal', paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div className="font-bold mb-1.5 text-gray-900 dark:text-gray-100">Étapes</div>
+                        <ol className="list-decimal pl-4 m-0 flex flex-col gap-1.5">
                             {(() => {
                                 const steps = route.steps || []
                                 const cumEnds: number[] = []
                                 let run = 0
                                 for (let i = 0; i < steps.length; i++) { run += Math.max(0, Number(steps[i]?.distance || 0)); cumEnds.push(run) }
                                 return steps.slice(0, 12).map((s, i) => (
-                                    <li key={i} style={{ fontSize: 13, color: 'var(--panel-fg, #333)', cursor: 'pointer' }} onClick={() => {
+                                    <li key={i} className="text-[13px] text-gray-900 dark:text-gray-100 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors" onClick={() => {
                                         try {
                                             if (s && s.coords && Array.isArray(s.coords) && s.coords.length === 2) {
                                                 const a = s.coords[0]
@@ -320,7 +329,7 @@ export function RouteDetailsBottomSheet({
                                             const distanceTo = Math.max(0, (man?.at || at) - prevAt)
                                             const t = man?.type || 'continue'
                                             return (
-                                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                <div className="flex items-center">
                                                     {iconFor(t)}
                                                     <span>{instructionFr(t, distanceTo)}</span>
                                                 </div>
@@ -330,7 +339,7 @@ export function RouteDetailsBottomSheet({
                                 ))
                             })()}
                             {route.steps.length > 12 && (
-                                <li style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}>… {route.steps.length - 12} étapes supplémentaires</li>
+                                <li className="text-xs text-gray-600 dark:text-gray-400">… {route.steps.length - 12} étapes supplémentaires</li>
                             )}
                         </ol>
                     </div>

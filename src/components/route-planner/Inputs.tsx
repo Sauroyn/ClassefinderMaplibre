@@ -1,3 +1,5 @@
+import { Xmark, LocationArrow, MapPin } from '@gravity-ui/icons'
+
 type NodeOption = { id: string, name: string }
 
 type Props = {
@@ -19,16 +21,60 @@ export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuer
         if (list.length === 1) { const n = list[0]; pick(n.id, n.name || String(n.id)); setFocusedField(null) }
     }
     return (
-        <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}><div>Départ</div></div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
-                <input value={startQuery} onChange={(e) => { setStartQuery(e.target.value); setFocusedField('start') }} onFocus={() => setFocusedField('start')} onBlur={() => setTimeout(() => setFocusedField(null), 150)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(startQuery, onPickStart) } }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher un départ..." />
-                {startQuery ? <button onClick={onClearStart} title="Clear start" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
-            </div>
-            <div style={{ fontSize: 12, marginTop: 8 }}>Arrivée</div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
-                <input value={endQuery} onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }} onFocus={() => setFocusedField('end')} onBlur={() => setTimeout(() => setFocusedField(null), 150)} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(endQuery, onPickEnd) } }} style={{ flex: 1, padding: 8, borderRadius: 8, border: '1px solid var(--panel-border, #ddd)', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)' }} placeholder="Rechercher une arrivée..." />
-                {endQuery ? <button onClick={onClearEnd} title="Clear end" style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button> : null}
+        <div className="relative flex-1 min-w-0">
+            {/* Barre de recherche départ avec icône de position */}
+            <div className="flex gap-2 items-center">
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                    <LocationArrow className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <div className="w-0.5 h-4 border-l-2 border-dashed border-gray-400 dark:border-gray-500" />
+                    <MapPin className="w-5 h-5 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="flex-1 flex flex-col min-w-0">
+                    <div className="flex items-center h-[40px]">
+                        <input
+                            value={startQuery}
+                            onChange={(e) => { setStartQuery(e.target.value); setFocusedField('start') }}
+                            onFocus={() => setFocusedField('start')}
+                            onBlur={() => setTimeout(() => setFocusedField(null), 150)}
+                            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(startQuery, onPickStart) } }}
+                            className="flex-1 min-w-0 px-2 py-2 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Rechercher un départ..."
+                        />
+                        {startQuery && (
+                            <button
+                                onClick={onClearStart}
+                                title="Clear start"
+                                className="p-1.5 ml-1 rounded-lg bg-transparent text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                            >
+                                <Xmark className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Trait horizontal de séparation */}
+                    <div className="h-px bg-gray-200 dark:bg-gray-700" />
+
+                    <div className="flex items-center h-[40px]">
+                        <input
+                            value={endQuery}
+                            onChange={(e) => { setEndQuery(e.target.value); setFocusedField('end') }}
+                            onFocus={() => setFocusedField('end')}
+                            onBlur={() => setTimeout(() => setFocusedField(null), 150)}
+                            onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); tryPickSingle(endQuery, onPickEnd) } }}
+                            className="flex-1 min-w-0 px-2 py-2 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Rechercher une arrivée..."
+                        />
+                        {endQuery && (
+                            <button
+                                onClick={onClearEnd}
+                                title="Clear end"
+                                className="p-1.5 ml-1 rounded-lg bg-transparent text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+                            >
+                                <Xmark className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
     )

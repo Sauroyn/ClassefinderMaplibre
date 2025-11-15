@@ -4,6 +4,7 @@ import SearchList from './search/SearchList'
 import SearchSelected from './search/SearchSelected'
 import { STORAGE_KEYS, getScopedKey, safeGetItem, safeSetItem } from '../utils/storage'
 import { searchWithAliases, getAlias } from '../utils/aliases'
+import { Magnifier, Xmark, ArrowLeft, Route as RouteIcon } from '@gravity-ui/icons'
 
 type Props = {
     data: GeoJSON.FeatureCollection | null
@@ -18,12 +19,12 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     const [q, setQ] = useState('')
     const [focused, setFocused] = useState(false)
     const [showBack, setShowBack] = useState(false)
-    type RecentItem = { id: string | number, name: string, level?: string | number }
+    type RecentItem = { id: string | number, name: string, level?: string | number, buildingLabel?: string }
     const [recent, setRecent] = useState<RecentItem[]>(() => {
         try {
             const key = getScopedKey(STORAGE_KEYS.RECENT_SEARCHES_BASE)
             const raw = JSON.parse(safeGetItem(key) || '[]')
-            if (Array.isArray(raw)) return raw.map((r: any) => typeof r === 'string' ? { id: r, name: r } : { id: r.id ?? r.name, name: r.name, level: r.level })
+            if (Array.isArray(raw)) return raw.map((r: any) => typeof r === 'string' ? { id: r, name: r } : { id: r.id ?? r.name, name: r.name, level: r.level, buildingLabel: r.buildingLabel })
         } catch (e) { }
         return []
     })
@@ -31,7 +32,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     const inputRef = useRef<HTMLInputElement | null>(null)
     const blurTimeout = useRef<number | null>(null)
     // Group navigation state
-    const [groupView, setGroupView] = useState<{ title: string, items: Array<{ id: number | string, name: string, level?: number | string }> } | null>(null)
+    const [groupView, setGroupView] = useState<{ title: string, items: Array<{ id: number | string, name: string, level?: number | string, buildingLabel?: string }> } | null>(null)
     // Force re-render when aliases are updated
     const [aliasVersion, setAliasVersion] = useState(0)
 
@@ -42,16 +43,22 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         const qn = q.trim()
         if (qn.length > 0) {
             // Mode recherche: utiliser la fonction de recherche avec alias
-            return searchWithAliases(data, qn, true).map(item => ({
-                id: item.id,
-                name: item.name,
-                level: item.level,
-                isAlias: item.isAlias,
-                originalName: item.originalName
-            }))
+            return searchWithAliases(data, qn, true).map(item => {
+                // Récupérer le building label depuis la feature originale
+                const feature = data.features.find((f: any, idx) => normalizedFeatureId(f, idx) === item.id)
+                const buildingLabel = (feature as any)?.properties?.__buildingLabel
+                return {
+                    id: item.id,
+                    name: item.name,
+                    level: item.level,
+                    buildingLabel,
+                    isAlias: item.isAlias,
+                    originalName: item.originalName
+                }
+            })
         } else {
             // Mode liste complète (sans recherche): afficher toutes les features avec leurs alias
-            const list: Array<{ id: number; name: string; level?: number | string; isAlias?: boolean; originalName?: string }> = []
+            const list: Array<{ id: number; name: string; level?: number | string; buildingLabel?: string; isAlias?: boolean; originalName?: string }> = []
             const feats = (data.features as any[]) || []
             for (let i = 0; i < feats.length; i++) {
                 const f = feats[i]
@@ -60,11 +67,13 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 if (typeof originalName === 'string' && originalName.trim().length > 0) {
                     const id = normalizedFeatureId(f, i)
                     const level = coerceLevel(f.properties?.level)
+                    const buildingLabel = f.properties?.__buildingLabel
                     const alias = getAlias(id)
                     list.push({
                         id,
                         name: alias ? alias.aliasName : originalName,
                         level,
+                        buildingLabel,
                         isAlias: !!alias,
                         originalName
                     })
@@ -77,7 +86,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // Build grouped entries only when searching (q non vide). Recent list remains flat.
     const groupedEntries = useMemo(() => {
         if (!q) return [] as any[]
-        const byName = new Map<string, Array<{ id: number | string; name: string; level?: number | string; isAlias?: boolean; originalName?: string }>>()
+        const byName = new Map<string, Array<{ id: number | string; name: string; level?: number | string; buildingLabel?: string; isAlias?: boolean; originalName?: string }>>()
         for (const it of flatItems) {
             const arr = byName.get(it.name) || []
             arr.push(it)
@@ -158,21 +167,20 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         const n = parseInt(String(id), 10)
         if (Number.isFinite(n)) resolved = n
         // derive level from the feature matched by normalized id
-        const lvl = (() => {
-            const feat = findByNormalizedId(data as any, resolved as number)
-            const lv = feat?.properties?.level
-            return coerceLevel(lv)
-        })()
+        const feat = findByNormalizedId(data as any, resolved as number)
+        const lvl = coerceLevel(feat?.properties?.level)
+        const buildingLabel = feat?.properties?.__buildingLabel
+
         setQ(name)
         // update recent as objects
         setRecent(r => {
-            const next = [{ id: resolved, name, level: lvl }, ...r.filter(x => String(x.id) !== String(resolved))].slice(0, 5)
+            const next = [{ id: resolved, name, level: lvl, buildingLabel }, ...r.filter(x => String(x.id) !== String(resolved))].slice(0, 5)
             const key = getScopedKey(STORAGE_KEYS.RECENT_SEARCHES_BASE)
             safeSetItem(key, JSON.stringify(next))
             return next
         })
         // apply selection
-        const item = { id: resolved, name, level: lvl }
+        const item = { id: resolved, name, level: lvl, buildingLabel }
         setSelected(item)
         setShowBack(true)
         setFocused(false)
@@ -194,41 +202,65 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // Cacher les suggestions si un élément est sélectionné
     const showList = (!selected) && (focused || q.length > 0 || groupView) && list.length > 0
 
+    // Détermine si on doit afficher la forme pillule (fermée) ou les arrondis normaux (ouverte)
+    const isSearchClosed = !showList && !selected && !q && !focused
+
     // Ne pas masquer la liste lors d'une sélection, sauf si on sort du champ
     // On ne masque la liste que si on clique sur retour ou qu'on sort du focus sans texte
     // On ne force plus setSelected(null) sur focus input, pour permettre la sélection ET la liste
     return (
-        <div className="searchbar" style={{ position: 'absolute', left: 12, top: 12, zIndex: 10, width: 360, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.18)', border: '1px solid var(--panel-border, #ddd)' }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className={`searchbar absolute left-3 right-3 top-[15px] md:left-3 md:right-auto md:top-3 z-search w-auto md:w-[360px] max-w-[calc(100vw-24px)] bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 p-0 shadow-lg border-none transition-[width,height,background-color,box-shadow] duration-100 overflow-hidden ${isSearchClosed ? 'rounded-full' : 'rounded-[15px]'}`}>
+            <div className="flex gap-1 items-center px-3 py-2">
                 {/* left icon: back | clear | search */}
                 {showBack || groupView ? (
-                    <button onClick={() => {
-                        if (groupView) {
-                            // Si on est dans une vue de groupe, revenir à la liste de recherche
-                            setGroupView(null)
-                            try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
-                        } else {
-                            // Sinon, réinitialiser complètement
-                            setQ('')
-                            setFocused(false)
-                            setShowBack(false)
-                            setSelected(null)
-                            try { window.dispatchEvent(new CustomEvent('map:highlight-clear')) } catch { }
-                            if ((onClear)) onClear()
-                        }
-                    }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>←</button>
+                    <button
+                        onClick={() => {
+                            if (groupView) {
+                                // Si on est dans une vue de groupe, revenir à la liste de recherche
+                                setGroupView(null)
+                                try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
+                            } else {
+                                // Sinon, réinitialiser complètement
+                                setQ('')
+                                setFocused(false)
+                                setShowBack(false)
+                                setSelected(null)
+                                try { window.dispatchEvent(new CustomEvent('map:highlight-clear')) } catch { }
+                                if ((onClear)) onClear()
+                            }
+                        }}
+                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-transparent bg-transparent text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center flex-shrink-0"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
                 ) : q.length > 0 ? (
-                    <button onClick={() => { if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }; setQ(''); setSelected(null); setFocused(true); if (inputRef.current) inputRef.current.focus() }} style={{ width: 36, height: 36, borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>✕</button>
+                    <button
+                        onClick={() => {
+                            if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }
+                            setQ('')
+                            setSelected(null)
+                            setFocused(true)
+                            if (inputRef.current) inputRef.current.focus()
+                        }}
+                        className="w-8 h-8 md:w-9 md:h-9 rounded-lg border border-transparent bg-transparent text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center flex-shrink-0"
+                    >
+                        <Xmark className="w-5 h-5" />
+                    </button>
                 ) : (
-                    <button onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }} style={{ width: 36, height: 36, background: 'var(--btn-bg, transparent)', border: '1px solid var(--btn-border, transparent)', borderRadius: 8, color: 'var(--btn-fg, inherit)' }} aria-label="search">🔍</button>
+                    <button
+                        onClick={() => { const el = document.querySelector('.searchbar input') as HTMLInputElement | null; if (el) el.focus() }}
+                        className="w-8 h-8 md:w-9 md:h-9 bg-transparent border border-transparent rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors flex items-center justify-center flex-shrink-0"
+                        aria-label="search"
+                    >
+                        <Magnifier className="w-5 h-5" />
+                    </button>
                 )}
                 <input
                     ref={inputRef}
-                    className="search-input"
+                    className="search-input flex-1 px-2 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-none rounded-full outline-none transition-all text-sm md:text-base"
                     value={q}
                     onChange={e => { setQ(e.target.value); if (selected) setSelected(null); setFocused(true) }}
                     placeholder="Rechercher une salle..."
-                    style={{ flex: 1, padding: '8px', background: 'var(--panel-bg, #fff)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #eee)', borderRadius: 8, outline: 'none' }}
                     onFocus={() => {
                         if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }
                         setFocused(true)
@@ -240,35 +272,25 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                             setFocused(false)
                             // Si pas de texte, on peut masquer la sélection
                             if (!q) setSelected(null)
-                        }, 150)
+                        }, 50)
                     }}
                 />
                 {/* Bouton accès direct itinéraire à droite de l'input */}
                 {(!focused && !q) && (
                     <button
                         onClick={() => { if (typeof onOpenRoutePlanner === 'function') { onOpenRoutePlanner(); } }}
-                        style={{
-                            width: 36,
-                            height: 36,
-                            marginLeft: 2,
-                            borderRadius: 8,
-                            border: '1px solid var(--btn-border, #444)',
-                            background: 'var(--btn-bg, #222)',
-                            color: 'var(--btn-fg, #fff)',
-                            fontWeight: 700,
-                            transition: 'background 0.2s, color 0.2s',
-                            boxShadow: '0 1px 4px rgba(0,0,0,0.10)',
-                        }}
+                        className="w-8 h-8 md:w-9 md:h-9 ml-0.5 rounded-lg border-none bg-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors flex items-center justify-center flex-shrink-0"
                         title="Itinéraire"
                         aria-label="Itinéraire"
-                        className="itinerary-btn"
-                    >🗺️</button>
+                    >
+                        <RouteIcon className="w-5 h-5" />
+                    </button>
                 )}
             </div>
             {showList && (
-                <>
+                <div className="max-h-[220px] md:max-h-[260px] overflow-auto">
                     {groupView && (
-                        <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--panel-border, #eee)', fontWeight: 700, fontSize: 14 }}>
+                        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 font-bold text-sm">
                             {groupView.title} ({groupView.items.length})
                         </div>
                     )}
@@ -282,7 +304,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                         setGroupView({ title: name, items })
                         setFocused(true) // Keep focus to show the list
                     }} />
-                </>
+                </div>
             )}
 
             {/* Selected details */}

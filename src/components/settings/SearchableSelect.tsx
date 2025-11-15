@@ -59,88 +59,53 @@ export default function SearchableSelect({ options, value, onChange, placeholder
     }
 
     return (
-        <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+        <div ref={containerRef} className="relative w-full">
             {/* Selected value / trigger button */}
             <button
                 type="button"
                 disabled={disabled}
                 onClick={() => setIsOpen(!isOpen)}
-                style={{
-                    width: '100%',
-                    padding: 8,
-                    borderRadius: 6,
-                    border: '1px solid var(--panel-border, #ddd)',
-                    background: disabled ? 'var(--muted, #f8f9fa)' : 'var(--panel-bg, white)',
-                    color: 'var(--panel-fg, #111)',
-                    textAlign: 'left',
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    opacity: disabled ? 0.6 : 1
-                }}
+                className={`w-full p-2 rounded-md border border-gray-300 dark:border-gray-600 text-left flex justify-between items-center ${disabled
+                        ? 'bg-gray-100 dark:bg-gray-700/50 cursor-not-allowed opacity-60'
+                        : 'bg-white dark:bg-gray-800 cursor-pointer'
+                    } text-gray-900 dark:text-gray-100`}
             >
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                     {selectedOption ? (
                         <>
                             {selectedOption.name}
                             {selectedOption.level != null && (
-                                <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>
+                                <span className="ml-2 text-xs opacity-70">
                                     (Niveau {selectedOption.level})
                                 </span>
                             )}
                         </>
                     ) : (
-                        <span style={{ opacity: 0.5 }}>{placeholder}</span>
+                        <span className="opacity-50">{placeholder}</span>
                     )}
                 </span>
-                <span style={{ marginLeft: 8, fontSize: 12 }}>{isOpen ? '▲' : '▼'}</span>
+                <span className="ml-2 text-xs">{isOpen ? '▲' : '▼'}</span>
             </button>
 
             {/* Dropdown menu */}
             {isOpen && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        marginTop: 4,
-                        background: 'var(--panel-bg, white)',
-                        border: '1px solid var(--panel-border, #ddd)',
-                        borderRadius: 6,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                        zIndex: 1000,
-                        maxHeight: 300,
-                        display: 'flex',
-                        flexDirection: 'column'
-                    }}
-                >
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-[1000] max-h-[300px] flex flex-col">
                     {/* Search input */}
-                    <div style={{ padding: 8, borderBottom: '1px solid var(--panel-border, #ddd)' }}>
+                    <div className="p-2 border-b border-gray-300 dark:border-gray-600">
                         <input
                             ref={inputRef}
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Rechercher..."
-                            style={{
-                                width: '100%',
-                                padding: '6px 8px',
-                                border: '1px solid var(--panel-border, #ddd)',
-                                borderRadius: 4,
-                                background: 'var(--panel-bg, white)',
-                                color: 'var(--panel-fg, #111)',
-                                outline: 'none',
-                                fontSize: 13
-                            }}
+                            className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-[13px] outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                         />
                     </div>
 
                     {/* Options list */}
-                    <div style={{ overflowY: 'auto', maxHeight: 240 }}>
+                    <div className="overflow-y-auto max-h-60">
                         {filteredOptions.length === 0 ? (
-                            <div style={{ padding: 16, textAlign: 'center', color: 'var(--chip-fg, #999)', fontSize: 13 }}>
+                            <div className="p-4 text-center text-gray-500 dark:text-gray-500 text-[13px]">
                                 Aucun résultat
                             </div>
                         ) : (
@@ -149,36 +114,16 @@ export default function SearchableSelect({ options, value, onChange, placeholder
                                     key={option.id}
                                     type="button"
                                     onClick={() => handleSelect(option)}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: 'none',
-                                        background: String(option.id) === String(value) ? 'var(--muted, #f1f3f5)' : 'transparent',
-                                        color: 'var(--panel-fg, #111)',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        fontSize: 13,
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        transition: 'background 0.1s'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (String(option.id) !== String(value)) {
-                                            e.currentTarget.style.background = 'var(--muted, #f8f9fa)'
-                                        }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        if (String(option.id) !== String(value)) {
-                                            e.currentTarget.style.background = 'transparent'
-                                        }
-                                    }}
+                                    className={`w-full px-3 py-2 border-none text-left cursor-pointer text-[13px] flex justify-between items-center transition-colors ${String(option.id) === String(value)
+                                            ? 'bg-gray-100 dark:bg-gray-700'
+                                            : 'bg-transparent hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                        } text-gray-900 dark:text-gray-100`}
                                 >
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                                         {option.name}
                                     </span>
                                     {option.level != null && (
-                                        <span style={{ marginLeft: 8, fontSize: 11, opacity: 0.6, flexShrink: 0 }}>
+                                        <span className="ml-2 text-[11px] opacity-60 flex-shrink-0">
                                             Niveau {option.level}
                                         </span>
                                     )}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Sun, Moon } from '@gravity-ui/icons'
 import SearchableSelect from './SearchableSelect'
 import publicConfigs from 'virtual:public-configs'
 
@@ -18,118 +19,62 @@ export default function GeneralSettings({ theme, onChangeTheme, selectedConfig, 
     }, [])
     return (
         <div>
-            <h2 style={{ marginTop: 0, marginBottom: 24, fontSize: 22, fontWeight: 700 }}>
+            <h2 className="mt-0 mb-6 text-[22px] font-bold">
                 Paramètres généraux
             </h2>
 
             {/* Theme selection */}
-            <div style={{ marginBottom: 32 }}>
+            <div className="mb-8">
                 <label
                     htmlFor="theme-select"
-                    style={{
-                        display: 'block',
-                        marginBottom: 8,
-                        fontWeight: 600,
-                        fontSize: 14,
-                        color: 'var(--panel-fg, #111)'
-                    }}
+                    className="block mb-2 font-semibold text-sm text-gray-900 dark:text-gray-100"
                 >
                     Mode d'affichage
                 </label>
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                        gap: 12
-                    }}
-                >
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-3">
                     {/* Light mode */}
                     <button
                         onClick={() => onChangeTheme('light')}
-                        style={{
-                            padding: 16,
-                            borderRadius: 12,
-                            border: `2px solid ${theme === 'light' ? '#007AFF' : 'var(--panel-border, #ddd)'}`,
-                            background: theme === 'light' ? 'rgba(0, 122, 255, 0.1)' : 'var(--panel-bg, white)',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 8
-                        }}
+                        className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${theme === 'light'
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                            } hover:border-blue-400 dark:hover:border-blue-600`}
                     >
-                        <span style={{ fontSize: 32 }}>☀️</span>
-                        <span style={{ fontWeight: theme === 'light' ? 600 : 400, fontSize: 14 }}>Clair</span>
+                        <Sun className="w-8 h-8" />
+                        <span className={`text-sm ${theme === 'light' ? 'font-semibold' : 'font-normal'}`}>Clair</span>
                     </button>
 
                     {/* Dark mode */}
                     <button
                         onClick={() => onChangeTheme('dark')}
-                        style={{
-                            padding: 16,
-                            borderRadius: 12,
-                            border: `2px solid ${theme === 'dark' ? '#007AFF' : 'var(--panel-border, #ddd)'}`,
-                            background: theme === 'dark' ? 'rgba(0, 122, 255, 0.1)' : 'var(--panel-bg, white)',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 8
-                        }}
+                        className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${theme === 'dark'
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                            } hover:border-blue-400 dark:hover:border-blue-600`}
                     >
-                        <span style={{ fontSize: 32 }}>🌙</span>
-                        <span style={{ fontWeight: theme === 'dark' ? 600 : 400, fontSize: 14 }}>Sombre</span>
+                        <Moon className="w-8 h-8" />
+                        <span className={`text-sm ${theme === 'dark' ? 'font-semibold' : 'font-normal'}`}>Sombre</span>
                     </button>
 
                     {/* Automatic mode - future enhancement */}
                     <button
                         disabled
-                        style={{
-                            padding: 16,
-                            borderRadius: 12,
-                            border: '2px solid var(--panel-border, #ddd)',
-                            background: 'var(--muted, #f8f9fa)',
-                            cursor: 'not-allowed',
-                            opacity: 0.5,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 8
-                        }}
+                        className="p-4 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 cursor-not-allowed opacity-50 flex flex-col items-center gap-2"
                     >
-                        <span style={{ fontSize: 32 }}>🌗</span>
-                        <span style={{ fontSize: 14 }}>Automatique</span>
-                        <span style={{ fontSize: 10, opacity: 0.7 }}>(Bientôt)</span>
+                        <span className="text-3xl">🌗</span>
+                        <span className="text-sm">Automatique</span>
+                        <span className="text-[10px] opacity-70">(Bientôt)</span>
                     </button>
                 </div>
             </div>
 
             {/* Configuration selection */}
-            <div style={{ marginBottom: 32 }}>
-                <label
-                    style={{
-                        display: 'block',
-                        marginBottom: 8,
-                        fontWeight: 600,
-                        fontSize: 14,
-                        color: 'var(--panel-fg, #111)'
-                    }}
-                >
+            <div className="mb-8">
+                <label className="block mb-2 font-semibold text-sm text-gray-900 dark:text-gray-100">
                     Configuration de carte
                 </label>
                 {configFiles.length === 0 ? (
-                    <div
-                        style={{
-                            padding: 16,
-                            borderRadius: 12,
-                            border: '1px solid var(--panel-border, #ddd)',
-                            background: 'var(--muted, #f8f9fa)',
-                            fontSize: 14,
-                            opacity: 0.7
-                        }}
-                    >
+                    <div className="p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-sm opacity-70">
                         Aucun fichier de configuration trouvé
                     </div>
                 ) : (
@@ -147,7 +92,7 @@ export default function GeneralSettings({ theme, onChangeTheme, selectedConfig, 
                             }}
                             placeholder="— Sélectionner une configuration —"
                         />
-                        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                        <div className="mt-2 text-xs opacity-70">
                             Cliquez sur "Enregistrer" pour appliquer les changements
                         </div>
                     </>

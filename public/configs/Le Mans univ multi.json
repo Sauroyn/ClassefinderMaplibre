@@ -1,0 +1,20 @@
+{
+    "name": "Le Mans université",
+    "description": "Crée par un étudiant de l'ESGT. Il manque des batiments",
+    "initialCenter": [
+        0.15986548744816018,
+        48.01747757301202
+    ],
+    "initialZoom": 16,
+    "minZoom": 14,
+    "geojson": [
+        "geojson/LeMansUniv/ESGT.geojson",
+        "geojson/LeMansUniv/IRA.geojson"
+    ],
+    "graphGeojson": "geojson/LeMansUniv/GrapheESGT.geojson",
+    "fillColor": "#ffffff",
+    "fillHeight": 10,
+    "transitionZoom": 20,
+    "labelZoomThreshold": 17,
+    "labelMinZoom": 10
+}

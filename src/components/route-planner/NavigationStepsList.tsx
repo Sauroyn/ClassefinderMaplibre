@@ -7,11 +7,12 @@ export function NavigationStepsList({ steps, nav, route, apiRef }: { steps: Arra
     let run = 0
     for (let i = 0; i < steps.length; i++) { run += Math.max(0, Number(steps[i]?.distance || 0)); cumEnds.push(run) }
     return (
-        <ol style={{ listStyle: 'decimal', paddingLeft: 18, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <ol className="list-decimal pl-[18px] m-0 flex flex-col gap-1.5">
             {steps.map((s, i) => (
                 <li
                     key={i}
-                    style={{ opacity: i < (nav.currentStep || 0) ? 0.5 : 1, cursor: 'pointer' }}
+                    className="cursor-pointer transition-opacity"
+                    style={{ opacity: i < (nav.currentStep || 0) ? 0.5 : 1 }}
                     onClick={() => {
                         try { apiRef.current?.snapToMin?.() } catch { }
                         try {
@@ -46,7 +47,7 @@ export function NavigationStepsList({ steps, nav, route, apiRef }: { steps: Arra
                         const distanceTo = Math.max(0, (man?.at || at) - prevAt)
                         const t = man?.type || 'continue'
                         return (
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <div className="flex items-center">
                                 {iconFor(t)}
                                 <span>{instructionFr(t, distanceTo)}</span>
                             </div>

@@ -1,7 +1,8 @@
 import { findByNormalizedId } from '../../utils/featureId'
 import { getAlias } from '../../utils/aliases'
+import { Route, Pencil } from '@gravity-ui/icons'
 
-type Item = { id: string | number; name: string; level?: string | number }
+type Item = { id: string | number; name: string; level?: string | number; buildingLabel?: string }
 
 export default function SearchSelected({ selected, onRoute, data, onOpenAliasSettings }: { selected: Item | null; onRoute?: (feat: any) => void; data?: GeoJSON.FeatureCollection | null; onOpenAliasSettings?: (featureId: string | number, originalName: string) => void }) {
     if (!selected) return null
@@ -13,23 +14,34 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
     const hasRealName = (originalName && typeof originalName === 'string' && originalName.trim().length > 0) || !!alias
 
     return (
-        <div style={{ marginTop: 8, padding: 10, background: 'var(--panel-bg, #fbfbfb)', color: 'var(--panel-fg, #111)', borderRadius: 8, boxShadow: 'inset 0 0 0 1px var(--panel-border, #eee)' }}>
-            <div style={{ fontWeight: 700 }}>{selected.name}</div>
-            {alias && alias.originalName && (
-                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--chip-fg, #666)' }}>
-                    Alias de "{alias.originalName}"
+        <div className="p-2 md:p-2.5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0 flex-1">
+                    <div className="font-bold truncate">{selected.name}</div>
+                    {selected.buildingLabel && (
+                        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {selected.buildingLabel}
+                        </div>
+                    )}
+                    {alias && alias.originalName && (
+                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 truncate">
+                            Alias de "{alias.originalName}"
+                        </div>
+                    )}
+                    {alias && !alias.originalName && (
+                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                            Alias
+                        </div>
+                    )}
                 </div>
-            )}
-            {alias && !alias.originalName && (
-                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--chip-fg, #666)' }}>
-                    Alias
-                </div>
-            )}
-            <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
-                <div style={{ padding: '6px 10px', background: 'var(--chip-bg, #f1f3f5)', color: 'var(--chip-fg, #111)', borderRadius: 12 }}>{selected.level ?? '—'}</div>
+                {selected.level != null && (
+                    <div className="px-2 md:px-2.5 py-1 md:py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-xs md:text-sm flex-shrink-0 whitespace-nowrap">Étage {selected.level}</div>
+                )}
+            </div>
+            <div className="mt-2 flex gap-2">
                 {hasRealName && (
                     <button
-                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}
+                        className="flex-1 px-2 md:px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1 md:gap-1.5 text-sm"
                         onClick={() => {
                             if (!onRoute) return
                             // Passer l'objet avec le nom effectif (alias ou original)
@@ -43,11 +55,12 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
                             })
                         }}
                     >
-                        Itinéraire
+                        <Route className="w-4 h-4 flex-shrink-0" />
+                        <span>Itinéraire</span>
                     </button>
                 )}
                 <button
-                    style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}
+                    className="flex-1 px-2 md:px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1 md:gap-1.5 text-sm"
                     onClick={() => {
                         if (onOpenAliasSettings) {
                             const originalName = feat?.properties?.name || ''
@@ -55,7 +68,8 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
                         }
                     }}
                 >
-                    {alias ? 'Modifier alias' : 'Alias'}
+                    <Pencil className="w-4 h-4 flex-shrink-0" />
+                    <span>{alias ? 'Mod. alias' : 'Alias'}</span>
                 </button>
             </div>
         </div>

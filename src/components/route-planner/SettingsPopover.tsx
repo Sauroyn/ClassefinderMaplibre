@@ -13,14 +13,14 @@ type Props = {
 
 export default function SettingsPopover({ excludeStairs, coveredOnly, showSecondary, onChangeExcludeStairs, onChangeCoveredOnly, onChangeShowSecondary, onApply, style }: Props) {
     return (
-        <div style={{ position: 'absolute', right: 12, top: 40, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)', padding: 8, borderRadius: 8, zIndex: 30, boxShadow: '0 2px 8px rgba(0,0,0,0.2)', ...style }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={{ fontSize: 13 }}><input type="checkbox" checked={excludeStairs} onChange={(e) => onChangeExcludeStairs(e.target.checked)} />{' '}Mode fauteuil roulant (sans escaliers)</label>
-                <label style={{ fontSize: 13 }}><input type="checkbox" checked={coveredOnly} onChange={(e) => onChangeCoveredOnly(e.target.checked)} />{' '}Couvert uniquement</label>
-                <label style={{ fontSize: 13 }}><input type="checkbox" checked={showSecondary} onChange={(e) => onChangeShowSecondary(e.target.checked)} />{' '}Afficher itinéraires secondaires</label>
-                <div style={{ fontSize: 12, color: 'var(--list-item-muted, #666)' }}><strong>Filtres actifs :</strong> {excludeStairs ? 'Sans escaliers' : '—'}{', '}{coveredOnly ? 'Couvert' : '—'}</div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button onClick={onApply} style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>Appliquer</button>
+        <div className="absolute right-3 top-10 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 p-2 rounded-lg z-[30] shadow-md" style={style}>
+            <div className="flex flex-col gap-2">
+                <label className="text-[13px] flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={excludeStairs} onChange={(e) => onChangeExcludeStairs(e.target.checked)} className="accent-blue-600 dark:accent-blue-500" /> Mode fauteuil roulant (sans escaliers)</label>
+                <label className="text-[13px] flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={coveredOnly} onChange={(e) => onChangeCoveredOnly(e.target.checked)} className="accent-blue-600 dark:accent-blue-500" /> Couvert uniquement</label>
+                <label className="text-[13px] flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={showSecondary} onChange={(e) => onChangeShowSecondary(e.target.checked)} className="accent-blue-600 dark:accent-blue-500" /> Afficher itinéraires secondaires</label>
+                <div className="text-xs text-gray-600 dark:text-gray-400"><strong>Filtres actifs :</strong> {excludeStairs ? 'Sans escaliers' : '—'}{', '}{coveredOnly ? 'Couvert' : '—'}</div>
+                <div className="flex gap-2 justify-end">
+                    <button onClick={onApply} className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">Appliquer</button>
                 </div>
             </div>
         </div>

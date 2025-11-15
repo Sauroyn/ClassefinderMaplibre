@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { Xmark, Gear } from '@gravity-ui/icons'
 import ConfirmStartModal from './route-planner/ConfirmStartModal'
 import Toast from './route-planner/Toast'
-import GroupedResultsMenu from './search/GroupedResultsMenu'
 
 import { getUserStartDistance } from './route-planner/getStartProximity'
 import { computeAndDrawRoute } from '../map/computeRoute'
@@ -15,7 +15,6 @@ import { MobileRouteDetailsSheet } from './route-planner/MobileRouteDetailsSheet
 import { useNavigationController } from './route-planner/NavigationController'
 import NavigationBanner from './route-planner/NavigationBanner'
 import NavigationBottomSheet from './route-planner/NavigationBottomSheet'
-import SettingsPopover from './route-planner/SettingsPopover'
 import Inputs from './route-planner/Inputs'
 import { fitBoundsSmart } from '../map/viewport'
 import { haversine } from '../map/measure'
@@ -28,7 +27,7 @@ import { highlightRouteLayer } from './route-planner/utils'
 import { useRoutePlannerState } from '../hooks/useRoutePlannerState'
 import { getAlias } from '../utils/aliases'
 
-export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void }) {
+export default function RoutePlanner({ mapRef, data, initialDestination, initialStartId, initialStartName, initialEndId, initialEndName, onClose, onOpenRouteSettings }: { mapRef: any, data?: GeoJSON.FeatureCollection | null, initialDestination?: any, initialStartId?: string, initialStartName?: string, initialEndId?: string, initialEndName?: string, onClose?: () => void, onOpenRouteSettings?: () => void }) {
 
     // Unified state management with useReducer
     const [state, dispatch] = useRoutePlannerState(isMobileViewport())
@@ -38,7 +37,7 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
         graph,
         input: { start, end, startQuery, endQuery, focusedField },
         routes: { list: routes, highlighted: highlightedRoute, selected: selectedRoute },
-        settings: { excludeStairs, coveredOnly, showSecondary, showSettings },
+        settings: { excludeStairs, coveredOnly, showSecondary },
         ui: { isMobile, mobileRoutesOpen, detailsOpen },
         navigation: { active: navigationActive, confirmOpen, confirmDistance, confirmUserCoord },
         suggestions: { nodeOptions, groupMenuField, groupMenuTitle, groupMenuItems },
@@ -63,14 +62,19 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     const setConfirmUserCoord = (payload: [number, number] | null) => dispatch({ type: 'SET_CONFIRM_USER_COORD', payload })
     const setToastMessage = (payload: string | null) => dispatch({ type: 'SET_TOAST_MESSAGE', payload })
     const setProvisionalNodes = (payload: Map<string, any>) => dispatch({ type: 'SET_PROVISIONAL_NODES', payload })
-    const setExcludeStairs = () => dispatch({ type: 'TOGGLE_EXCLUDE_STAIRS' })
-    const setCoveredOnly = () => dispatch({ type: 'TOGGLE_COVERED_ONLY' })
-    const setShowSecondary = () => dispatch({ type: 'TOGGLE_SHOW_SECONDARY' })
-    const setShowSettings = (payload: boolean) => dispatch({ type: 'SET_SHOW_SETTINGS', payload: payload })
-    const setGroupMenuField = (payload: 'start' | 'end' | null) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: payload, title: groupMenuTitle, items: groupMenuItems } })
-    const setGroupMenuTitle = (title: string) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title, items: groupMenuItems } })
-    const setGroupMenuItems = (items: Array<{ id: string; name: string; level?: string }>) => dispatch({ type: 'SET_GROUP_MENU', payload: { field: groupMenuField, title: groupMenuTitle, items } })
-    // setGroupMenu & clearGroupMenu helpers removed (unused); individual setters retained
+    const openGroupMenu = (field: 'start' | 'end', title: string, items: Array<{ id: string; name: string; level?: string }>) =>
+        dispatch({ type: 'SET_GROUP_MENU', payload: { field, title, items } })
+    const closeGroupMenu = () => dispatch({ type: 'CLEAR_GROUP_MENU' })
+    const dismissGroupMenu = () => {
+        closeGroupMenu()
+        try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
+    }
+
+    const showSuggestionsPanel = Boolean(
+        focusedField ||
+        (groupMenuField && groupMenuItems.length > 0) ||
+        (routes && routes.length > 0 && !detailsOpen)
+    )
 
     // Keep the last computed workingGraph (with provisional nodes) so we can reuse it for onAdjust
     const workingGraphRef = useRef<Graph | null>(null)
@@ -399,74 +403,84 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
     }
     // Affichage desktop : toujours les inputs et la liste, détail en-dessous si sélectionné
     return (
-        <div className="route-planner" style={{ position: 'absolute', top: 10, left: 10, background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', padding: 8, borderRadius: 6, zIndex: 20, width: 360, boxSizing: 'border-box', border: '1px solid var(--panel-border, #ddd)', boxShadow: '0 4px 12px rgba(0,0,0,0.18)', display: (navigationActive ? 'none' : 'block') }}>
-            <div style={{ position: 'relative', marginBottom: 6 }}>
-                {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" style={{ position: 'absolute', left: 6, top: 6, width: 28, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>✕</button>}
-                <div style={{ textAlign: 'center', fontWeight: 600 }}>Itinéraire</div>
-                <button title="Paramètres itinéraire" onClick={() => setShowSettings(!showSettings)} style={{ position: 'absolute', right: 6, top: 6, width: 32, height: 28, borderRadius: 4, border: 'none', background: 'transparent', fontSize: 16 }}>⚙</button>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                <Inputs
-                    startQuery={startQuery}
-                    endQuery={endQuery}
-                    setStartQuery={setStartQuery}
-                    setEndQuery={setEndQuery}
-                    nodeOptions={nodeOptions}
-                    setFocusedField={setFocusedField}
-                    onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
-                    onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
-                    onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
-                    onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
-                />
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)' }}>⇄</button>
-                </div>
-                {showSettings && (
-                    <SettingsPopover
-                        excludeStairs={excludeStairs}
-                        coveredOnly={coveredOnly}
-                        showSecondary={showSecondary}
-                        onChangeExcludeStairs={setExcludeStairs}
-                        onChangeCoveredOnly={setCoveredOnly}
-                        onChangeShowSecondary={setShowSecondary}
-                        onApply={() => { setShowSettings(false); try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } if (graph && start && end) compute() }}
-                    />
-                )}
-            </div>
-            {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
-            <div style={{ width: '100%', marginTop: 6, borderTop: '1px solid var(--muted, #eee)', paddingTop: 6, maxHeight: 220, overflow: 'auto' }}>
-                <div style={{ marginBottom: 8 }}>
-                    <Suggestions
-                        focusedField={focusedField}
-                        startQuery={startQuery}
-                        endQuery={endQuery}
-                        nodeOptions={nodeOptions}
-                        onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }}
-                        onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }}
-                        onRequestGroup={(field, name, items) => {
-                            setGroupMenuField(field)
-                            setGroupMenuTitle(name)
-                            setGroupMenuItems(items)
-                            setFocusedField(null)
-                        }}
-                    />
-                    {/* Liste visible seulement si détail non ouvert */}
-                    {!isMobile && routes && routes.length > 0 && !detailsOpen && (
-                        <RoutesList
-                            routes={routes}
-                            highlightedRoute={highlightedRoute}
-                            onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(mapRef, routes, rt.layerId) }}
-                            onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(mapRef, routes, null) }}
-                            onGo={(rt: any) => {
-                                setSelectedRoute(rt)
-                                setDetailsOpen(true)
-                                setHighlightedRoute(rt.layerId)
-                                highlightRouteLayer(mapRef, routes, rt.layerId)
-                            }}
+        <div className={`route-planner absolute ${isMobile ? 'top-3 left-3 right-3 w-auto' : 'top-[12px] left-[12px] w-[360px]'} bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-[15px] z-controls shadow-lg ${groupMenuField ? 'overflow-visible' : 'overflow-hidden'} ${navigationActive ? 'hidden' : 'block'}`}>
+            <div className="p-[2px] pr-1">
+                {/* Ligne avec bouton fermer, inputs, et boutons paramètres/swap */}
+                <div className="flex gap-2 items-start">
+                    {/* Bouton fermer */}
+                    <div className="flex-shrink-0 pt-1 pl-1">
+                        {onClose && <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } if (onClose) onClose() }} aria-label="close" title="Close" className="w-7 h-7 rounded-lg bg-transparent text-base text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors flex items-center justify-center"><Xmark className="w-4 h-4" /></button>}
+                    </div>
+
+                    {/* Inputs avec icônes */}
+                    <div className="flex-1 min-w-0">
+                        <Inputs
+                            startQuery={startQuery}
+                            endQuery={endQuery}
+                            setStartQuery={setStartQuery}
+                            setEndQuery={setEndQuery}
+                            nodeOptions={nodeOptions}
+                            setFocusedField={setFocusedField}
+                            onPickStart={(id, name) => { setStart(id); setStartQuery(name) }}
+                            onPickEnd={(id, name) => { setEnd(id); setEndQuery(name) }}
+                            onClearStart={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setStart(''); setStartQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
+                            onClearEnd={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch { } setEnd(''); setEndQuery(''); setRoutes([]); setHighlightedRoute(null); setDetailsOpen(false); setSelectedRoute(null); setMobileRoutesOpen(false) }}
                         />
-                    )}
+                    </div>
+
+                    {/* Boutons paramètres et swap positionnés pour s'aligner avec les barres de recherche */}
+                    <div className="flex flex-col flex-shrink-0">
+                        {/* Bouton paramètres aligné avec la première barre (40px de haut) */}
+                        <div className="h-[40px] flex items-center">
+                            <button title="Paramètres itinéraire" onClick={() => onOpenRouteSettings && onOpenRouteSettings()} className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"><Gear className="w-4 h-4" /></button>
+                        </div>
+                        {/* Séparateur de 1px pour correspondre au trait entre les barres */}
+                        <div className="h-px" />
+                        {/* Bouton swap aligné avec la deuxième barre (40px de haut) */}
+                        <div className="h-[40px] flex items-center">
+                            <button onClick={() => { try { const m = mapRef && mapRef.current; if (m && m.clearRoute) m.clearRoute() } catch (e) { } setRoutes([]); setHighlightedRoute(null); const s = start; const sq = startQuery; setStart(end); setEnd(s); setStartQuery(endQuery); setEndQuery(sq) }} title="Swap" className="w-8 h-8 rounded-lg bg-transparent text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center">⇄</button>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* Suggestions toujours visibles, liste masquée si détail ouvert (desktop) */}
+            {/* Afficher le conteneur seulement si suggestions ou routes présentes */}
+            {showSuggestionsPanel && (
+                <div className="w-full border-t border-gray-200 dark:border-gray-700 max-h-[220px] overflow-auto">
+                    <div>
+                        <Suggestions
+                            focusedField={focusedField}
+                            startQuery={startQuery}
+                            endQuery={endQuery}
+                            nodeOptions={nodeOptions}
+                            onSelectStart={(id, name) => { setStart(id); setStartQuery(name); setFocusedField(null) }}
+                            onSelectEnd={(id, name) => { setEnd(id); setEndQuery(name); setFocusedField(null) }}
+                            onRequestGroup={(field, name, items) => {
+                                openGroupMenu(field, name, items)
+                                setFocusedField(field)
+                            }}
+                            groupView={groupMenuField && groupMenuItems.length > 0 ? { field: groupMenuField, title: groupMenuTitle, items: groupMenuItems } : null}
+                            onCloseGroup={dismissGroupMenu}
+                        />
+                        {/* Liste visible seulement si détail non ouvert */}
+                        {!isMobile && routes && routes.length > 0 && !detailsOpen && (
+                            <RoutesList
+                                routes={routes}
+                                highlightedRoute={highlightedRoute}
+                                onHover={(rt: any) => { setHighlightedRoute(rt.layerId); highlightRouteLayer(mapRef, routes, rt.layerId) }}
+                                onLeave={() => { setHighlightedRoute(null); highlightRouteLayer(mapRef, routes, null) }}
+                                onGo={(rt: any) => {
+                                    setSelectedRoute(rt)
+                                    setDetailsOpen(true)
+                                    setHighlightedRoute(rt.layerId)
+                                    highlightRouteLayer(mapRef, routes, rt.layerId)
+                                }}
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
             {/* Affichage du détail en-dessous en mode desktop */}
             {!isMobile && detailsOpen && selectedRoute && (
                 <DesktopRouteDetails
@@ -650,27 +664,6 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                 />
             )}
             {/* Group menu for multiple features with same name */}
-            {groupMenuField && groupMenuItems.length > 0 && (
-                <GroupedResultsMenu
-                    title={groupMenuTitle}
-                    items={groupMenuItems}
-                    onPick={(id, name) => {
-                        console.log('[RoutePlanner] GroupedResultsMenu onPick:', { field: groupMenuField, id, name })
-                        if (groupMenuField === 'start') {
-                            setStart(String(id))
-                            setStartQuery(name)
-                        } else {
-                            setEnd(String(id))
-                            setEndQuery(name)
-                        }
-                        setGroupMenuField(null)
-                    }}
-                    onClose={() => {
-                        setGroupMenuField(null)
-                        try { window.dispatchEvent(new CustomEvent('map:hover-clear')) } catch { }
-                    }}
-                />
-            )}
         </div>
     )
 }

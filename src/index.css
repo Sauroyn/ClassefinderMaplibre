@@ -1,66 +1,72 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px;
+  }
+
+  #root,
+  .maplibregl-canvas,
+  .maplibregl-map {
+    touch-action: none;
+  }
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
+@layer components {
+  .route-planner-marker {
+    @apply rounded-full shadow-md overflow-hidden bg-transparent border-0;
+  }
+
+  /* Force searchbar mobile positioning */
+  .searchbar {
+    top: 15px !important;
+  }
+
+  @media (min-width: 768px) {
+    .searchbar {
+      top: 0.75rem !important;
+    }
+  }
 }
 
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  touch-action: manipulation;
-  /* Reduce double-tap zoom on some browsers */
-}
-
-/* Route planner custom markers */
-.route-planner-marker {
-  border: none;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
-  background-color: transparent;
-}
-
-/* Prevent iOS from zooming on input focus by keeping font-size >= 16px */
-input,
-select,
-textarea,
-button {
-  font-size: 16px;
-}
-
-/* Prevent pinch-zoom on map container and app root where appropriate */
-#root,
-.maplibregl-canvas,
-.maplibregl-map {
-  touch-action: none;
-}
-
-/* Bottom sheet: ensure it's above everything */
 [data-rsbs-root] {
-  /* z-index only applies on positioned elements */
   position: relative !important;
-  z-index: 2147483000 !important;
-  /* near INT32 max, but below devtools */
+  z-index: 40 !important;
 }
 
 [data-rsbs-overlay],
 [data-rsbs-backdrop],
 [data-rsbs-sibling] {
-  z-index: 2147483002 !important;
+  z-index: 42 !important;
 }
 
-/* Backdrop just below overlay */
 [data-rsbs-backdrop] {
-  z-index: 2147483001 !important;
+  z-index: 41 !important;
   pointer-events: auto !important;
 }
 
-/* Mobile stacking context fixes (WebGL/canvas overdraw) */
 @media (max-width: 768px) {
 
   [data-rsbs-root],
@@ -72,13 +78,11 @@ button {
     backface-visibility: hidden;
   }
 
-  /* Ensure overlay receives clicks/touches */
   [data-rsbs-overlay] {
     pointer-events: auto !important;
   }
 }
 
-/* iOS-specific hint */
 @supports (-webkit-touch-callout: none) {
 
   [data-rsbs-root],
@@ -89,8 +93,6 @@ button {
   }
 }
 
-/* Theme the bottom sheet using app theme */
-/* Light theme */
 html[data-theme='light'] {
   --rsbs-bg: #ffffff;
   --rsbs-color: #111111;
@@ -102,7 +104,6 @@ html[data-theme='light'] {
   --rsbs-mr: env(safe-area-inset-right);
 }
 
-/* Dark theme */
 html[data-theme='dark'] {
   --rsbs-bg: #1b1f26;
   --rsbs-color: #f5f7fb;
@@ -114,13 +115,11 @@ html[data-theme='dark'] {
   --rsbs-mr: env(safe-area-inset-right);
 }
 
-/* Round overlay and improve contrast of header area */
 [data-rsbs-overlay] {
   border-top-left-radius: var(--rsbs-overlay-rounded);
   border-top-right-radius: var(--rsbs-overlay-rounded);
 }
 
-/* Ensure text and background use our variables */
 [data-rsbs-overlay] .rsbs-content,
 [data-rsbs-overlay] .rsbs-header,
 [data-rsbs-overlay] .rsbs-footer {

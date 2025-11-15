@@ -24,18 +24,16 @@
 }
 
 /* Mobile responsive layout */
-@media (max-width: 720px) {
+@media (max-width: 768px) {
 
   .searchbar,
   .route-planner {
     position: fixed !important;
-    left: 10px !important;
-    right: 10px !important;
-    width: calc(100% - 20px) !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
     box-sizing: border-box;
     margin: 0 !important;
-    border-radius: 8px !important;
-    padding: 8px 12px !important;
     z-index: 30 !important;
   }
 
@@ -45,7 +43,7 @@
   }
 
   .route-planner {
-    top: 56px;
+    top: 15px;
   }
 
   /* level selector sits under the active top panels */
@@ -53,7 +51,6 @@
     /* position managed dynamically via JS (top set inline) */
     z-index: 29 !important;
     width: auto !important;
-    border-radius: 8px !important;
     left: auto !important;
     right: 10px !important;
     /* respect safe-area for iOS */

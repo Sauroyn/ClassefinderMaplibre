@@ -37,6 +37,14 @@ export const themeVars = {
 export function applyTheme(mode: ThemeMode) {
     const root = document.documentElement
     root.setAttribute('data-theme', mode)
+
+    // Add/remove 'dark' class for Tailwind
+    if (mode === 'dark') {
+        root.classList.add('dark')
+    } else {
+        root.classList.remove('dark')
+    }
+
     const vars = themeVars[mode]
     for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v)
 }

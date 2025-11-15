@@ -143,27 +143,50 @@ export default function EventSelector({
                 noOptionsMessage={() => 'Aucun résultat'}
                 styles={{
                     container: (base) => ({ ...base, zIndex: 10000, maxWidth: '100%', width: '100%' }),
-                    control: (base, state) => ({ ...base, borderRadius: 999, width: '100%', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', borderColor: state.isFocused ? 'var(--btn-border, #aaa)' : 'var(--panel-border, #ddd)', boxShadow: state.isFocused ? '0 0 0 2px rgba(100,150,250,0.3)' : 'none' }),
+                    control: (base, state) => ({
+                        ...base,
+                        borderRadius: 999,
+                        width: '100%',
+                        backgroundColor: 'rgb(var(--panel-bg) / 1)',
+                        color: 'rgb(var(--panel-fg) / 1)',
+                        borderColor: state.isFocused ? 'rgb(100 150 250 / 1)' : 'rgb(var(--panel-border) / 1)',
+                        boxShadow: state.isFocused ? '0 0 0 2px rgba(100,150,250,0.3)' : 'none'
+                    }),
                     valueContainer: (base) => ({ ...base, overflow: 'hidden' }),
-                    singleValue: (base) => ({ ...base, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '100%', color: 'var(--panel-fg, #111)' }),
-                    menu: (base) => ({ ...base, zIndex: 10001, maxWidth: '100vw', width: '100%', background: 'var(--panel-bg, white)', color: 'var(--panel-fg, #111)', border: '1px solid var(--panel-border, #ddd)' }),
+                    singleValue: (base) => ({
+                        ...base,
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                        overflow: 'hidden',
+                        maxWidth: '100%',
+                        color: 'rgb(var(--panel-fg) / 1)'
+                    }),
+                    menu: (base) => ({
+                        ...base,
+                        zIndex: 10001,
+                        maxWidth: '100vw',
+                        width: '100%',
+                        backgroundColor: 'rgb(var(--panel-bg) / 1)',
+                        color: 'rgb(var(--panel-fg) / 1)',
+                        border: '1px solid rgb(var(--panel-border) / 1)'
+                    }),
                     menuList: (base) => ({ ...base, maxHeight: '45vh', overflowY: 'auto' }),
                     option: (base, state) => ({
                         ...base,
                         backgroundColor: state.isFocused ? 'rgba(100,150,250,0.12)' : 'transparent',
-                        color: 'var(--panel-fg, #111)'
+                        color: 'rgb(var(--panel-fg) / 1)'
                     }),
                     menuPortal: (base) => ({ ...base, zIndex: 10002 })
                 }}
                 menuPortalTarget={isMobile ? (typeof document !== 'undefined' ? document.body : undefined) : undefined}
                 menuPosition={isMobile ? 'fixed' : 'absolute'}
                 formatOptionLabel={(opt: any) => (
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="flex flex-col">
                         <div>{opt.label}</div>
                         {opt.ev?.issues?.length ? (
-                            <div style={{ marginTop: 4, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            <div className="mt-1 flex gap-1.5 flex-wrap">
                                 {opt.ev.issues.map((iss: string, i: number) => (
-                                    <span key={i} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 12, background: '#fff4e6', color: '#b76e00', border: '1px solid #ffd8a8' }}>{iss}</span>
+                                    <span key={i} className="text-[11px] px-1.5 py-0.5 rounded-xl bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-700">{iss}</span>
                                 ))}
                             </div>
                         ) : null}

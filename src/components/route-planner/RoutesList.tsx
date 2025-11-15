@@ -11,7 +11,7 @@ type Props = {
 export default function RoutesList({ routes, highlightedRoute, onHover, onLeave, onGo }: Props) {
     if (!routes || routes.length === 0) return null
     return (
-        <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
+        <div className="flex flex-col">
             {routes.map((r: any, i: number) => (
                 <RouteOption
                     key={r.id}

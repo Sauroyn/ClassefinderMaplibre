@@ -1,4 +1,5 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react'
+import { Sun, Moon, LocationArrow } from '@gravity-ui/icons'
 import maplibre from 'maplibre-gl'
 import UserGeolocate from './UserGeolocate'
 import { useNavigationActive } from '../hooks/useNavigationActive'
@@ -66,7 +67,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 // Only compute special positioning for narrow/mobile viewports
                 const isMobile = window.innerWidth <= 720
                 if (!isMobile) { navBtnsTopRef.current = null; setNavBtnsTopState(null); return }
-                const sel = document.querySelector('.level-selector') as HTMLElement | null
+                const sel = document.querySelector('.mobile-controls-bar') as HTMLElement | null || document.querySelector('.level-selector') as HTMLElement | null
                 const GAP = 8
                 if (sel) {
                     const cs = window.getComputedStyle(sel)
@@ -173,7 +174,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             parsedConfigRef.current = {
                                 fillColor: parsed.fillColor || parsed.color || undefined,
                                 fillHeight: (typeof parsed.fillHeight === 'number') ? parsed.fillHeight : undefined,
-                                transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined
+                                transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined,
+                                minZoom: (typeof parsed.minZoom === 'number') ? parsed.minZoom : undefined,
+                                maxZoom: (typeof parsed.maxZoom === 'number') ? parsed.maxZoom : undefined,
+                                labelMinZoom: (typeof parsed.labelMinZoom === 'number') ? parsed.labelMinZoom : undefined,
+                                labelZoomThreshold: (typeof parsed.labelZoomThreshold === 'number') ? parsed.labelZoomThreshold : undefined
                             }
                         }
                     } catch (e) { /* ignore fetch/parse errors */ }
@@ -184,7 +189,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 container: container.current!,
                 style: getMapStyleUrl(theme),
                 center,
-                zoom
+                zoom,
+                minZoom: parsedConfigRef.current?.minZoom ?? undefined,
+                maxZoom: parsedConfigRef.current?.maxZoom ?? undefined
             })
             mapRef.current = map
                 // Exposer la map globalement pour le debug
@@ -431,11 +438,25 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     return { ...cfg0, fillColor: deriveDarkColor(cfg0.fillColor) }
                 })()
                 addFillLayers(map, level, cfg, theme)
-                const centroids = generateCentroids(themedData)
+                // Apply dynamic minZoom/maxZoom from config
+                if (parsedConfigRef.current?.minZoom !== undefined) {
+                    try { map.setMinZoom(parsedConfigRef.current.minZoom) } catch (e) { }
+                }
+                if (parsedConfigRef.current?.maxZoom !== undefined) {
+                    try { map.setMaxZoom(parsedConfigRef.current.maxZoom) } catch (e) { }
+                }
+                // Générer les centroïdes par feature (incluant toutes les propriétés)
+                const centroids = generateCentroids(themedData, false)
                 addCentroidsSource(map, centroids)
-                // Initialiser le gestionnaire de labels
+                // Initialiser le gestionnaire de labels avec mode feature (pas perBuilding)
                 featureLabelsRef.current = createFeatureLabels(map)
-                featureLabelsRef.current.update(level, theme)
+                featureLabelsRef.current.update({
+                    level,
+                    theme,
+                    minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                    zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                    perBuilding: false
+                })
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                 initialized.current = true
             } catch (e) { console.warn('init map sources failed', e) }
@@ -457,7 +478,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
             // Mettre à jour les labels avec le nouveau niveau
             if (featureLabelsRef.current) {
-                featureLabelsRef.current.update(level, theme)
+                featureLabelsRef.current.update({
+                    level,
+                    theme,
+                    minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                    zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                    perBuilding: false
+                })
             }
             // apply filter to any route-planner layers (IDs like "route-planner-0-line")
             const applyRouteFilterToAll = () => {
@@ -556,7 +583,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     }
                 } catch { }
 
-                const centroids = generateCentroids(themedData)
+                const centroids = generateCentroids(themedData, false)
 
                 // Mettre à jour la source des centroides
                 const source = map.getSource('buildings-centroids') as any
@@ -566,7 +593,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
 
                     // Mettre à jour les labels aussi
                     if (featureLabelsRef.current) {
-                        featureLabelsRef.current.update(level, theme)
+                        featureLabelsRef.current.update({
+                            level,
+                            theme,
+                            minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                            zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                            perBuilding: false
+                        })
                     }
                 }
             } catch (error) {
@@ -746,8 +779,15 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         return { ...cfg0b, fillColor: deriveDarkColor(cfg0b.fillColor) }
                     })()
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
+                    // Apply dynamic minZoom/maxZoom from config after style change
+                    if (parsedConfigRef.current?.minZoom !== undefined) {
+                        try { map.setMinZoom(parsedConfigRef.current.minZoom) } catch (e) { }
+                    }
+                    if (parsedConfigRef.current?.maxZoom !== undefined) {
+                        try { map.setMaxZoom(parsedConfigRef.current.maxZoom) } catch (e) { }
+                    }
                     // Generate centroids from the normalized/themed data to ensure coerced numeric levels
-                    const centroids = generateCentroids(themedDataForAll)
+                    const centroids = generateCentroids(themedDataForAll, false)
                     if (import.meta && (import.meta as any).env && (import.meta as any).env.DEV) {
                         console.log('[MapView] Centroïdes générés:', centroids.features.length, 'features')
                         if (centroids.features.length > 0) {
@@ -765,7 +805,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         featureLabelsRef.current = createFeatureLabels(map)
                     }
                     console.log('[MapView] Recréation des labels après swap de style')
-                    featureLabelsRef.current.update((map as any).__currentLevel ?? level, theme)
+                    featureLabelsRef.current.update({
+                        level: (map as any).__currentLevel ?? level,
+                        theme,
+                        minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                        zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                        perBuilding: false
+                    })
 
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                     // Restore previously drawn route layers/sources (lost during style swap)
@@ -835,21 +881,34 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         } catch { }
     }
 
+    // Allow external UI to trigger recenter (MobileControlsBar)
+    useEffect(() => {
+        const onRecenter = () => recenterToNavMarker()
+        window.addEventListener('ui:recenter-nav-marker', onRecenter as any)
+        return () => window.removeEventListener('ui:recenter-nav-marker', onRecenter as any)
+    }, [])
+
     const themeToggle = (
         <button
             title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
-            style={{ position: 'fixed', right: 10, top: (navBtnsTopState ?? 110), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-        >{theme === 'dark' ? '☀️' : '🌙'}</button>
+            className="fixed right-2.5 z-selector w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-md flex items-center justify-center text-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+            style={{ top: navBtnsTopState ?? 110 }}
+        >
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
     )
     const recenterToMarker = (
         <button
             title={'Recentrer sur le marqueur'}
             aria-label={'Recentrer sur le marqueur'}
             onClick={recenterToNavMarker}
-            style={{ position: 'fixed', right: 10, top: ((navBtnsTopState ?? 110) + 50), zIndex: 28, width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--btn-border, #ddd)', background: 'var(--btn-bg, white)', color: 'var(--btn-fg, #111)', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}
-        >🎯</button>
+            className="fixed right-2.5 z-selector w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-md flex items-center justify-center text-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+            style={{ top: (navBtnsTopState ?? 110) + 50 }}
+        >
+            <LocationArrow className="w-5 h-5" />
+        </button>
     )
 
     // When navigation starts, auto-trigger the same recenter + 3D orientation as the button
@@ -861,7 +920,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         }
     }, [navActive])
     return <>
-        <div id="map" ref={container} style={{ height: '100vh' }} onClick={(e) => {
+        <div id="map" ref={container} className="h-screen" onClick={(e) => {
             // Also relay click as custom event with lngLat if possible (dev aid)
             try {
                 const map = mapRef.current
@@ -880,8 +939,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         {/* Follow mode handled via top-level effects */}
         {navActive ? (
             <>
-                {themeToggle}
-                {recenterToMarker}
+                {/* On mobile, MobileControlsBar renders these; only render here on desktop */}
+                {navBtnsTopState == null && (
+                    <>
+                        {themeToggle}
+                        {recenterToMarker}
+                    </>
+                )}
             </>
         ) : (
             <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
