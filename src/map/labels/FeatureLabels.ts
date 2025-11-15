@@ -99,16 +99,27 @@ export class FeatureLabels {
                 id: this.layerId,
                 type: 'symbol',
                 source: this.sourceId,
+                minzoom: 16, // Ne pas afficher en dessous de zoom 16
                 layout: {
-                    // Essayer plusieurs champs possibles pour le nom
+                    // Basculer entre nom de feature (zoom >= 17) et nom de bâtiment (zoom < 17)
+                    // Utiliser step au lieu de case pour pouvoir utiliser zoom
                     'text-field': [
-                        'coalesce',
-                        ['get', 'name'],
-                        ['get', 'nom'],
-                        ['get', 'label'],
-                        ['get', 'title'],
-                        ['get', 'NAME'],
-                        ['get', 'Name']
+                        'step',
+                        ['zoom'],
+                        // Zoom < 17 : afficher le nom du bâtiment
+                        ['coalesce', ['get', '__buildingLabel'], ''],
+                        17,
+                        // Zoom >= 17 : afficher le nom de la feature
+                        [
+                            'coalesce',
+                            ['get', 'name'],
+                            ['get', 'nom'],
+                            ['get', 'label'],
+                            ['get', 'title'],
+                            ['get', 'NAME'],
+                            ['get', 'Name'],
+                            ''
+                        ]
                     ],
                     'text-size': style.textSize,
                     'text-anchor': 'center',

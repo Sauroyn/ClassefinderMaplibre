@@ -51,16 +51,16 @@ type Props = {
     onResetAllBuildingFilters: () => void
 }
 
-const tabs: Array<{ id: Tab; label: string; icon: string }> = [
-    { id: 'general', label: 'Général', icon: '⚙️' },
-    { id: 'buildings', label: 'Gestion des bâtiments', icon: '🏢' },
-    { id: 'route', label: 'Itinéraire', icon: '🗺️' },
-    { id: 'alias', label: 'Alias', icon: '🏷️' },
-    { id: 'calendar', label: 'Calendrier', icon: '📅' }
+const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'general', label: 'Général' },
+    { id: 'buildings', label: 'Bâtiments' },
+    { id: 'route', label: 'Itinéraire' },
+    { id: 'alias', label: 'Alias' },
+    { id: 'calendar', label: 'Calendrier' }
 ]
 
 export default function SettingsLayout(props: Props) {
-    const [activeTab, setActiveTab] = useState<Tab>('general')
+    const [activeTab, setActiveTab] = useState<Tab>(props.initialTab || 'general')
     const [isMobile, setIsMobile] = useState(false)
     const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
 
@@ -74,18 +74,8 @@ export default function SettingsLayout(props: Props) {
         return () => window.removeEventListener('resize', checkMobile)
     }, [])
 
-    // Update active tab when initialTab prop changes
-    useEffect(() => {
-        const nextTab = props.initialTab || 'general'
-        setActiveTab(nextTab)
-        if (isMobile) {
-            if (nextTab !== 'general') {
-                setMobileDetailOpen(true)
-            } else {
-                setMobileDetailOpen(false)
-            }
-        }
-    }, [props.initialTab, isMobile])
+    // Ne plus réinitialiser activeTab quand initialTab change
+    // C'est l'utilisateur qui contrôle maintenant
 
     // Auto-open alias tab if editing
     useEffect(() => {
@@ -195,11 +185,10 @@ export default function SettingsLayout(props: Props) {
                                         setActiveTab(tab.id)
                                         setMobileDetailOpen(true)
                                     }}
-                                    className="w-full p-4 mb-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center gap-3 cursor-pointer text-base text-left transition-all hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    className="w-full p-3 mb-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center gap-2 cursor-pointer text-sm text-left transition-all hover:bg-gray-50 dark:hover:bg-gray-700"
                                 >
-                                    <span className="text-2xl">{tab.icon}</span>
                                     <span className="flex-1 font-medium">{tab.label}</span>
-                                    <span className="text-lg opacity-50">›</span>
+                                    <span className="text-sm opacity-50">›</span>
                                 </button>
                             ))}
                         </div>
@@ -237,12 +226,11 @@ export default function SettingsLayout(props: Props) {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`w-full p-3 mb-1 rounded-lg border-none flex items-center gap-2.5 cursor-pointer text-sm text-left transition-all ${activeTab === tab.id
-                                    ? 'bg-white dark:bg-gray-800 font-semibold shadow-md'
+                                className={`w-full p-2.5 mb-1 rounded-lg border-none flex items-center cursor-pointer text-sm text-left transition-all ${activeTab === tab.id
+                                    ? 'bg-white dark:bg-gray-800 font-semibold shadow-sm'
                                     : 'bg-transparent font-normal hover:bg-white/50 dark:hover:bg-gray-800/50'
                                     }`}
                             >
-                                <span className="text-lg">{tab.icon}</span>
                                 <span>{tab.label}</span>
                             </button>
                         ))}
