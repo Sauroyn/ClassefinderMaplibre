@@ -260,14 +260,49 @@ function annotateFeatures(collection: GeoJSON.FeatureCollection, buildingId: str
     // Utiliser le nom détecté ou celui fourni
     const finalLabel = detectedBuildingName || buildingLabel
 
-    const features = (collection.features || []).map((feature: any) => ({
-        ...feature,
-        properties: {
-            ...(feature.properties || {}),
-            __buildingId: buildingId,
-            __buildingLabel: finalLabel
+    const features = (collection.features || []).map((feature: any, index: number) => {
+        const props = feature.properties || {}
+
+        // Préparer les nouvelles propriétés
+        const newProps: any = { ...props }
+
+        // Si pas de propriété level, assigner 0 par défaut (number, pas string!)
+        if (props.level === undefined || props.level === null) {
+            newProps.level = 0
+        } else {
+            // S'assurer que level est un number
+            const parsed = parseFloat(String(props.level))
+            if (Number.isFinite(parsed)) {
+                newProps.level = parsed
+            } else {
+                // Si non parsable, utiliser 0 par défaut
+                newProps.level = 0
+            }
         }
-    }))
+
+        // Si pas de propriété name, essayer Nom, nom, NAME, Etiquette, etc.
+        if (!props.name && (props.Nom || props.nom || props.NAME || props.Etiquette)) {
+            newProps.name = props.Nom || props.nom || props.NAME || props.Etiquette
+        }
+
+        // Toujours ajouter les propriétés internes
+        newProps.__buildingId = buildingId
+        newProps.__buildingLabel = finalLabel
+
+        // S'assurer que la feature a une géométrie valide
+        if (!feature.geometry || !feature.geometry.type) {
+            console.warn(`Feature ${index} has no valid geometry, skipping`)
+            return null
+        }
+
+        return {
+            type: 'Feature',
+            id: feature.id !== undefined ? feature.id : index,
+            geometry: feature.geometry,
+            properties: newProps
+        } as GeoJSON.Feature
+    }).filter((f): f is GeoJSON.Feature => f !== null) // Retirer les features null avec type guard
+
     return { type: 'FeatureCollection', features }
 }
 
