@@ -149,17 +149,22 @@ export class FeatureLabels {
             } else {
                 layerFilter = [
                     'all',
-                    // Filtre de niveau
-                    this.createLevelFilter(level),
+                    // Le filtre de niveau ne s'applique PAS aux centroïdes de bâtiment
+                    // (qui représentent tous les niveaux du bâtiment)
+                    [
+                        'any',
+                        ['==', ['get', '__isBuildingCentroid'], true],
+                        this.createLevelFilter(level)
+                    ],
                     // En bas zoom : afficher UNIQUEMENT les centroïdes primaires (un par bâtiment)
                     // En haut zoom : afficher tous les centroïdes (toutes les features)
                     [
                         'step',
                         ['zoom'],
-                        // Zoom < zoomThreshold : uniquement centroïdes primaires
+                        // Zoom < zoomThreshold : uniquement centroïdes primaires (bâtiments)
                         ['==', ['get', '__isPrimaryCentroid'], true],
                         zoomThreshold,
-                        // Zoom >= zoomThreshold : tous les centroïdes qui ont un nom
+                        // Zoom >= zoomThreshold : tous les centroïdes qui ont un nom (features)
                         [
                             'any',
                             ['has', 'name'],

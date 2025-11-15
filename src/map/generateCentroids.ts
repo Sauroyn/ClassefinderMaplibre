@@ -15,13 +15,20 @@ export function generateCentroids(data: any, perBuilding: boolean = false) {
     if (!data || !data.features) return centroids
 
     if (!perBuilding) {
-        // Mode par défaut : un centroïde par feature
-        // Mais on marque le PREMIER centroïde de chaque bâtiment comme "primary"
-        const seenBuildings = new Set<string>()
+        // Mode par défaut : un centroïde par feature + un centroïde spécial par bâtiment
+        // Stratégie : créer un centroïde supplémentaire au centre de chaque bâtiment
+        // pour afficher le nom du bâtiment, et conserver tous les centroïdes de features
+        // à leur position d'origine pour afficher les noms individuels
+
+        // Étape 1 : Grouper par bâtiment et calculer les centres moyens
+        const buildingCenters = new Map<string, [number, number]>()
+        const buildingLabels = new Map<string, string>()
+        const buildingCentroids = new Map<string, Array<{ coords: [number, number], feature: any, index: number }>>()
 
         for (let i = 0; i < data.features.length; i++) {
             const f = data.features[i]
             if (!f.geometry) continue
+
             let centroid: [number, number] | null = null
             if (f.geometry.type === 'Polygon') centroid = polygonCentroid(f.geometry.coordinates[0])
             else if (f.geometry.type === 'MultiPolygon') {
@@ -42,37 +49,67 @@ export function generateCentroids(data: any, perBuilding: boolean = false) {
             }
             if (!centroid) continue
 
-            // Enrichir les properties avec l'alias si disponible
-            const featureId = normalizedFeatureId(f, i)
-            const alias = getAlias(featureId)
-            const enrichedProperties = { ...f.properties }
+            const buildingId = f.properties?.__buildingId || 'default'
+            const buildingLabel = f.properties?.__buildingLabel || buildingId
 
-            if (alias) {
-                // Remplacer le nom par l'alias
-                enrichedProperties.name = alias.aliasName
-                // Conserver le nom original dans une propriété séparée
-                enrichedProperties._originalName = f.properties?.name || ''
+            if (!buildingCentroids.has(buildingId)) {
+                buildingCentroids.set(buildingId, [])
+                buildingLabels.set(buildingId, buildingLabel)
             }
+            buildingCentroids.get(buildingId)!.push({ coords: centroid, feature: f, index: i })
+        }
 
-            // Marquer le premier centroïde de chaque bâtiment comme "primary"
-            const buildingId = enrichedProperties.__buildingId || 'default'
-            const isPrimary = !seenBuildings.has(buildingId)
-            if (isPrimary) {
-                seenBuildings.add(buildingId)
-            }
-            enrichedProperties.__isPrimaryCentroid = isPrimary
+        // Calculer le centre moyen de chaque bâtiment
+        for (const [buildingId, items] of buildingCentroids.entries()) {
+            const avgLon = items.reduce((sum, item) => sum + item.coords[0], 0) / items.length
+            const avgLat = items.reduce((sum, item) => sum + item.coords[1], 0) / items.length
+            buildingCenters.set(buildingId, [avgLon, avgLat])
+        }
 
+        // Étape 2 : Créer un centroïde spécial par bâtiment (pour le nom du bâtiment)
+        for (const [buildingId, buildingCenter] of buildingCenters.entries()) {
             centroids.features.push({
                 type: 'Feature',
-                id: f.id,
-                properties: enrichedProperties,
-                geometry: { type: 'Point', coordinates: centroid }
+                // ID spécial pour éviter les conflits
+                id: `building-center-${buildingId}`,
+                properties: {
+                    __buildingId: buildingId,
+                    __buildingLabel: buildingLabels.get(buildingId),
+                    __isPrimaryCentroid: true,
+                    __isBuildingCentroid: true,
+                    // Pas de propriété 'name' pour ne pas être affiché en zoom élevé
+                },
+                geometry: { type: 'Point', coordinates: buildingCenter }
             })
         }
-        return centroids
-    }
 
-    // Mode par bâtiment : un seul centroïde par __buildingId
+        // Étape 3 : Générer les centroïdes de features (pour les noms individuels)
+        for (const items of buildingCentroids.values()) {
+            for (const { coords, feature, index } of items) {
+                // Enrichir les properties avec l'alias si disponible
+                const featureId = normalizedFeatureId(feature, index)
+                const alias = getAlias(featureId)
+                const enrichedProperties = { ...feature.properties }
+
+                if (alias) {
+                    enrichedProperties.name = alias.aliasName
+                    enrichedProperties._originalName = feature.properties?.name || ''
+                }
+
+                // Ces centroïdes ne sont PAS primaires (pour ne pas être affichés en bas zoom)
+                enrichedProperties.__isPrimaryCentroid = false
+                enrichedProperties.__isBuildingCentroid = false
+
+                centroids.features.push({
+                    type: 'Feature',
+                    id: feature.id,
+                    properties: enrichedProperties,
+                    geometry: { type: 'Point', coordinates: coords }
+                })
+            }
+        }
+        return centroids
+    }    // Mode par bâtiment : un seul centroïde par __buildingId
     const buildingGroups = new Map<string, any[]>()
 
     // Grouper les features par bâtiment
