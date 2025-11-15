@@ -60,7 +60,12 @@ const tabs: Array<{ id: Tab; label: string }> = [
 ]
 
 export default function SettingsLayout(props: Props) {
-    const [activeTab, setActiveTab] = useState<Tab>(props.initialTab || 'general')
+    // Initialiser l'onglet actif depuis la prop `initialTab` si fournie, sinon 'general'
+    const [activeTab, setActiveTab] = useState<Tab>(() => {
+        const initial = props.initialTab ?? 'general'
+        console.log('[SettingsLayout] Initial activeTab:', initial)
+        return initial
+    })
     const [isMobile, setIsMobile] = useState(false)
     const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
 
@@ -74,8 +79,13 @@ export default function SettingsLayout(props: Props) {
         return () => window.removeEventListener('resize', checkMobile)
     }, [])
 
-    // Ne plus réinitialiser activeTab quand initialTab change
-    // C'est l'utilisateur qui contrôle maintenant
+    // Reset activeTab when initialTab prop changes (e.g., when modal reopens)
+    useEffect(() => {
+        if (props.initialTab !== undefined) {
+            console.log('[SettingsLayout] Setting activeTab to:', props.initialTab)
+            setActiveTab(props.initialTab)
+        }
+    }, [props.initialTab])
 
     // Auto-open alias tab if editing
     useEffect(() => {
@@ -88,6 +98,7 @@ export default function SettingsLayout(props: Props) {
     }, [props.editingAliasFeatureId, isMobile])
 
     const renderTabContent = () => {
+        console.log('[SettingsLayout] renderTabContent called with activeTab:', activeTab)
         switch (activeTab) {
             case 'general':
                 return (
@@ -138,6 +149,16 @@ export default function SettingsLayout(props: Props) {
                         onResetAll={props.onResetAllBuildingFilters}
                     />
                 )
+            default:
+                // Fallback: si activeTab n'est pas reconnu, afficher Général
+                return (
+                    <GeneralSettings
+                        theme={props.theme}
+                        onChangeTheme={props.onChangeTheme}
+                        selectedConfig={props.selectedConfig}
+                        onChangeConfig={props.onChangeConfig}
+                    />
+                )
         }
     }
 
@@ -185,7 +206,7 @@ export default function SettingsLayout(props: Props) {
                                         setActiveTab(tab.id)
                                         setMobileDetailOpen(true)
                                     }}
-                                    className="w-full p-3 mb-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center gap-2 cursor-pointer text-sm text-left transition-all hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    className="w-full p-3 mb-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center gap-2 cursor-pointer text-sm text-left transition-colors duration-150 hover:bg-gray-50 dark:hover:bg-gray-700"
                                 >
                                     <span className="flex-1 font-medium">{tab.label}</span>
                                     <span className="text-sm opacity-50">›</span>
@@ -222,18 +243,22 @@ export default function SettingsLayout(props: Props) {
                         <div className="font-bold text-xl">Paramètres</div>
                     </div>
                     <div className="flex-1 p-3 overflow-y-auto">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`w-full p-2.5 mb-1 rounded-lg border-none flex items-center cursor-pointer text-sm text-left transition-all ${activeTab === tab.id
-                                    ? 'bg-white dark:bg-gray-800 font-semibold shadow-sm'
-                                    : 'bg-transparent font-normal hover:bg-white/50 dark:hover:bg-gray-800/50'
-                                    }`}
-                            >
-                                <span>{tab.label}</span>
-                            </button>
-                        ))}
+                        {tabs.map(tab => {
+                            const isActive = activeTab === tab.id
+                            console.log('[SettingsLayout] Tab', tab.id, 'isActive:', isActive, 'activeTab:', activeTab)
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`w-full p-2.5 mb-1 rounded-lg border-none flex items-center cursor-pointer text-sm text-left transition-colors duration-150 ${isActive
+                                        ? 'bg-white dark:bg-gray-800 font-semibold shadow-sm'
+                                        : 'bg-transparent font-normal hover:bg-white/50 dark:hover:bg-gray-800/50'
+                                        }`}
+                                >
+                                    <span>{tab.label}</span>
+                                </button>
+                            )
+                        })}
                     </div>
                 </div>
 

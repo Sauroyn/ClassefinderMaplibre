@@ -139,6 +139,40 @@ export class FeatureLabels {
                 ]
             }
 
+            // Filtre pour le layer
+            let layerFilter: any
+            if (perBuilding) {
+                layerFilter = [
+                    'all',
+                    ['has', '__buildingLabel']
+                ]
+            } else {
+                layerFilter = [
+                    'all',
+                    // Filtre de niveau
+                    this.createLevelFilter(level),
+                    // En bas zoom : afficher UNIQUEMENT les centroïdes primaires (un par bâtiment)
+                    // En haut zoom : afficher tous les centroïdes (toutes les features)
+                    [
+                        'step',
+                        ['zoom'],
+                        // Zoom < zoomThreshold : uniquement centroïdes primaires
+                        ['==', ['get', '__isPrimaryCentroid'], true],
+                        zoomThreshold,
+                        // Zoom >= zoomThreshold : tous les centroïdes qui ont un nom
+                        [
+                            'any',
+                            ['has', 'name'],
+                            ['has', 'nom'],
+                            ['has', 'label'],
+                            ['has', 'title'],
+                            ['has', 'NAME'],
+                            ['has', 'Name']
+                        ]
+                    ]
+                ]
+            }
+
             this.map.addLayer({
                 id: this.layerId,
                 type: 'symbol',
@@ -148,7 +182,7 @@ export class FeatureLabels {
                     'text-field': textFieldExpression,
                     'text-size': style.textSize,
                     'text-anchor': 'center',
-                    // Désactiver le recouvrement pour éviter que les noms se superposent
+                    // Désactiver le chevauchement pour une meilleure lisibilité
                     'text-allow-overlap': false,
                     'text-ignore-placement': false,
                     // Options pour améliorer la gestion des collisions
@@ -163,27 +197,7 @@ export class FeatureLabels {
                     'text-halo-color': style.haloColor,
                     'text-halo-width': style.haloWidth
                 },
-                filter: perBuilding
-                    ? [
-                        'all',
-                        // En mode perBuilding, pas de filtre de niveau (le centroïde représente tout le bâtiment)
-                        ['has', '__buildingLabel']
-                    ]
-                    : [
-                        'all',
-                        // Filtre de niveau
-                        this.createLevelFilter(level),
-                        // N'afficher que les features qui ont un nom
-                        [
-                            'any',
-                            ['has', 'name'],
-                            ['has', 'nom'],
-                            ['has', 'label'],
-                            ['has', 'title'],
-                            ['has', 'NAME'],
-                            ['has', 'Name']
-                        ]
-                    ]
+                filter: layerFilter
             }, beforeId)
             console.log('[FeatureLabels] Layer créé avec succès', beforeId ? `avant ${beforeId}` : 'au-dessus de tout')
         } catch (error) {

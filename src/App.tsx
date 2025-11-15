@@ -277,7 +277,7 @@ export default function App() {
         onOpenAliasSettings={(featureId, originalName) => {
           setEditingAliasFeatureId(featureId)
           setEditingAliasOriginalName(originalName)
-          openSettings()
+          openSettings('alias')
         }}
       />}
       <MapView ref={mapRef} data={resolvedData} level={level} theme={theme} onThemeChange={setTheme} />

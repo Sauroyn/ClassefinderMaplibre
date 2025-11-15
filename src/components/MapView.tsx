@@ -174,7 +174,11 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             parsedConfigRef.current = {
                                 fillColor: parsed.fillColor || parsed.color || undefined,
                                 fillHeight: (typeof parsed.fillHeight === 'number') ? parsed.fillHeight : undefined,
-                                transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined
+                                transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined,
+                                minZoom: (typeof parsed.minZoom === 'number') ? parsed.minZoom : undefined,
+                                maxZoom: (typeof parsed.maxZoom === 'number') ? parsed.maxZoom : undefined,
+                                labelMinZoom: (typeof parsed.labelMinZoom === 'number') ? parsed.labelMinZoom : undefined,
+                                labelZoomThreshold: (typeof parsed.labelZoomThreshold === 'number') ? parsed.labelZoomThreshold : undefined
                             }
                         }
                     } catch (e) { /* ignore fetch/parse errors */ }
@@ -434,17 +438,24 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     return { ...cfg0, fillColor: deriveDarkColor(cfg0.fillColor) }
                 })()
                 addFillLayers(map, level, cfg, theme)
-                // Générer les centroïdes en mode perBuilding (un seul label par bâtiment)
-                const centroids = generateCentroids(themedData, true)
+                // Apply dynamic minZoom/maxZoom from config
+                if (parsedConfigRef.current?.minZoom !== undefined) {
+                    try { map.setMinZoom(parsedConfigRef.current.minZoom) } catch (e) { }
+                }
+                if (parsedConfigRef.current?.maxZoom !== undefined) {
+                    try { map.setMaxZoom(parsedConfigRef.current.maxZoom) } catch (e) { }
+                }
+                // Générer les centroïdes par feature (incluant toutes les propriétés)
+                const centroids = generateCentroids(themedData, false)
                 addCentroidsSource(map, centroids)
-                // Initialiser le gestionnaire de labels
+                // Initialiser le gestionnaire de labels avec mode feature (pas perBuilding)
                 featureLabelsRef.current = createFeatureLabels(map)
                 featureLabelsRef.current.update({
                     level,
                     theme,
                     minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
                     zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
-                    perBuilding: true
+                    perBuilding: false
                 })
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                 initialized.current = true
@@ -472,7 +483,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     theme,
                     minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
                     zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
-                    perBuilding: true
+                    perBuilding: false
                 })
             }
             // apply filter to any route-planner layers (IDs like "route-planner-0-line")
@@ -572,7 +583,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     }
                 } catch { }
 
-                const centroids = generateCentroids(themedData, true)
+                const centroids = generateCentroids(themedData, false)
 
                 // Mettre à jour la source des centroides
                 const source = map.getSource('buildings-centroids') as any
@@ -587,7 +598,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                             theme,
                             minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
                             zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
-                            perBuilding: true
+                            perBuilding: false
                         })
                     }
                 }
@@ -768,8 +779,15 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         return { ...cfg0b, fillColor: deriveDarkColor(cfg0b.fillColor) }
                     })()
                     addFillLayers(map, (map as any).__currentLevel ?? level, cfgb, theme)
+                    // Apply dynamic minZoom/maxZoom from config after style change
+                    if (parsedConfigRef.current?.minZoom !== undefined) {
+                        try { map.setMinZoom(parsedConfigRef.current.minZoom) } catch (e) { }
+                    }
+                    if (parsedConfigRef.current?.maxZoom !== undefined) {
+                        try { map.setMaxZoom(parsedConfigRef.current.maxZoom) } catch (e) { }
+                    }
                     // Generate centroids from the normalized/themed data to ensure coerced numeric levels
-                    const centroids = generateCentroids(themedDataForAll)
+                    const centroids = generateCentroids(themedDataForAll, false)
                     if (import.meta && (import.meta as any).env && (import.meta as any).env.DEV) {
                         console.log('[MapView] Centroïdes générés:', centroids.features.length, 'features')
                         if (centroids.features.length > 0) {
@@ -792,7 +810,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         theme,
                         minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
                         zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
-                        perBuilding: true
+                        perBuilding: false
                     })
 
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })

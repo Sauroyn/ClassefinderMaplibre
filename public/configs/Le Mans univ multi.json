@@ -16,5 +16,5 @@
     "fillHeight": 10,
     "transitionZoom": 20,
     "labelZoomThreshold": 17,
-    "labelMinZoom": 16
+    "labelMinZoom": 10
 }

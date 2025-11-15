@@ -6,7 +6,6 @@
         48.85637865556587
     ],
     "initialZoom": 15,
-    "minZoom": 13,
     "geojson": "Paris.geojson",
     "graphGeojson": "Paris-graph.geojson",
     "fillColor": "#ffffff",

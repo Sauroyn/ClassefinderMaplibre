@@ -16,6 +16,9 @@ export function generateCentroids(data: any, perBuilding: boolean = false) {
 
     if (!perBuilding) {
         // Mode par défaut : un centroïde par feature
+        // Mais on marque le PREMIER centroïde de chaque bâtiment comme "primary"
+        const seenBuildings = new Set<string>()
+        
         for (let i = 0; i < data.features.length; i++) {
             const f = data.features[i]
             if (!f.geometry) continue
@@ -50,6 +53,14 @@ export function generateCentroids(data: any, perBuilding: boolean = false) {
                 // Conserver le nom original dans une propriété séparée
                 enrichedProperties._originalName = f.properties?.name || ''
             }
+
+            // Marquer le premier centroïde de chaque bâtiment comme "primary"
+            const buildingId = enrichedProperties.__buildingId || 'default'
+            const isPrimary = !seenBuildings.has(buildingId)
+            if (isPrimary) {
+                seenBuildings.add(buildingId)
+            }
+            enrichedProperties.__isPrimaryCentroid = isPrimary
 
             centroids.features.push({
                 type: 'Feature',
