@@ -18,6 +18,7 @@ Ce dossier contient toute la documentation du projet.
 - **[LABELS_ARCHITECTURE.md](LABELS_ARCHITECTURE.md)** - Architecture du système de labels
 - **[LABELS_INDEX.md](LABELS_INDEX.md)** - Index des composants de labels
 - **[LABELS_QUICKSTART.md](LABELS_QUICKSTART.md)** - Guide rapide d'utilisation des labels
+- **[LABELS_CONFIG.md](LABELS_CONFIG.md)** - Configuration avancée des labels (zoom, seuils)
 - **[ROUTE_PLANNER_STRUCTURE.md](ROUTE_PLANNER_STRUCTURE.md)** - Structure du planificateur d'itinéraire
 
 ### Refactoring & Optimisation

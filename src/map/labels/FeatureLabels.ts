@@ -12,6 +12,21 @@ export interface LabelStyle {
     haloWidth: number
 }
 
+export interface LabelOptions {
+    /** Niveau à afficher */
+    level: number
+    /** Thème (light/dark) */
+    theme?: 'light' | 'dark'
+    /** Style personnalisé */
+    customStyle?: Partial<LabelStyle>
+    /** Zoom minimum pour afficher les labels (défaut: 16) */
+    minZoom?: number
+    /** Seuil de zoom pour basculer de building → feature (défaut: 17) */
+    zoomThreshold?: number
+    /** Mode centroïdes par bâtiment (un seul label par bâtiment) ou par feature */
+    perBuilding?: boolean
+}
+
 export class FeatureLabels {
     private map: maplibre.Map
     private layerId = 'buildings-name'
@@ -70,7 +85,9 @@ export class FeatureLabels {
     /**
      * Crée le layer de labels
      */
-    private createLayer(level: number, style: LabelStyle): void {
+    private createLayer(options: LabelOptions, style: LabelStyle): void {
+        const { level, minZoom = 16, zoomThreshold = 17, perBuilding = false } = options
+
         // Vérifier que la source existe
         if (!this.map.getSource(this.sourceId)) {
             console.error('[FeatureLabels] La source', this.sourceId, 'n\'existe pas!')
@@ -80,7 +97,7 @@ export class FeatureLabels {
         // Supprimer l'ancien layer s'il existe
         this.removeLayerIfExists()
 
-        console.log('[FeatureLabels] Création du layer pour niveau', level, 'thème', style.textColor)
+        console.log('[FeatureLabels] Création du layer - niveau:', level, 'minZoom:', minZoom, 'zoomThreshold:', zoomThreshold, 'perBuilding:', perBuilding)
 
         try {
             // Trouver le dernier layer des bâtiments pour insérer le layer de noms au-dessus
@@ -95,32 +112,40 @@ export class FeatureLabels {
                 }
             }
 
+            // Construire le text-field selon le mode
+            let textFieldExpression: any
+            if (perBuilding) {
+                // Mode bâtiment : afficher seulement le nom du bâtiment
+                textFieldExpression = ['coalesce', ['get', '__buildingLabel'], '']
+            } else {
+                // Mode feature : basculer entre nom de bâtiment et nom de feature selon le zoom
+                textFieldExpression = [
+                    'step',
+                    ['zoom'],
+                    // Zoom < zoomThreshold : afficher le nom du bâtiment
+                    ['coalesce', ['get', '__buildingLabel'], ''],
+                    zoomThreshold,
+                    // Zoom >= zoomThreshold : afficher le nom de la feature
+                    [
+                        'coalesce',
+                        ['get', 'name'],
+                        ['get', 'nom'],
+                        ['get', 'label'],
+                        ['get', 'title'],
+                        ['get', 'NAME'],
+                        ['get', 'Name'],
+                        ''
+                    ]
+                ]
+            }
+
             this.map.addLayer({
                 id: this.layerId,
                 type: 'symbol',
                 source: this.sourceId,
-                minzoom: 16, // Ne pas afficher en dessous de zoom 16
+                minzoom: minZoom,
                 layout: {
-                    // Basculer entre nom de feature (zoom >= 17) et nom de bâtiment (zoom < 17)
-                    // Utiliser step au lieu de case pour pouvoir utiliser zoom
-                    'text-field': [
-                        'step',
-                        ['zoom'],
-                        // Zoom < 17 : afficher le nom du bâtiment
-                        ['coalesce', ['get', '__buildingLabel'], ''],
-                        17,
-                        // Zoom >= 17 : afficher le nom de la feature
-                        [
-                            'coalesce',
-                            ['get', 'name'],
-                            ['get', 'nom'],
-                            ['get', 'label'],
-                            ['get', 'title'],
-                            ['get', 'NAME'],
-                            ['get', 'Name'],
-                            ''
-                        ]
-                    ],
+                    'text-field': textFieldExpression,
                     'text-size': style.textSize,
                     'text-anchor': 'center',
                     // Désactiver le recouvrement pour éviter que les noms se superposent
@@ -138,21 +163,27 @@ export class FeatureLabels {
                     'text-halo-color': style.haloColor,
                     'text-halo-width': style.haloWidth
                 },
-                filter: [
-                    'all',
-                    // Filtre de niveau
-                    this.createLevelFilter(level),
-                    // N'afficher que les features qui ont un nom
-                    [
-                        'any',
-                        ['has', 'name'],
-                        ['has', 'nom'],
-                        ['has', 'label'],
-                        ['has', 'title'],
-                        ['has', 'NAME'],
-                        ['has', 'Name']
+                filter: perBuilding
+                    ? [
+                        'all',
+                        // En mode perBuilding, pas de filtre de niveau (le centroïde représente tout le bâtiment)
+                        ['has', '__buildingLabel']
                     ]
-                ]
+                    : [
+                        'all',
+                        // Filtre de niveau
+                        this.createLevelFilter(level),
+                        // N'afficher que les features qui ont un nom
+                        [
+                            'any',
+                            ['has', 'name'],
+                            ['has', 'nom'],
+                            ['has', 'label'],
+                            ['has', 'title'],
+                            ['has', 'NAME'],
+                            ['has', 'Name']
+                        ]
+                    ]
             }, beforeId)
             console.log('[FeatureLabels] Layer créé avec succès', beforeId ? `avant ${beforeId}` : 'au-dessus de tout')
         } catch (error) {
@@ -163,17 +194,18 @@ export class FeatureLabels {
     /**
      * Met à jour ou crée le layer de labels
      */
-    public update(level: number, theme: 'light' | 'dark' = 'light', customStyle?: Partial<LabelStyle>): void {
+    public update(options: LabelOptions): void {
+        const { theme = 'light', customStyle } = options
         const style: LabelStyle = {
             ...this.getDefaultStyle(theme),
             ...customStyle
         }
 
-        console.log('[FeatureLabels] update() - niveau:', level, 'thème:', theme)
+        console.log('[FeatureLabels] update() - options:', options)
 
         // Toujours recréer le layer pour éviter les problèmes de synchronisation
         // mais s'assurer que la source existe (après un setStyle le style recharge asynchrone)
-        const ensureCreate = () => this.createLayer(level, style)
+        const ensureCreate = () => this.createLayer(options, style)
         if (!this.map.getSource(this.sourceId)) {
             console.warn('[FeatureLabels] Source absente, attente du chargement pour créer le layer…')
             // Retenter quelques fois de façon progressive

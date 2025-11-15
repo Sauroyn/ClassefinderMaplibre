@@ -185,7 +185,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 container: container.current!,
                 style: getMapStyleUrl(theme),
                 center,
-                zoom
+                zoom,
+                minZoom: parsedConfigRef.current?.minZoom ?? undefined,
+                maxZoom: parsedConfigRef.current?.maxZoom ?? undefined
             })
             mapRef.current = map
                 // Exposer la map globalement pour le debug
@@ -432,11 +434,18 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     return { ...cfg0, fillColor: deriveDarkColor(cfg0.fillColor) }
                 })()
                 addFillLayers(map, level, cfg, theme)
-                const centroids = generateCentroids(themedData)
+                // Générer les centroïdes en mode perBuilding (un seul label par bâtiment)
+                const centroids = generateCentroids(themedData, true)
                 addCentroidsSource(map, centroids)
                 // Initialiser le gestionnaire de labels
                 featureLabelsRef.current = createFeatureLabels(map)
-                featureLabelsRef.current.update(level, theme)
+                featureLabelsRef.current.update({
+                    level,
+                    theme,
+                    minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                    zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                    perBuilding: true
+                })
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                 initialized.current = true
             } catch (e) { console.warn('init map sources failed', e) }
@@ -458,7 +467,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
             // Mettre à jour les labels avec le nouveau niveau
             if (featureLabelsRef.current) {
-                featureLabelsRef.current.update(level, theme)
+                featureLabelsRef.current.update({
+                    level,
+                    theme,
+                    minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                    zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                    perBuilding: true
+                })
             }
             // apply filter to any route-planner layers (IDs like "route-planner-0-line")
             const applyRouteFilterToAll = () => {
@@ -557,7 +572,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     }
                 } catch { }
 
-                const centroids = generateCentroids(themedData)
+                const centroids = generateCentroids(themedData, true)
 
                 // Mettre à jour la source des centroides
                 const source = map.getSource('buildings-centroids') as any
@@ -567,7 +582,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
 
                     // Mettre à jour les labels aussi
                     if (featureLabelsRef.current) {
-                        featureLabelsRef.current.update(level, theme)
+                        featureLabelsRef.current.update({
+                            level,
+                            theme,
+                            minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                            zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                            perBuilding: true
+                        })
                     }
                 }
             } catch (error) {
@@ -766,7 +787,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         featureLabelsRef.current = createFeatureLabels(map)
                     }
                     console.log('[MapView] Recréation des labels après swap de style')
-                    featureLabelsRef.current.update((map as any).__currentLevel ?? level, theme)
+                    featureLabelsRef.current.update({
+                        level: (map as any).__currentLevel ?? level,
+                        theme,
+                        minZoom: parsedConfigRef.current?.labelMinZoom ?? 16,
+                        zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
+                        perBuilding: true
+                    })
 
                     addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
                     // Restore previously drawn route layers/sources (lost during style swap)
