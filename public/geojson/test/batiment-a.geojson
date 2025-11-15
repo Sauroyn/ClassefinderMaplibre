@@ -1,0 +1,205 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "0",
+                "name": "Hall d'entrée A",
+                "type": "entrance",
+                "exit": true,
+                "accessible": true,
+                "color": "#3b82f6"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3490,
+                    48.8575
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "0",
+                "name": "Salle A101",
+                "type": "room",
+                "capacity": 30,
+                "color": "#10b981"
+            },
+            "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3491,
+                            48.8576
+                        ],
+                        [
+                            2.3493,
+                            48.8576
+                        ],
+                        [
+                            2.3493,
+                            48.8574
+                        ],
+                        [
+                            2.3491,
+                            48.8574
+                        ],
+                        [
+                            2.3491,
+                            48.8576
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "0",
+                "name": "Escalier A-Nord",
+                "type": "stairs",
+                "exit": false,
+                "color": "#f59e0b"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3494,
+                    48.8575
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "1",
+                "name": "Bureau A201",
+                "type": "office",
+                "color": "#8b5cf6"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3491,
+                            48.8576
+                        ],
+                        [
+                            2.3492,
+                            48.8576
+                        ],
+                        [
+                            2.3492,
+                            48.8575
+                        ],
+                        [
+                            2.3491,
+                            48.8575
+                        ],
+                        [
+                            2.3491,
+                            48.8576
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "1",
+                "name": "Salle A202",
+                "type": "room",
+                "capacity": 50,
+                "exit": false,
+                "color": "#10b981"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3492,
+                            48.8576
+                        ],
+                        [
+                            2.3494,
+                            48.8576
+                        ],
+                        [
+                            2.3494,
+                            48.8574
+                        ],
+                        [
+                            2.3492,
+                            48.8574
+                        ],
+                        [
+                            2.3492,
+                            48.8576
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "2",
+                "name": "Sortie de secours A",
+                "type": "emergency_exit",
+                "exit": true,
+                "color": "#ef4444"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3495,
+                    48.8575
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "2",
+                "name": "Laboratoire A301",
+                "type": "laboratory",
+                "exit": false,
+                "color": "#06b6d4"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3491,
+                            48.8577
+                        ],
+                        [
+                            2.3494,
+                            48.8577
+                        ],
+                        [
+                            2.3494,
+                            48.8575
+                        ],
+                        [
+                            2.3491,
+                            48.8575
+                        ],
+                        [
+                            2.3491,
+                            48.8577
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

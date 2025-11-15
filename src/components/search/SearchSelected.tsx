@@ -2,7 +2,7 @@ import { findByNormalizedId } from '../../utils/featureId'
 import { getAlias } from '../../utils/aliases'
 import { Route, Pencil } from '@gravity-ui/icons'
 
-type Item = { id: string | number; name: string; level?: string | number }
+type Item = { id: string | number; name: string; level?: string | number; buildingLabel?: string }
 
 export default function SearchSelected({ selected, onRoute, data, onOpenAliasSettings }: { selected: Item | null; onRoute?: (feat: any) => void; data?: GeoJSON.FeatureCollection | null; onOpenAliasSettings?: (featureId: string | number, originalName: string) => void }) {
     if (!selected) return null
@@ -18,6 +18,11 @@ export default function SearchSelected({ selected, onRoute, data, onOpenAliasSet
             <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0 flex-1">
                     <div className="font-bold truncate">{selected.name}</div>
+                    {selected.buildingLabel && (
+                        <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {selected.buildingLabel}
+                        </div>
+                    )}
                     {alias && alias.originalName && (
                         <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 truncate">
                             Alias de "{alias.originalName}"

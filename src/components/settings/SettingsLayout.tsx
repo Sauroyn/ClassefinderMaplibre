@@ -4,8 +4,10 @@ import GeneralSettings from './GeneralSettings'
 import AliasSettings from './AliasSettings'
 import CalendarSettings from './CalendarSettings'
 import RouteSettings from './RouteSettings'
+import BuildingSettings from './BuildingSettings'
+import type { BuildingFiltersState, BuildingFilterSettings, BuildingMeta } from '../../hooks/useConfigData'
 
-type Tab = 'general' | 'alias' | 'calendar' | 'route'
+type Tab = 'general' | 'alias' | 'calendar' | 'route' | 'buildings'
 
 type Props = {
     // General settings
@@ -36,22 +38,29 @@ type Props = {
     editingAliasOriginalName?: string
 
     // Actions
-    onCancel: () => void
-    onSave: () => void
+    onClose: () => void
 
     // Optional: initial tab to open
     initialTab?: Tab
+
+    // Buildings management
+    buildingsMeta: BuildingMeta[]
+    buildingFilters: BuildingFiltersState
+    onChangeBuildingFilter: (buildingId: string, next: BuildingFilterSettings) => void
+    onResetBuildingFilter: (buildingId: string) => void
+    onResetAllBuildingFilters: () => void
 }
 
 const tabs: Array<{ id: Tab; label: string; icon: string }> = [
     { id: 'general', label: 'Général', icon: '⚙️' },
+    { id: 'buildings', label: 'Gestion des bâtiments', icon: '🏢' },
     { id: 'route', label: 'Itinéraire', icon: '🗺️' },
     { id: 'alias', label: 'Alias', icon: '🏷️' },
     { id: 'calendar', label: 'Calendrier', icon: '📅' }
 ]
 
 export default function SettingsLayout(props: Props) {
-    const [activeTab, setActiveTab] = useState<Tab>(props.initialTab || 'general')
+    const [activeTab, setActiveTab] = useState<Tab>('general')
     const [isMobile, setIsMobile] = useState(false)
     const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
 
@@ -67,10 +76,13 @@ export default function SettingsLayout(props: Props) {
 
     // Update active tab when initialTab prop changes
     useEffect(() => {
-        if (props.initialTab) {
-            setActiveTab(props.initialTab)
-            if (isMobile && props.initialTab !== 'general') {
+        const nextTab = props.initialTab || 'general'
+        setActiveTab(nextTab)
+        if (isMobile) {
+            if (nextTab !== 'general') {
                 setMobileDetailOpen(true)
+            } else {
+                setMobileDetailOpen(false)
             }
         }
     }, [props.initialTab, isMobile])
@@ -126,6 +138,16 @@ export default function SettingsLayout(props: Props) {
                         onChangeEventsEnabled={props.onChangeEventsEnabled}
                     />
                 )
+            case 'buildings':
+                return (
+                    <BuildingSettings
+                        buildingsMeta={props.buildingsMeta}
+                        filters={props.buildingFilters}
+                        onChangeFilter={props.onChangeBuildingFilter}
+                        onResetFilter={props.onResetBuildingFilter}
+                        onResetAll={props.onResetAllBuildingFilters}
+                    />
+                )
         }
     }
 
@@ -152,7 +174,7 @@ export default function SettingsLayout(props: Props) {
                         {mobileDetailOpen ? tabs.find(t => t.id === activeTab)?.label : 'Paramètres'}
                     </div>
                     <button
-                        onClick={props.onCancel}
+                        onClick={props.onClose}
                         aria-label="Fermer"
                         title="Fermer"
                         className="bg-transparent border-none text-2xl text-gray-900 dark:text-gray-100 cursor-pointer p-1 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
@@ -188,22 +210,7 @@ export default function SettingsLayout(props: Props) {
                 </div>
 
                 {/* Footer actions - only show when not in detail view */}
-                {!mobileDetailOpen && (
-                    <div className="flex gap-3 p-4 border-t border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
-                        <button
-                            onClick={props.onCancel}
-                            className="flex-1 px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-900 dark:text-gray-100 cursor-pointer font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            onClick={props.onSave}
-                            className="flex-1 px-4 py-3 rounded-lg border-none bg-blue-600 hover:bg-blue-700 text-white cursor-pointer font-medium transition-colors"
-                        >
-                            Enregistrer
-                        </button>
-                    </div>
-                )}
+                {/* Mobile view: closing handled via header button */}
             </div>
         )
     }
@@ -214,7 +221,7 @@ export default function SettingsLayout(props: Props) {
             role="dialog"
             aria-modal="true"
             className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-            onClick={props.onCancel}
+            onClick={props.onClose}
         >
             <div
                 onClick={(e) => e.stopPropagation()}
@@ -246,7 +253,7 @@ export default function SettingsLayout(props: Props) {
                 <div className="flex-1 flex flex-col">
                     {/* Close button */}
                     <button
-                        onClick={props.onCancel}
+                        onClick={props.onClose}
                         aria-label="Fermer"
                         title="Fermer"
                         className="absolute right-4 top-4 bg-gray-100 dark:bg-gray-700 border-none w-8 h-8 rounded-lg text-lg text-gray-900 dark:text-gray-100 cursor-pointer flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -256,22 +263,6 @@ export default function SettingsLayout(props: Props) {
 
                     {/* Tab content */}
                     <div className="flex-1 overflow-y-auto p-8">{renderTabContent()}</div>
-
-                    {/* Footer actions */}
-                    <div className="flex justify-end gap-3 p-5 border-t border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
-                        <button
-                            onClick={props.onCancel}
-                            className="px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-transparent text-gray-900 dark:text-gray-100 cursor-pointer font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                        >
-                            Annuler
-                        </button>
-                        <button
-                            onClick={props.onSave}
-                            className="px-6 py-2.5 rounded-lg border-none bg-blue-600 hover:bg-blue-700 text-white cursor-pointer font-medium transition-colors"
-                        >
-                            Enregistrer
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>

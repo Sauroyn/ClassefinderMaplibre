@@ -1,0 +1,190 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "0",
+                "name": "Entrée principale B",
+                "type": "entrance",
+                "exit": true,
+                "accessible": true,
+                "automated": true,
+                "color": "#3b82f6"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3510,
+                    48.8570
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "0",
+                "name": "Cafétéria B",
+                "type": "cafeteria",
+                "exit": false,
+                "color": "#f97316"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3511,
+                            48.8571
+                        ],
+                        [
+                            2.3514,
+                            48.8571
+                        ],
+                        [
+                            2.3514,
+                            48.8569
+                        ],
+                        [
+                            2.3511,
+                            48.8569
+                        ],
+                        [
+                            2.3511,
+                            48.8571
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "0",
+                "name": "Ascenseur B",
+                "type": "elevator",
+                "accessible": true,
+                "exit": false,
+                "color": "#6366f1"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3512,
+                    48.8570
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "1",
+                "name": "Amphithéâtre B1",
+                "type": "amphitheater",
+                "capacity": 200,
+                "exit": false,
+                "color": "#ec4899"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3510,
+                            48.8572
+                        ],
+                        [
+                            2.3515,
+                            48.8572
+                        ],
+                        [
+                            2.3515,
+                            48.8568
+                        ],
+                        [
+                            2.3510,
+                            48.8568
+                        ],
+                        [
+                            2.3510,
+                            48.8572
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "1",
+                "name": "Sortie B-Est",
+                "type": "exit",
+                "exit": true,
+                "color": "#ef4444"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3516,
+                    48.8570
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "-1",
+                "name": "Parking B",
+                "type": "parking",
+                "exit": false,
+                "accessible": true,
+                "color": "#64748b"
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            2.3509,
+                            48.8572
+                        ],
+                        [
+                            2.3516,
+                            48.8572
+                        ],
+                        [
+                            2.3516,
+                            48.8568
+                        ],
+                        [
+                            2.3509,
+                            48.8568
+                        ],
+                        [
+                            2.3509,
+                            48.8572
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "level": "-1",
+                "name": "Sortie parking B",
+                "type": "exit",
+                "exit": true,
+                "automated": true,
+                "color": "#ef4444"
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    2.3509,
+                    48.8570
+                ]
+            }
+        }
+    ]
+}

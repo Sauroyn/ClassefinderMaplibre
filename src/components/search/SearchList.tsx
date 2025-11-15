@@ -1,6 +1,6 @@
 import { MapPin } from '@gravity-ui/icons'
 
-type Item = { id: string | number; name: string; level?: string | number; isRecent?: boolean }
+type Item = { id: string | number; name: string; level?: string | number; buildingLabel?: string; isRecent?: boolean }
 type ListEntry =
     | { type: 'single'; item: Item; isRecent?: boolean }
     | { type: 'group'; name: string; items: Item[] }
@@ -43,10 +43,15 @@ export default function SearchList({ items, onPick, onOpenGroup }: { items: List
                                 <MapPin className="w-4 h-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
                                 <div className="min-w-0 flex-1">
                                     <div className="font-semibold text-gray-900 dark:text-gray-100 truncate">{it.name}</div>
+                                    {it.buildingLabel && (
+                                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{it.buildingLabel}</div>
+                                    )}
                                 </div>
                             </div>
                             {it.level != null ? (
-                                <div className="self-center opacity-90 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm ml-2 flex-shrink-0">Étage {it.level}</div>
+                                <div className="self-center opacity-90 px-2 py-1 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-xl text-sm ml-2 flex-shrink-0">
+                                    <span>Étage {it.level}</span>
+                                </div>
                             ) : (
                                 <div className="w-9 flex-shrink-0" />
                             )}

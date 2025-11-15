@@ -1,0 +1,17 @@
+{
+    "name": "Le Mans Université",
+    "description": "Créé par un étudiant de l'ESGT",
+    "geojson": [
+        "geojson/LeMansUniv/ESGT.geojson",
+        "geojson/LeMansUniv/bati.geojson"
+    ],
+    "graphGeojson": "geojson/LeMansUniv/GrapheESGT.geojson",
+    "initialCenter": [
+        0.15986548744816018,
+        48.01747757301202
+    ],
+    "initialZoom": 16,
+    "fillColor": "#ffffff",
+    "fillHeight": 10,
+    "transitionZoom": 20
+}

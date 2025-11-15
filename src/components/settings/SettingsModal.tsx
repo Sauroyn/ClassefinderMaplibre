@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import SettingsLayout from './SettingsLayout'
 import { STORAGE_KEYS, safeGetItem, safeSetItem, safeRemoveItem } from '../../utils/storage'
+import type { BuildingFiltersState, BuildingFilterSettings, BuildingMeta } from '../../hooks/useConfigData'
 
 export default function SettingsModal({
     theme,
@@ -17,12 +18,16 @@ export default function SettingsModal({
     onChangeCoveredOnly,
     showSecondary,
     onChangeShowSecondary,
-    onCancel,
-    onSave,
+    onClose,
     data,
     editingAliasFeatureId,
     editingAliasOriginalName,
     initialTab,
+    buildingsMeta,
+    buildingFilters,
+    onChangeBuildingFilter,
+    onResetBuildingFilter,
+    onResetAllBuildingFilters,
 }: {
     theme: 'light' | 'dark'
     onChangeTheme: (t: 'light' | 'dark') => void
@@ -38,12 +43,16 @@ export default function SettingsModal({
     onChangeCoveredOnly: (v: boolean) => void
     showSecondary: boolean
     onChangeShowSecondary: (v: boolean) => void
-    onCancel: () => void
-    onSave: () => void
+    onClose: () => void
     data?: GeoJSON.FeatureCollection | null
     editingAliasFeatureId?: string | number | null
     editingAliasOriginalName?: string
-    initialTab?: 'general' | 'route' | 'alias' | 'calendar'
+    initialTab?: 'general' | 'route' | 'alias' | 'calendar' | 'buildings'
+    buildingsMeta: BuildingMeta[]
+    buildingFilters: BuildingFiltersState
+    onChangeBuildingFilter: (buildingId: string, next: BuildingFilterSettings) => void
+    onResetBuildingFilter: (buildingId: string) => void
+    onResetAllBuildingFilters: () => void
 }) {
     // Local draft state for config (only applied on save)
     const [draftConfig, setDraftConfig] = useState<string | null>(null)
@@ -55,7 +64,7 @@ export default function SettingsModal({
     }, [])
 
     // Handle save with config change
-    const handleSave = () => {
+    const handleClose = () => {
         // Check if config changed
         const currentConfig = safeGetItem(STORAGE_KEYS.CONFIG_FILE)
         const configChanged = draftConfig !== currentConfig
@@ -67,8 +76,8 @@ export default function SettingsModal({
             safeRemoveItem(STORAGE_KEYS.CONFIG_FILE)
         }
 
-        // Call original onSave
-        onSave()
+        // Notify parent so it can persist other settings
+        onClose()
 
         // Reload page if config changed
         if (configChanged) {
@@ -94,12 +103,16 @@ export default function SettingsModal({
             onChangeCoveredOnly={onChangeCoveredOnly}
             showSecondary={showSecondary}
             onChangeShowSecondary={onChangeShowSecondary}
-            onCancel={onCancel}
-            onSave={handleSave}
+            onClose={handleClose}
             data={data || null}
             editingAliasFeatureId={editingAliasFeatureId}
             editingAliasOriginalName={editingAliasOriginalName}
             initialTab={initialTab}
+            buildingsMeta={buildingsMeta}
+            buildingFilters={buildingFilters}
+            onChangeBuildingFilter={onChangeBuildingFilter}
+            onResetBuildingFilter={onResetBuildingFilter}
+            onResetAllBuildingFilters={onResetAllBuildingFilters}
         />
     )
 }

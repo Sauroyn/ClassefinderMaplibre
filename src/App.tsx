@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import MapView from './components/MapView'
 import LevelSelector from './components/LevelSelector'
@@ -9,13 +9,88 @@ import EventBar from './components/events/EventBar'
 import MobileControlsBar from './components/MobileControlsBar'
 import { loadGraphFromConfigOrFallback } from './utils/graph'
 import SettingsModal from './components/settings/SettingsModal.tsx'
-import { useConfigData } from './hooks/useConfigData'
+import { useConfigData, type BuildingFiltersState, type BuildingFilterSettings, type BuildingMeta, createDefaultFilterFromMeta } from './hooks/useConfigData'
 import { useTheme } from './hooks/useTheme'
 import { useSettingsDraft } from './hooks/useSettingsDraft'
 import { ICAL_URL_KEY, TRAVEL_BUFFER_MIN_KEY, EVENTS_ENABLED_KEY } from './utils/storageKeys'
+import { STORAGE_KEYS } from './utils/storage'
+
+function loadStoredBuildingFilters(): BuildingFiltersState {
+  if (typeof window === 'undefined') return {}
+  try {
+    const configId = localStorage.getItem(STORAGE_KEYS.CONFIG_FILE) || 'default'
+    const raw = localStorage.getItem(`${STORAGE_KEYS.BUILDING_FILTERS}:${configId}`)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function normalizeArray(values: string[], sortLocale: string = 'fr'): string[] {
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, sortLocale, { numeric: true }))
+}
+
+function filtersAreEqual(a?: BuildingFilterSettings, b?: BuildingFilterSettings) {
+  if (!a && !b) return true
+  if (!a || !b) return false
+  if (a.visible !== b.visible) return false
+  const aLevels = a.levels
+  const bLevels = b.levels
+  if (aLevels === 'all' || bLevels === 'all') {
+    if (aLevels !== bLevels) return false
+  } else {
+    if (aLevels.length !== bLevels.length) return false
+    for (let i = 0; i < aLevels.length; i++) {
+      if (aLevels[i] !== bLevels[i]) return false
+    }
+  }
+  if (a.tags.length !== b.tags.length) return false
+  for (let i = 0; i < a.tags.length; i++) {
+    if (a.tags[i] !== b.tags[i]) return false
+  }
+  return true
+}
+
+function sanitizeFilterForMeta(filter: BuildingFilterSettings, meta?: BuildingMeta): BuildingFilterSettings {
+  const visible = !!filter.visible
+
+  let levels: BuildingFilterSettings['levels']
+  if (filter.levels === 'all' || !meta || meta.availableLevels.length === 0) {
+    levels = 'all'
+  } else {
+    const allowed = new Set(meta.availableLevels)
+    const deduped = normalizeArray(filter.levels.filter(level => allowed.has(level)))
+    levels = deduped.length === meta.availableLevels.length ? 'all' : deduped
+  }
+
+  let tags: string[] = []
+  if (!meta || meta.availableTags.length === 0) {
+    tags = normalizeArray(filter.tags.map(t => String(t).toLowerCase().trim()).filter(Boolean))
+  } else {
+    const allowedTags = new Set(meta.availableTags.map(tag => tag.toLowerCase()))
+    tags = normalizeArray(
+      filter.tags
+        .map(tag => String(tag).toLowerCase().trim())
+        .filter(tag => tag && allowedTags.has(tag))
+    )
+  }
+
+  return { visible, levels, tags }
+}
 
 export default function App() {
-  const { levels, level, setLevel, loading, dataRef } = useConfigData()
+  const [buildingFilters, setBuildingFilters] = useState<BuildingFiltersState>(() => loadStoredBuildingFilters())
+  const { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig } = useConfigData(buildingFilters)
+  const resolvedData = data ?? dataRef.current
+  const metaById = useMemo(() => {
+    const map = new Map<string, BuildingMeta>()
+    for (const meta of buildingsMeta || []) {
+      map.set(meta.id, meta)
+    }
+    return map
+  }, [buildingsMeta])
   const mapRef = useRef<any>(null)
   const prevCameraRef = useRef<any>(null)
   const [showPlanner, setShowPlanner] = useState(false)
@@ -39,7 +114,7 @@ export default function App() {
   const [navActive, setNavActive] = useState(false)
   const [editingAliasFeatureId, setEditingAliasFeatureId] = useState<string | number | null>(null)
   const [editingAliasOriginalName, setEditingAliasOriginalName] = useState<string>('')
-  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'route' | 'alias' | 'calendar'>('general')
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'general' | 'route' | 'alias' | 'calendar' | 'buildings'>('general')
 
   // Route settings (stored in localStorage, read by RoutePlanner)
   const [excludeStairs, setExcludeStairs] = useState(false)
@@ -49,16 +124,88 @@ export default function App() {
   // Settings modal draft states to avoid partial saves and allow cancel
   const { draftTheme, setDraftTheme, draftIcalUrl, setDraftIcalUrl, draftBufferMin, setDraftBufferMin, draftEventsEnabled, setDraftEventsEnabled, resetDraft } = useSettingsDraft({ theme, icalUrl, bufferMin, eventsEnabled })
 
-  function openSettings(initialTab: 'general' | 'route' | 'alias' | 'calendar' = 'general') {
+  function openSettings(initialTab: 'general' | 'route' | 'alias' | 'calendar' | 'buildings' = 'general') {
     resetDraft({ theme, icalUrl, bufferMin, eventsEnabled })
     setSettingsInitialTab(initialTab)
     setShowSettings(true)
   }
 
+  const handleApplyBuildingFilter = useCallback((buildingId: string, nextFilter: BuildingFilterSettings) => {
+    setBuildingFilters(prev => {
+      const meta = metaById.get(buildingId)
+      if (!meta) return prev
+      const sanitized = sanitizeFilterForMeta(nextFilter, meta)
+      const current = prev[buildingId] ?? createDefaultFilterFromMeta(meta)
+      if (filtersAreEqual(current, sanitized)) return prev
+      return { ...prev, [buildingId]: sanitized }
+    })
+  }, [metaById])
+
+  const handleResetBuildingFilter = useCallback((buildingId: string) => {
+    setBuildingFilters(prev => {
+      const meta = metaById.get(buildingId)
+      if (!meta) return prev
+      const defaults = createDefaultFilterFromMeta(meta)
+      if (filtersAreEqual(prev[buildingId], defaults)) return prev
+      return { ...prev, [buildingId]: defaults }
+    })
+  }, [metaById])
+
+  const handleResetAllBuildingFilters = useCallback(() => {
+    setBuildingFilters(prev => {
+      if (!buildingsMeta || buildingsMeta.length === 0) return prev
+      let mutated = false
+      const next: BuildingFiltersState = { ...prev }
+      for (const meta of buildingsMeta) {
+        const defaults = createDefaultFilterFromMeta(meta)
+        if (!filtersAreEqual(next[meta.id], defaults)) {
+          next[meta.id] = defaults
+          mutated = true
+        }
+      }
+      return mutated ? next : prev
+    })
+  }, [buildingsMeta])
+
   // data is now managed by useConfigData
 
   // (optional) Preload graph for other features; EventBar loads its own
   useEffect(() => { (async () => { graphRef.current = await loadGraphFromConfigOrFallback() })() }, [])
+
+  useEffect(() => {
+    if (!buildingsMeta || buildingsMeta.length === 0) return
+    setBuildingFilters(prev => {
+      const next: BuildingFiltersState = { ...prev }
+      let changed = false
+      const metaIds = new Set(buildingsMeta.map(b => b.id))
+
+      for (const meta of buildingsMeta) {
+        if (!next[meta.id]) {
+          next[meta.id] = createDefaultFilterFromMeta(meta)
+          changed = true
+        }
+      }
+
+      for (const key of Object.keys(next)) {
+        if (!metaIds.has(key)) {
+          delete next[key]
+          changed = true
+        }
+      }
+
+      return changed ? next : prev
+    })
+  }, [buildingsMeta])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const configId = activeConfig || localStorage.getItem(STORAGE_KEYS.CONFIG_FILE) || 'default'
+    try {
+      localStorage.setItem(`${STORAGE_KEYS.BUILDING_FILTERS}:${configId}`, JSON.stringify(buildingFilters))
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [buildingFilters, activeConfig])
 
   // theme application handled in useTheme hook
 
@@ -103,7 +250,7 @@ export default function App() {
       />
 
       {!navActive && !showPlanner && <SearchBar
-        data={dataRef.current}
+        data={resolvedData}
         onSelect={(id, lvl) => {
           if (!mapRef.current) return
           // save camera before changing
@@ -133,10 +280,10 @@ export default function App() {
           openSettings()
         }}
       />}
-      <MapView ref={mapRef} data={dataRef.current} level={level} theme={theme} onThemeChange={setTheme} />
+      <MapView ref={mapRef} data={resolvedData} level={level} theme={theme} onThemeChange={setTheme} />
       {showPlanner && <RoutePlanner
         mapRef={mapRef}
-        data={dataRef.current}
+        data={resolvedData}
         initialDestination={plannerDest}
         initialStartId={plannerStart?.id}
         initialStartName={plannerStart?.name}
@@ -157,7 +304,7 @@ export default function App() {
           bufferMin={bufferMin}
           eventsEnabled={eventsEnabled}
           mapRef={mapRef}
-          data={dataRef.current}
+          data={resolvedData}
           onOpenPlannerWithStartEnd={(s, e) => { setPlannerStart(s); setPlannerEnd(e); setShowPlanner(true) }}
           onOpenPlannerWithDest={(d) => { setPlannerDest(d); setPlannerStart(null); setPlannerEnd(null); setShowPlanner(true) }}
           onClearRoute={() => { try { mapRef.current?.clearRoute?.() } catch { } }}
@@ -180,16 +327,16 @@ export default function App() {
           onChangeCoveredOnly={setCoveredOnly}
           showSecondary={showSecondary}
           onChangeShowSecondary={setShowSecondary}
-          data={dataRef.current}
+          data={resolvedData}
           editingAliasFeatureId={editingAliasFeatureId}
           editingAliasOriginalName={editingAliasOriginalName}
           initialTab={settingsInitialTab}
-          onCancel={() => {
-            setShowSettings(false)
-            setEditingAliasFeatureId(null)
-            setEditingAliasOriginalName('')
-          }}
-          onSave={() => {
+          buildingsMeta={buildingsMeta}
+          buildingFilters={buildingFilters}
+          onChangeBuildingFilter={handleApplyBuildingFilter}
+          onResetBuildingFilter={handleResetBuildingFilter}
+          onResetAllBuildingFilters={handleResetAllBuildingFilters}
+          onClose={() => {
             setTheme(draftTheme)
             setIcalUrl(draftIcalUrl)
             try { localStorage.setItem(ICAL_URL_KEY, draftIcalUrl || '') } catch { }

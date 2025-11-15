@@ -19,12 +19,12 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     const [q, setQ] = useState('')
     const [focused, setFocused] = useState(false)
     const [showBack, setShowBack] = useState(false)
-    type RecentItem = { id: string | number, name: string, level?: string | number }
+    type RecentItem = { id: string | number, name: string, level?: string | number, buildingLabel?: string }
     const [recent, setRecent] = useState<RecentItem[]>(() => {
         try {
             const key = getScopedKey(STORAGE_KEYS.RECENT_SEARCHES_BASE)
             const raw = JSON.parse(safeGetItem(key) || '[]')
-            if (Array.isArray(raw)) return raw.map((r: any) => typeof r === 'string' ? { id: r, name: r } : { id: r.id ?? r.name, name: r.name, level: r.level })
+            if (Array.isArray(raw)) return raw.map((r: any) => typeof r === 'string' ? { id: r, name: r } : { id: r.id ?? r.name, name: r.name, level: r.level, buildingLabel: r.buildingLabel })
         } catch (e) { }
         return []
     })
@@ -32,7 +32,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     const inputRef = useRef<HTMLInputElement | null>(null)
     const blurTimeout = useRef<number | null>(null)
     // Group navigation state
-    const [groupView, setGroupView] = useState<{ title: string, items: Array<{ id: number | string, name: string, level?: number | string }> } | null>(null)
+    const [groupView, setGroupView] = useState<{ title: string, items: Array<{ id: number | string, name: string, level?: number | string, buildingLabel?: string }> } | null>(null)
     // Force re-render when aliases are updated
     const [aliasVersion, setAliasVersion] = useState(0)
 
@@ -43,16 +43,22 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         const qn = q.trim()
         if (qn.length > 0) {
             // Mode recherche: utiliser la fonction de recherche avec alias
-            return searchWithAliases(data, qn, true).map(item => ({
-                id: item.id,
-                name: item.name,
-                level: item.level,
-                isAlias: item.isAlias,
-                originalName: item.originalName
-            }))
+            return searchWithAliases(data, qn, true).map(item => {
+                // Récupérer le building label depuis la feature originale
+                const feature = data.features.find((f: any, idx) => normalizedFeatureId(f, idx) === item.id)
+                const buildingLabel = (feature as any)?.properties?.__buildingLabel
+                return {
+                    id: item.id,
+                    name: item.name,
+                    level: item.level,
+                    buildingLabel,
+                    isAlias: item.isAlias,
+                    originalName: item.originalName
+                }
+            })
         } else {
             // Mode liste complète (sans recherche): afficher toutes les features avec leurs alias
-            const list: Array<{ id: number; name: string; level?: number | string; isAlias?: boolean; originalName?: string }> = []
+            const list: Array<{ id: number; name: string; level?: number | string; buildingLabel?: string; isAlias?: boolean; originalName?: string }> = []
             const feats = (data.features as any[]) || []
             for (let i = 0; i < feats.length; i++) {
                 const f = feats[i]
@@ -61,11 +67,13 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                 if (typeof originalName === 'string' && originalName.trim().length > 0) {
                     const id = normalizedFeatureId(f, i)
                     const level = coerceLevel(f.properties?.level)
+                    const buildingLabel = f.properties?.__buildingLabel
                     const alias = getAlias(id)
                     list.push({
                         id,
                         name: alias ? alias.aliasName : originalName,
                         level,
+                        buildingLabel,
                         isAlias: !!alias,
                         originalName
                     })
@@ -78,7 +86,7 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
     // Build grouped entries only when searching (q non vide). Recent list remains flat.
     const groupedEntries = useMemo(() => {
         if (!q) return [] as any[]
-        const byName = new Map<string, Array<{ id: number | string; name: string; level?: number | string; isAlias?: boolean; originalName?: string }>>()
+        const byName = new Map<string, Array<{ id: number | string; name: string; level?: number | string; buildingLabel?: string; isAlias?: boolean; originalName?: string }>>()
         for (const it of flatItems) {
             const arr = byName.get(it.name) || []
             arr.push(it)
@@ -159,21 +167,20 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
         const n = parseInt(String(id), 10)
         if (Number.isFinite(n)) resolved = n
         // derive level from the feature matched by normalized id
-        const lvl = (() => {
-            const feat = findByNormalizedId(data as any, resolved as number)
-            const lv = feat?.properties?.level
-            return coerceLevel(lv)
-        })()
+        const feat = findByNormalizedId(data as any, resolved as number)
+        const lvl = coerceLevel(feat?.properties?.level)
+        const buildingLabel = feat?.properties?.__buildingLabel
+
         setQ(name)
         // update recent as objects
         setRecent(r => {
-            const next = [{ id: resolved, name, level: lvl }, ...r.filter(x => String(x.id) !== String(resolved))].slice(0, 5)
+            const next = [{ id: resolved, name, level: lvl, buildingLabel }, ...r.filter(x => String(x.id) !== String(resolved))].slice(0, 5)
             const key = getScopedKey(STORAGE_KEYS.RECENT_SEARCHES_BASE)
             safeSetItem(key, JSON.stringify(next))
             return next
         })
         // apply selection
-        const item = { id: resolved, name, level: lvl }
+        const item = { id: resolved, name, level: lvl, buildingLabel }
         setSelected(item)
         setShowBack(true)
         setFocused(false)
