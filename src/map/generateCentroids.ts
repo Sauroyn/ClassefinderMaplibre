@@ -18,7 +18,7 @@ export function generateCentroids(data: any, perBuilding: boolean = false) {
         // Mode par défaut : un centroïde par feature
         // Mais on marque le PREMIER centroïde de chaque bâtiment comme "primary"
         const seenBuildings = new Set<string>()
-        
+
         for (let i = 0; i < data.features.length; i++) {
             const f = data.features[i]
             if (!f.geometry) continue
