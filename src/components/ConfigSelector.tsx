@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import publicConfigs from 'virtual:public-configs'
 import { STORAGE_KEYS, safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage'
+import { configsAPI } from '../utils/api'
 
 const ConfigSelector: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
     const [selected, setSelected] = useState<string | null>(
@@ -9,8 +9,17 @@ const ConfigSelector: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
     const [files, setFiles] = useState<string[]>([])
 
     useEffect(() => {
-        // list is provided at build/dev time by virtual module
-        setFiles((publicConfigs || []).slice().sort())
+        // Fetch configs from API
+        const loadConfigs = async () => {
+            try {
+                const configs = await configsAPI.list()
+                setFiles(configs.map(c => c.slug).sort())
+            } catch (err) {
+                console.error('Failed to load configs:', err)
+                setFiles([])
+            }
+        }
+        loadConfigs()
     }, [])
 
     const content = (

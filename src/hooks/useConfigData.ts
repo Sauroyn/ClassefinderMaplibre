@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CONFIG_STORAGE_KEY } from '../utils/storageKeys'
+import { configsAPI, geojsonAPI } from '../utils/api'
 
 export type BuildingFilterSettings = {
     visible: boolean
@@ -50,7 +51,6 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
         let cancelled = false
         const load = async () => {
             setLoading(true)
-            const base = (import.meta.env && (import.meta.env.BASE_URL || '/')) || '/'
             let selectedConfig: string | null = null
             try {
                 if (typeof window !== 'undefined') {
@@ -61,18 +61,19 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
             let parsedConfig: any = null
             if (selectedConfig) {
                 try {
-                    const resp = await fetch(base + 'configs/' + selectedConfig)
-                    if (resp.ok) {
-                        parsedConfig = await resp.json()
-                    }
-                } catch { }
+                    // Use API instead of static files
+                    const configData = await configsAPI.get(selectedConfig)
+                    parsedConfig = configData.data
+                } catch (err) {
+                    console.warn('Failed to load config from API:', err)
+                }
             }
             if (!parsedConfig) parsedConfig = {}
             if (!cancelled) {
                 setActiveConfig(selectedConfig)
             }
             try {
-                const { combinedData, meta } = await loadBuildingCollections(parsedConfig, base)
+                const { combinedData, meta } = await loadBuildingCollections(parsedConfig)
                 if (cancelled) return
                 rawDataRef.current = combinedData
                 setBuildingsMeta(meta)
@@ -108,19 +109,19 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
     return { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig }
 }
 
-async function loadBuildingCollections(config: any, baseUrl: string): Promise<{ combinedData: GeoJSON.FeatureCollection, meta: BuildingMeta[] }> {
+async function loadBuildingCollections(config: any): Promise<{ combinedData: GeoJSON.FeatureCollection, meta: BuildingMeta[] }> {
     const entries = resolveBuildingEntries(config)
     const annotatedCollections: Array<{ entry: typeof entries[number]; data: GeoJSON.FeatureCollection }> = []
 
     for (const entry of entries) {
-        const url = entry.geojson && typeof entry.geojson === 'string'
-            ? buildPublicUrl(baseUrl, entry.geojson)
-            : `${baseUrl}buildings.geojson`
         try {
-            const resp = await fetch(url)
-            if (!resp.ok) continue
-            const payload = await resp.json()
-            const fc = ensureFeatureCollection(payload)
+            // Use API to fetch GeoJSON by path
+            const geojsonPath = entry.geojson && typeof entry.geojson === 'string'
+                ? entry.geojson
+                : 'buildings.geojson'
+            
+            const geojsonData = await geojsonAPI.getByPath(geojsonPath)
+            const fc = ensureFeatureCollection(geojsonData.data)
             annotatedCollections.push({ entry, data: annotateFeatures(fc, entry.id, entry.label) })
         } catch (err) {
             console.warn(`[useConfigData] unable to load building geojson for ${entry.id}`, err)

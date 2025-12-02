@@ -1,0 +1,35 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // Change to "postgresql" for production
+  url      = env("DATABASE_URL")
+}
+
+model Config {
+  id          String   @id @default(cuid())
+  name        String   @unique // e.g., "Le Mans univ", "Paris"
+  slug        String   @unique // e.g., "le-mans-univ", "paris"
+  data        String   // JSON stringified config content
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("configs")
+}
+
+model GeoJSON {
+  id          String   @id @default(cuid())
+  path        String   @unique // e.g., "LeMansUniv/ESGT.geojson"
+  name        String   // e.g., "ESGT"
+  folder      String   // e.g., "LeMansUniv"
+  data        String   // JSON stringified GeoJSON content
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([folder])
+  @@map("geojson")
+}
