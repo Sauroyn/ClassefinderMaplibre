@@ -5,6 +5,24 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+/**
+ * Helper to convert old config name (e.g., "Le Mans univ multi.json") to slug
+ * Used for localStorage migration from static files to API
+ */
+export function configNameToSlug(name: string): string {
+  // Remove .json extension if present
+  const withoutExt = name.replace(/\.json$/i, '');
+  // Convert to slug: lowercase, replace spaces with hyphens
+  return withoutExt
+    .toLowerCase()
+    .normalize('NFD') // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/[^\w\s-]/g, '') // Remove special chars
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Collapse multiple hyphens
+    .trim();
+}
+
 // Types
 export interface ConfigListItem {
   id: string;

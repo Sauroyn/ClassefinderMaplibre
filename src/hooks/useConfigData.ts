@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CONFIG_STORAGE_KEY } from '../utils/storageKeys'
-import { configsAPI, geojsonAPI } from '../utils/api'
+import { configsAPI, geojsonAPI, configNameToSlug } from '../utils/api'
 
 export type BuildingFilterSettings = {
     visible: boolean
@@ -61,9 +61,17 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
             let parsedConfig: any = null
             if (selectedConfig) {
                 try {
+                    // Convert old config names (e.g., "Le Mans univ.json") to slugs
+                    const slug = configNameToSlug(selectedConfig);
+                    
                     // Use API instead of static files
-                    const configData = await configsAPI.get(selectedConfig)
+                    const configData = await configsAPI.get(slug)
                     parsedConfig = configData.data
+                    
+                    // Update localStorage with the correct slug if it was an old name
+                    if (selectedConfig !== slug && typeof window !== 'undefined') {
+                        localStorage.setItem(CONFIG_STORAGE_KEY, slug);
+                    }
                 } catch (err) {
                     console.warn('Failed to load config from API:', err)
                 }

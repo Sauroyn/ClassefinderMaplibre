@@ -4,6 +4,55 @@ import * as path from 'path';
 
 const prisma = new PrismaClient();
 
+/**
+ * Clean GeoJSON paths in config data
+ * Removes "geojson/" prefix and "public/geojson/" prefix
+ */
+function cleanConfigPaths(configData: any): any {
+  if (!configData || typeof configData !== 'object') return configData;
+  
+  const cleaned = { ...configData };
+  
+  // Clean geojson array
+  if (Array.isArray(cleaned.geojson)) {
+    cleaned.geojson = cleaned.geojson.map((path: string) => 
+      path.replace(/^(public\/)?geojson\//, '')
+    );
+  }
+  
+  // Clean single geojson string
+  if (typeof cleaned.geojson === 'string') {
+    cleaned.geojson = cleaned.geojson.replace(/^(public\/)?geojson\//, '');
+  }
+  
+  // Clean graphGeojson
+  if (typeof cleaned.graphGeojson === 'string') {
+    cleaned.graphGeojson = cleaned.graphGeojson.replace(/^(public\/)?geojson\//, '');
+  }
+  
+  // Clean buildings array (for multi-building configs)
+  if (Array.isArray(cleaned.buildings)) {
+    cleaned.buildings = cleaned.buildings.map((building: any) => {
+      if (!building) return building;
+      const cleanedBuilding = { ...building };
+      
+      if (typeof cleanedBuilding.geojson === 'string') {
+        cleanedBuilding.geojson = cleanedBuilding.geojson.replace(/^(public\/)?geojson\//, '');
+      }
+      
+      if (Array.isArray(cleanedBuilding.geojson)) {
+        cleanedBuilding.geojson = cleanedBuilding.geojson.map((path: string) =>
+          path.replace(/^(public\/)?geojson\//, '')
+        );
+      }
+      
+      return cleanedBuilding;
+    });
+  }
+  
+  return cleaned;
+}
+
 async function seed() {
   console.log('🌱 Starting seed...');
 
@@ -24,6 +73,9 @@ async function seed() {
       const content = await fs.readFile(filePath, 'utf-8');
       const data = JSON.parse(content);
       
+      // Clean GeoJSON paths in config
+      const cleanedData = cleanConfigPaths(data);
+      
       const name = file.replace('.json', '');
       const slug = name.toLowerCase().replace(/\s+/g, '-');
       
@@ -31,12 +83,12 @@ async function seed() {
         where: { slug },
         update: {
           name,
-          data: content
+          data: JSON.stringify(cleanedData, null, 2)
         },
         create: {
           name,
           slug,
-          data: content
+          data: JSON.stringify(cleanedData, null, 2)
         }
       });
       
