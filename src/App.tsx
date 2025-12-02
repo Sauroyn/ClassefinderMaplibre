@@ -7,11 +7,13 @@ import RoutePlanner from './components/RoutePlanner'
 import SettingsButton from './components/SettingsButton'
 import EventBar from './components/events/EventBar'
 import MobileControlsBar from './components/MobileControlsBar'
+import LocationLockMessage from './components/LocationLockMessage'
 import { loadGraphFromConfigOrFallback } from './utils/graph'
 import SettingsModal from './components/settings/SettingsModal.tsx'
 import { useConfigData, type BuildingFiltersState, type BuildingFilterSettings, type BuildingMeta, createDefaultFilterFromMeta } from './hooks/useConfigData'
 import { useTheme } from './hooks/useTheme'
 import { useSettingsDraft } from './hooks/useSettingsDraft'
+import { useLocationLock } from './hooks/useLocationLock'
 import { ICAL_URL_KEY, TRAVEL_BUFFER_MIN_KEY, EVENTS_ENABLED_KEY } from './utils/storageKeys'
 import { STORAGE_KEYS } from './utils/storage'
 
@@ -82,8 +84,14 @@ function sanitizeFilterForMeta(filter: BuildingFilterSettings, meta?: BuildingMe
 
 export default function App() {
   const [buildingFilters, setBuildingFilters] = useState<BuildingFiltersState>(() => loadStoredBuildingFilters())
-  const { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig } = useConfigData(buildingFilters)
-  const resolvedData = data ?? dataRef.current
+  const { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig, rawConfig } = useConfigData(buildingFilters)
+  
+  // Location lock hook - check if user is in allowed perimeter
+  const lockState = useLocationLock(rawConfig)
+  
+  // Block data access if location lock is active and user is not inside
+  const shouldBlockData = rawConfig?.locationLock && lockState.status !== 'inside' && lockState.status !== 'idle'
+  const resolvedData = shouldBlockData ? null : (data ?? dataRef.current)
   const metaById = useMemo(() => {
     const map = new Map<string, BuildingMeta>()
     for (const meta of buildingsMeta || []) {
@@ -280,7 +288,16 @@ export default function App() {
           openSettings('alias')
         }}
       />}
-      <MapView ref={mapRef} data={resolvedData} level={level} theme={theme} onThemeChange={setTheme} />
+      <MapView 
+        ref={mapRef} 
+        data={resolvedData} 
+        level={level} 
+        theme={theme} 
+        onThemeChange={setTheme}
+        lockState={lockState}
+        perimeterCenter={rawConfig?.perimeterCenter}
+        perimeterRadius={rawConfig?.perimeterRadius}
+      />
       {showPlanner && <RoutePlanner
         mapRef={mapRef}
         data={resolvedData}
@@ -351,6 +368,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Location lock message overlay */}
+      <LocationLockMessage lockState={lockState} />
     </>
   )
 }

@@ -2,7 +2,9 @@ import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 're
 import { Sun, Moon, LocationArrow } from '@gravity-ui/icons'
 import maplibre from 'maplibre-gl'
 import UserGeolocate from './UserGeolocate'
+import LocationLockOverlay from './LocationLockOverlay'
 import { useNavigationActive } from '../hooks/useNavigationActive'
+import type { LocationLockState } from '../hooks/useLocationLock'
 import { addBuildingsSource, addCentroidsSource } from '../map/sources'
 import { addFillLayers } from '../map/layers'
 import { createFeatureLabels, FeatureLabels } from '../map/labels/FeatureLabels'
@@ -18,9 +20,17 @@ import { removeLayer, removeSource, getLayersWithPrefix, getSourcesWithPrefix, s
 import { getFeatureBounds } from '../utils/geometryBounds'
 import { getMapStyleUrl } from '../utils/mapStyles'
 
-type Props = { data: any | null, level: number, theme?: 'light' | 'dark', onThemeChange?: (t: 'light' | 'dark') => void }
+type Props = { 
+    data: any | null, 
+    level: number, 
+    theme?: 'light' | 'dark', 
+    onThemeChange?: (t: 'light' | 'dark') => void,
+    lockState?: LocationLockState,
+    perimeterCenter?: [number, number],
+    perimeterRadius?: number
+}
 
-export default forwardRef(function MapView({ data, level, theme = 'light', onThemeChange }: Props, ref) {
+export default forwardRef(function MapView({ data, level, theme = 'light', onThemeChange, lockState, perimeterCenter, perimeterRadius }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<maplibre.Map | null>(null)
     const latestDataRef = useRef<any | null>(null)
@@ -949,6 +959,16 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             </>
         ) : (
             <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
+        )}
+        
+        {/* Location lock overlay - show perimeter and user position when needed */}
+        {lockState && (
+            <LocationLockOverlay 
+                map={mapRef.current} 
+                lockState={lockState}
+                perimeterCenter={perimeterCenter}
+                perimeterRadius={perimeterRadius}
+            />
         )}
     </>
 })

@@ -30,6 +30,7 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
     const [data, setData] = useState<GeoJSON.FeatureCollection | null>(null)
     const [buildingsMeta, setBuildingsMeta] = useState<BuildingMeta[]>([])
     const [activeConfig, setActiveConfig] = useState<string | null>(null)
+    const [rawConfig, setRawConfig] = useState<any | null>(null) // NEW: store raw config for location lock
     const dataRef = useRef<GeoJSON.FeatureCollection | null>(null)
     const rawDataRef = useRef<GeoJSON.FeatureCollection | null>(null)
 
@@ -79,6 +80,7 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
             if (!parsedConfig) parsedConfig = {}
             if (!cancelled) {
                 setActiveConfig(selectedConfig)
+                setRawConfig(parsedConfig) // NEW: store raw config
             }
             try {
                 const { combinedData, meta } = await loadBuildingCollections(parsedConfig)
@@ -114,7 +116,7 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
         updateLevelsFromData(filtered)
     }, [buildingFilters, buildingsMeta])
 
-    return { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig }
+    return { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig, rawConfig }
 }
 
 async function loadBuildingCollections(config: any): Promise<{ combinedData: GeoJSON.FeatureCollection, meta: BuildingMeta[] }> {
