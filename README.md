@@ -1,299 +1,96 @@
-# MapLibre GeoJSON - Full Stack Application
+# MapLibre GeoJSON - Application Full Stack
 
-Application de visualisation cartographique interactive avec backend Node.js et base de données.
+Visualisation cartographique interactive avec backend Node.js et base de données.
 
-**⚠️ Important : Le backend et le frontend sont séparés et indépendants.**
-
----
-
-## 🚀 Démarrage Rapide
-
-**Installation complète en 10 minutes :**
+## 🚀 Démarrage rapide (5 minutes)
 
 ```bash
-# 1. Backend
+# 1. Frontend
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173
+
+# 2. Backend (nouveau terminal)
 cd backend
 npm install
-cp .env.example .env
 npm run prisma:generate
-rm -rf prisma/migrations && npx prisma migrate dev --name init
-npm run seed
+npm run prisma:migrate:dev
 npm run dev
-
-# 2. Frontend (nouveau terminal)
-cd ..
-echo "VITE_API_URL=http://localhost:3001/api" > .env
-npm install
-npm run dev
+# → http://localhost:3001
 ```
 
-- **Backend :** http://localhost:3001
-- **Frontend :** http://localhost:5173
+## 📁 Structure du projet
 
-**📖 Guide détaillé :** [DEMARRAGE_RAPIDE.md](./DEMARRAGE_RAPIDE.md)
-
----
+```
+maplibreglgeojson/
+├── frontend/          🎨 React + Vite + Tailwind
+├── backend/           🔧 Express + Prisma + Node.js
+├── docs/              📚 Documentation complète
+└── Configuration files
+```
 
 ## 📚 Documentation
 
-### 🎯 Installation
+Commencez par : **[docs/00_LISEZ_MOI_D_ABORD.txt](./docs/00_LISEZ_MOI_D_ABORD.txt)**
 
-| Document | Description |
-|----------|-------------|
-| **[DEMARRAGE_RAPIDE.md](./DEMARRAGE_RAPIDE.md)** | ⭐ Installation express (10 min) |
-| **[INSTALLATION_BACKEND.md](./INSTALLATION_BACKEND.md)** | 🔧 Guide backend détaillé |
-| **[INSTALLATION_FRONTEND.md](./INSTALLATION_FRONTEND.md)** | 🎨 Guide frontend détaillé |
+ou selon votre besoin :
+- **Démarrer rapidement** → [docs/QUICK_START.md](./docs/QUICK_START.md)
+- **Déployer** → [docs/DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md) ⭐
+- **Comprendre le code** → [docs/PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md)
+- **Tout chercher** → [docs/GUIDES_INDEX.md](./docs/GUIDES_INDEX.md)
 
-### 📖 Comprendre
-
-| Document | Description |
-|----------|-------------|
-| **[COMMENT_CA_MARCHE.md](./COMMENT_CA_MARCHE.md)** | Fonctionnement détaillé |
-| **[docs/BACKEND_ARCHITECTURE.md](./docs/BACKEND_ARCHITECTURE.md)** | Architecture complète |
-| **[SYNTHESE_COMPLETE.md](./SYNTHESE_COMPLETE.md)** | Vue d'ensemble du projet |
-
-### 🔧 Backend
-
-| Document | Description |
-|----------|-------------|
-| **[backend/README.md](./backend/README.md)** | Vue d'ensemble backend |
-| **[backend/docs/README.md](./backend/docs/README.md)** | Documentation API complète |
-| **[backend/docs/MIGRATION.md](./backend/docs/MIGRATION.md)** | SQLite → PostgreSQL |
-| **[backend/docs/DEPLOYMENT.md](./backend/docs/DEPLOYMENT.md)** | Déploiement production |
-
-### 🗺️ Navigation
-
-| Document | Description |
-|----------|-------------|
-| **[INDEX_DOCUMENTATION.md](./INDEX_DOCUMENTATION.md)** | Index complet de la documentation |
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────┐
-│   Frontend (Port 5173)      │
-│   - React + Vite            │
-│   - MapLibre GL             │
-│   - Tailwind CSS            │
-└─────────────┬───────────────┘
-              │ HTTP/REST
-              ↓
-┌─────────────────────────────┐
-│   Backend (Port 3001)       │
-│   - Express.js              │
-│   - Prisma ORM              │
-│   - TypeScript              │
-└─────────────┬───────────────┘
-              │ SQL
-              ↓
-┌─────────────────────────────┐
-│   Database                  │
-│   - SQLite (dev)            │
-│   - PostgreSQL (prod)       │
-└─────────────────────────────┘
-```
-
----
-
-## 🔌 API REST
-
-### Endpoints Configs
-
-- `GET /api/configs` - Liste des configurations
-- `GET /api/configs/:slug` - Configuration spécifique
-- `POST /api/configs` - Créer une config
-- `PUT /api/configs/:slug` - Modifier une config
-- `DELETE /api/configs/:slug` - Supprimer une config
-
-### Endpoints GeoJSON
-
-- `GET /api/geojson` - Liste des fichiers GeoJSON
-- `GET /api/geojson/:id` - Fichier par ID
-- `GET /api/geojson/by-path/:path` - Fichier par chemin
-- `POST /api/geojson` - Créer un fichier
-- `PUT /api/geojson/:id` - Modifier un fichier
-- `DELETE /api/geojson/:id` - Supprimer un fichier
-
-**Documentation complète :** [backend/docs/README.md](./backend/docs/README.md)
-
----
-
-## 🛠️ Scripts disponibles
-
-### Backend
-
-```bash
-cd backend
-npm run dev              # Serveur développement
-npm run build            # Build production
-npm start                # Démarrer en production
-npm run seed             # Importer données depuis public/
-npm run prisma:studio    # Interface DB graphique
-npm run prisma:migrate:dev      # Créer migration
-npm run migrate:sqlite-to-pg    # Migrer vers PostgreSQL
-```
+## 🛠️ Scripts principaux
 
 ### Frontend
-
 ```bash
-npm run dev              # Serveur développement
-npm run build            # Build production
-npm run preview          # Preview build
+cd frontend
+npm run dev        # Développement
+npm run build      # Build production
+npm run preview    # Preview build
+npm run lint       # Vérifier code
 ```
 
----
-
-## 🗄️ Base de données
-
-### Développement (SQLite)
-
-La base de données `dev.db` est créée automatiquement dans `backend/`.
-
+### Backend
 ```bash
 cd backend
-npm run prisma:studio  # Interface graphique
+npm run dev        # Développement
+npm run build      # Build production
+npm start          # Lancer prod
+npm run prisma:generate      # Générer client Prisma
+npm run prisma:migrate:dev   # Créer migration
+npm run prisma:studio        # UI base de données
+npm run seed                 # Insérer données test
 ```
 
-### Production (PostgreSQL)
+## 💾 Base de données
 
-Voir [backend/docs/MIGRATION.md](./backend/docs/MIGRATION.md) pour migrer vers PostgreSQL.
+- **Développement** : SQLite (fichier `backend/prisma/dev.db`)
+- **Production** : PostgreSQL (sur Render)
 
----
+Gérée par Prisma - **pas d'SQL à écrire !**
 
 ## 🌐 Déploiement
 
-### Backend
+- **Frontend** : Vercel (gratuit, 1 clic)
+- **Backend** : Render (gratuit, 5 min)
+- **Database** : PostgreSQL Render (5GB gratuit)
 
-**Options recommandées :**
-1. **Railway** - PostgreSQL + Node.js en un clic
-2. **Render** - Alternative gratuite
-3. **VPS** - Contrôle total (Ubuntu + PM2 + Nginx)
+**Guide complet** → [docs/DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md)
 
-**Guide complet :** [backend/docs/DEPLOYMENT.md](./backend/docs/DEPLOYMENT.md)
+## 📖 Documentation complète
 
-### Frontend
+Tous les guides sont dans `docs/` avec 15+ fichiers couvrant :
+- Installation complète
+- Déploiement Vercel + Render
+- Gestion base de données
+- Troubleshooting & erreurs
+- Explications technologies
+- Checklist avant production
 
-**Options recommandées :**
-1. **Vercel** - Déploiement automatique depuis GitHub
-2. **Netlify** - Alternative populaire
-3. **CDN** - Pour grandes applications
+## 🆘 Problème ?
 
-**Configuration :** Ajouter `VITE_API_URL=https://votre-backend.com/api`
+1. Consultez [docs/GUIDES_INDEX.md](./docs/GUIDES_INDEX.md)
+2. ou cherchez votre erreur dans les docs
 
----
-
-## 🔧 Configuration
-
-### Backend (.env)
-
-```env
-DATABASE_URL=file:./dev.db
-PORT=3001
-NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
-```
-
-### Frontend (.env)
-
-```env
-VITE_API_URL=http://localhost:3001/api
-```
-
----
-
-## 📦 Technologies
-
-### Frontend
-- React 18
-- TypeScript
-- Vite
-- MapLibre GL
-- Tailwind CSS
-
-### Backend
-- Node.js 20+
-- Express.js
-- Prisma ORM
-- TypeScript
-- Zod (validation)
-
-### Base de données
-- SQLite (développement)
-- PostgreSQL (production)
-
----
-
-## 🐛 Troubleshooting
-
-### Backend ne démarre pas
-
-```bash
-cd backend
-rm -rf node_modules package-lock.json
-npm install
-npm run prisma:generate
-rm -rf prisma/migrations
-npx prisma migrate dev --name init
-npm run seed
-```
-
-### Frontend ne se connecte pas à l'API
-
-1. Vérifier que le backend tourne : `curl http://localhost:3001/health`
-2. Vérifier `VITE_API_URL` dans `.env`
-3. Vider le cache du navigateur (Ctrl+Shift+R)
-
-### Erreur CORS
-
-Vérifier `backend/.env` :
-```env
-FRONTEND_URL=http://localhost:5173
-```
-
-Redémarrer le backend.
-
-### Base de données vide
-
-```bash
-cd backend
-npm run seed
-```
-
----
-
-## 🎓 Apprendre
-
-- **Première fois avec backend + BDD ?** → [COMMENT_CA_MARCHE.md](./COMMENT_CA_MARCHE.md)
-- **Comprendre l'architecture ?** → [docs/BACKEND_ARCHITECTURE.md](./docs/BACKEND_ARCHITECTURE.md)
-- **Déployer en prod ?** → [backend/docs/DEPLOYMENT.md](./backend/docs/DEPLOYMENT.md)
-
----
-
-## 🤝 Contribution
-
-1. Fork le projet
-2. Créer une branche (`git checkout -b feature/amazing`)
-3. Commit (`git commit -m 'Add amazing feature'`)
-4. Push (`git push origin feature/amazing`)
-5. Ouvrir une Pull Request
-
----
-
-## 📄 License
-
-MIT
-
----
-
-## 📞 Support
-
-En cas de problème :
-1. Consulter [INDEX_DOCUMENTATION.md](./INDEX_DOCUMENTATION.md)
-2. Vérifier les logs backend et frontend
-3. Utiliser Prisma Studio pour vérifier les données
-
----
-
-**Prêt à commencer ?** → [DEMARRAGE_RAPIDE.md](./DEMARRAGE_RAPIDE.md) 🚀
+Bonne chance ! 🚀
