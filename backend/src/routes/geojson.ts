@@ -64,7 +64,7 @@ router.get('/:id', async (req, res, next) => {
 router.get('/by-path/*', async (req, res, next) => {
   try {
     // Extract full path after /by-path/
-    const path = req.params[0];
+    const path = (req.params as any)[0] as string;
     
     const geojson = await prisma.geoJSON.findUnique({
       where: { path }

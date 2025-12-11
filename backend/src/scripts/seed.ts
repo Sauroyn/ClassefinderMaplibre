@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { existsSync } from 'fs';
 
 const prisma = new PrismaClient();
 
@@ -56,15 +57,32 @@ function cleanConfigPaths(configData: any): any {
 async function seed() {
   console.log('🌱 Starting seed...');
 
-  // Path to public directory
-  const publicDir = path.join(__dirname, '../../../public');
+  // Path to public directory - try multiple locations
+  let publicDir = path.join(__dirname, '../../../public');
+  
+  // If not found, try frontend/public
+  if (!existsSync(publicDir)) {
+    publicDir = path.join(__dirname, '../../../frontend/public');
+  }
+  
+  // If still not found, skip seeding (manual import needed)
+  if (!existsSync(publicDir)) {
+    console.log('⚠️  Public directory not found. Skipping automatic seed.');
+    console.log('📝 You can manually import configs via the API later.');
+    return;
+  }
+  
   const configsDir = path.join(publicDir, 'configs');
   const geojsonDir = path.join(publicDir, 'geojson');
 
   try {
     // 1. Seed Configs
     console.log('\n📋 Seeding configs...');
-    const configFiles = await fs.readdir(configsDir);
+    
+    if (!existsSync(configsDir)) {
+      console.log('⚠️  Configs directory not found. Skipping configs seed.');
+    } else {
+      const configFiles = await fs.readdir(configsDir);
     
     for (const file of configFiles) {
       if (!file.endsWith('.json')) continue;
@@ -94,10 +112,14 @@ async function seed() {
       
       console.log(`  ✅ ${name}`);
     }
+    }
 
     // 2. Seed GeoJSON files
     console.log('\n🗺️  Seeding GeoJSON files...');
     
+    if (!existsSync(geojsonDir)) {
+      console.log('⚠️  GeoJSON directory not found. Skipping GeoJSON seed.');
+    } else {
     async function processDirectory(dirPath: string, relativePath: string = '') {
       const items = await fs.readdir(dirPath, { withFileTypes: true });
       
@@ -135,6 +157,7 @@ async function seed() {
     }
     
     await processDirectory(geojsonDir);
+    }
 
     console.log('\n✨ Seed completed successfully!');
     
