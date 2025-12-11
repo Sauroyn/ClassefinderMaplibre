@@ -39,6 +39,10 @@
     "@reach/portal": {
       "react": "^18.2.0",
       "react-dom": "^18.2.0"
+    },
+    "@xstate/react": {
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0"
     }
   }
 }
