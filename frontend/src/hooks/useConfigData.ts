@@ -244,12 +244,6 @@ function resolveBuildingEntries(config: any): Array<{
     }]
 }
 
-function buildPublicUrl(base: string, relativePath: string): string {
-    if (/^https?:/i.test(relativePath)) return relativePath
-    const clean = relativePath.replace(/^\//, '')
-    return `${base}${clean}`
-}
-
 function ensureFeatureCollection(payload: any): GeoJSON.FeatureCollection {
     if (payload && payload.type === 'FeatureCollection' && Array.isArray(payload.features)) {
         return payload
