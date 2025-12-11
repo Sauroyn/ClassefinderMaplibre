@@ -35,5 +35,10 @@
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.2"
   },
-  "overrides": {}
+  "overrides": {
+    "@reach/portal": {
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0"
+    }
+  }
 }
