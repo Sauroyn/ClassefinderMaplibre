@@ -14,11 +14,13 @@ import { addInteractions } from '../map/interactions'
 import { fitBoundsSmart } from '../map/viewport'
 import { haversine } from '../map/measure'
 import { normalizeFeatureCollection } from '../utils/featureNormalization'
-import { deriveDarkColor } from '../utils/colors'
+import { deriveDarkColor, shiftColor } from '../utils/colors'
 import { STORAGE_KEYS } from '../utils/storage'
 import { removeLayer, removeSource, getLayersWithPrefix, getSourcesWithPrefix, setFeatureState, setFilter } from '../utils/mapHelpers'
 import { getFeatureBounds } from '../utils/geometryBounds'
 import { getMapStyleUrl } from '../utils/mapStyles'
+import { configsAPI, configNameToSlug } from '../utils/api'
+import { FeatureHighlightController } from './map/FeatureHighlightController'
 
 type Props = { 
     data: any | null, 
@@ -174,24 +176,43 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
             try {
                 const sel = (typeof window !== 'undefined') ? (localStorage.getItem(STORAGE_KEYS.CONFIG_FILE) || null) : null
                 if (sel) {
+                    const slug = configNameToSlug(sel)
+                    // Try API first (DB-backed configs)
                     try {
-                        const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
-                        const r = await fetch(base + 'configs/' + sel)
-                        if (r.ok) {
-                            const parsed = await r.json()
-                            if (Array.isArray(parsed.initialCenter) && parsed.initialCenter.length === 2) center = [parsed.initialCenter[0], parsed.initialCenter[1]]
-                            if (typeof parsed.initialZoom === 'number') zoom = parsed.initialZoom
-                            parsedConfigRef.current = {
-                                fillColor: parsed.fillColor || parsed.color || undefined,
-                                fillHeight: (typeof parsed.fillHeight === 'number') ? parsed.fillHeight : undefined,
-                                transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined,
-                                minZoom: (typeof parsed.minZoom === 'number') ? parsed.minZoom : undefined,
-                                maxZoom: (typeof parsed.maxZoom === 'number') ? parsed.maxZoom : undefined,
-                                labelMinZoom: (typeof parsed.labelMinZoom === 'number') ? parsed.labelMinZoom : undefined,
-                                labelZoomThreshold: (typeof parsed.labelZoomThreshold === 'number') ? parsed.labelZoomThreshold : undefined
-                            }
+                        const cfg = await configsAPI.get(slug)
+                        const parsed = cfg?.data || {}
+                        if (Array.isArray(parsed.initialCenter) && parsed.initialCenter.length === 2) center = [parsed.initialCenter[0], parsed.initialCenter[1]]
+                        if (typeof parsed.initialZoom === 'number') zoom = parsed.initialZoom
+                        parsedConfigRef.current = {
+                            fillColor: parsed.fillColor || parsed.color || undefined,
+                            fillHeight: (typeof parsed.fillHeight === 'number') ? parsed.fillHeight : undefined,
+                            transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined,
+                            minZoom: (typeof parsed.minZoom === 'number') ? parsed.minZoom : undefined,
+                            maxZoom: (typeof parsed.maxZoom === 'number') ? parsed.maxZoom : undefined,
+                            labelMinZoom: (typeof parsed.labelMinZoom === 'number') ? parsed.labelMinZoom : undefined,
+                            labelZoomThreshold: (typeof parsed.labelZoomThreshold === 'number') ? parsed.labelZoomThreshold : undefined
                         }
-                    } catch (e) { /* ignore fetch/parse errors */ }
+                    } catch {
+                        // Fallback to legacy static JSON for dev/local files
+                        try {
+                            const base = (import.meta.env && (import.meta.env.BASE_URL || '/'))
+                            const r = await fetch(base + 'configs/' + sel)
+                            if (r.ok) {
+                                const parsed = await r.json()
+                                if (Array.isArray(parsed.initialCenter) && parsed.initialCenter.length === 2) center = [parsed.initialCenter[0], parsed.initialCenter[1]]
+                                if (typeof parsed.initialZoom === 'number') zoom = parsed.initialZoom
+                                parsedConfigRef.current = {
+                                    fillColor: parsed.fillColor || parsed.color || undefined,
+                                    fillHeight: (typeof parsed.fillHeight === 'number') ? parsed.fillHeight : undefined,
+                                    transitionZoom: (typeof parsed.transitionZoom === 'number') ? parsed.transitionZoom : undefined,
+                                    minZoom: (typeof parsed.minZoom === 'number') ? parsed.minZoom : undefined,
+                                    maxZoom: (typeof parsed.maxZoom === 'number') ? parsed.maxZoom : undefined,
+                                    labelMinZoom: (typeof parsed.labelMinZoom === 'number') ? parsed.labelMinZoom : undefined,
+                                    labelZoomThreshold: (typeof parsed.labelZoomThreshold === 'number') ? parsed.labelZoomThreshold : undefined
+                                }
+                            }
+                        } catch { /* ignore fetch/parse errors */ }
+                    }
                 }
             } catch (e) { /* ignore localStorage errors */ }
 
@@ -308,14 +329,20 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         if (!map) return
                         // Clear previous highlight
                         if (uiHighlightIdRef.current != null) {
-                            setFeatureState(map, 'buildings', uiHighlightIdRef.current, { highlight: false })
+                            setFeatureState(map, 'buildings', uiHighlightIdRef.current, { highlight: false, highlightColor: null })
                         }
                         // Set new highlight
                         const raw = e?.detail
                         const n = parseInt(String(raw), 10)
                         const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
                         if (id != null) {
-                            setFeatureState(map, 'buildings', id, { highlight: true })
+                            try {
+                                const base = (map as any).__resolveFeatureColor ? (map as any).__resolveFeatureColor(id) : undefined
+                                const highlightColor = base ? shiftColor(base, -0.06) : undefined
+                                setFeatureState(map, 'buildings', id, { highlight: true, highlightColor })
+                            } catch {
+                                setFeatureState(map, 'buildings', id, { highlight: true })
+                            }
                             uiHighlightIdRef.current = id as number
                         } else {
                             uiHighlightIdRef.current = null
@@ -447,6 +474,39 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     // Use centralized color utility
                     return { ...cfg0, fillColor: deriveDarkColor(cfg0.fillColor) }
                 })()
+                const resolveFeatureColor = (id: number): string => {
+                    const fallback = '#3b82f6'
+                    const cfgColor = parsedConfigRef.current?.fillColor
+                    const themedCfg = (() => {
+                        if (!cfgColor) return undefined
+                        return theme === 'dark' ? deriveDarkColor(cfgColor) : cfgColor
+                    })()
+
+                    try {
+                        const matches = map.querySourceFeatures('buildings', { filter: ['==', ['id'], id] as any }) || []
+                        const feat = matches[0]
+                        const props = (feat && feat.properties) || {}
+                        const propColor = theme === 'dark' ? (props.darkColor || props.color) : (props.color || props.darkColor)
+                        return propColor || themedCfg || fallback
+                    } catch { }
+
+                    try {
+                        const d = latestDataRef.current
+                        if (d && d.features) {
+                            const found = d.features.find((f: any) => f.id === id || f.properties?.id === id)
+                            if (found && found.properties) {
+                                const propColor = theme === 'dark' ? (found.properties.darkColor || found.properties.color) : (found.properties.color || found.properties.darkColor)
+                                if (propColor) return propColor
+                            }
+                        }
+                    } catch { }
+
+                    return themedCfg || fallback
+                }
+
+                // expose resolver for downstream handlers
+                try { (map as any).__resolveFeatureColor = resolveFeatureColor } catch { }
+
                 addFillLayers(map, level, cfg, theme)
                 // Apply dynamic minZoom/maxZoom from config
                 if (parsedConfigRef.current?.minZoom !== undefined) {
@@ -467,7 +527,12 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     zoomThreshold: parsedConfigRef.current?.labelZoomThreshold ?? 17,
                     perBuilding: false
                 })
-                addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
+                addInteractions(map, { hovered: null, selected: null, selectedPrev: null }, {
+                    resolveColor: resolveFeatureColor,
+                    deriveHoverColor: (base) => shiftColor(base, 0.25),
+                    deriveHighlightColor: (base) => shiftColor(base, -0.15),
+                    deriveSelectedColor: (base) => shiftColor(base, 0.15)
+                })
                 initialized.current = true
             } catch (e) { console.warn('init map sources failed', e) }
         }
@@ -823,7 +888,14 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         perBuilding: false
                     })
 
-                    addInteractions(map, { hovered: null, selected: null, selectedPrev: null })
+                    addInteractions(map, { hovered: null, selected: null, selectedPrev: null }, {
+                        resolveColor: (id) => {
+                            try { return (map as any).__resolveFeatureColor ? (map as any).__resolveFeatureColor(id) : undefined } catch { return undefined }
+                        },
+                        deriveHoverColor: (base) => shiftColor(base, 0.25),
+                        deriveHighlightColor: (base) => shiftColor(base, -0.15),
+                        deriveSelectedColor: (base) => shiftColor(base, 0.15)
+                    })
                     // Restore previously drawn route layers/sources (lost during style swap)
                     try {
                         const levelNow = (map as any).__currentLevel ?? level
@@ -960,6 +1032,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         ) : (
             <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
         )}
+        <FeatureHighlightController mapRef={mapRef} theme={theme} />
         
         {/* Location lock overlay - show perimeter and user position when needed */}
         {lockState && (

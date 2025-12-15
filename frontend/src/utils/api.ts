@@ -3,7 +3,16 @@
  * Handles all HTTP requests to the backend server
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+let API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
+
+// Normalize once: keep provided path as-is if it already contains /api (with or without trailing slash)
+// to avoid duplicating the segment when env already provides it.
+const hasApiSegment = /\/api(\b|\/)/.test(API_BASE_URL)
+if (hasApiSegment) {
+  API_BASE_URL = API_BASE_URL.replace(/\/+$/, '')
+} else {
+  API_BASE_URL = API_BASE_URL.replace(/\/+$/, '') + '/api'
+}
 
 /**
  * Helper to convert old config name (e.g., "Le Mans univ multi.json") to slug
@@ -109,9 +118,21 @@ export const geojsonAPI = {
   },
 
   async getByPath(path: string): Promise<GeoJSONData> {
-    const response = await fetch(`${API_BASE_URL}/geojson/by-path/${path}`);
-    if (!response.ok) throw new Error(`Failed to fetch geojson by path: ${path}`);
-    return response.json();
+    const apiUrl = `${API_BASE_URL}/geojson/by-path/${path}`;
+    const response = await fetch(apiUrl);
+    if (response.ok) return response.json();
+
+    // Fallback to static public asset when not in DB (dev/local or legacy files)
+    const prefix = (import.meta.env && (import.meta.env.BASE_URL || '/'));
+    const assetUrl = path.startsWith('/') ? `${prefix}${path.slice(1)}` : `${prefix}${path}`;
+    try {
+      const res2 = await fetch(assetUrl);
+      if (!res2.ok) throw new Error(`Failed to fetch geojson asset: ${assetUrl}`);
+      const data = await res2.json();
+      return { id: 'static', path, name: path, folder: '', data } as any;
+    } catch (e) {
+      throw new Error(`Failed to fetch geojson by path: ${path}`);
+    }
   },
 
   async create(path: string, name: string, folder: string, data: GeoJSON.FeatureCollection): Promise<GeoJSONData> {

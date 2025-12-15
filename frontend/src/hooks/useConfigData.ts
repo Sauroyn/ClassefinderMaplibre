@@ -128,11 +128,13 @@ async function loadBuildingCollections(config: any): Promise<{ combinedData: Geo
             // Use API to fetch GeoJSON by path
             const geojsonPath = entry.geojson && typeof entry.geojson === 'string'
                 ? entry.geojson
-                : 'buildings.geojson'
+                : (entry as any).path && typeof (entry as any).path === 'string'
+                    ? (entry as any).path
+                    : 'buildings.geojson'
             
             const geojsonData = await geojsonAPI.getByPath(geojsonPath)
             const fc = ensureFeatureCollection(geojsonData.data)
-            annotatedCollections.push({ entry, data: annotateFeatures(fc, entry.id, entry.label) })
+            annotatedCollections.push({ entry, data: annotateFeatures(fc, entry.id, entry.label, entry.fillColor, entry.fillHeight) })
         } catch (err) {
             console.warn(`[useConfigData] unable to load building geojson for ${entry.id}`, err)
         }
@@ -183,6 +185,8 @@ function resolveBuildingEntries(config: any): Array<{
     defaultLevels?: string[] | null
     defaultTags?: string[]
     activeTags?: string[]
+    fillColor?: string
+    fillHeight?: number
 }> {
     // Cas 1: buildings array explicite
     if (Array.isArray(config?.buildings) && config.buildings.length > 0) {
@@ -199,26 +203,42 @@ function resolveBuildingEntries(config: any): Array<{
                 : [],
             activeTags: Array.isArray(entry.activeTags)
                 ? entry.activeTags.map((tag: any) => String(tag).toLowerCase().trim())
-                : (Array.isArray(config.activeTags) ? config.activeTags.map((t: any) => String(t).toLowerCase().trim()) : [])
+                : (Array.isArray(config.activeTags) ? config.activeTags.map((t: any) => String(t).toLowerCase().trim()) : []),
+            fillColor: entry.fillColor || entry.color || config.fillColor || config.color || undefined,
+            fillHeight: typeof entry.fillHeight === 'number' ? entry.fillHeight : (typeof config.fillHeight === 'number' ? config.fillHeight : undefined)
         }))
     }
 
-    // Cas 2: geojson array simple ["file1.geojson", "file2.geojson"]
+    // Cas 2: geojson array simple ou objets { path, fillColor, fillHeight }
     if (Array.isArray(config?.geojson) && config.geojson.length > 0) {
         const globalActiveTags = Array.isArray(config.activeTags)
             ? config.activeTags.map((t: any) => String(t).toLowerCase().trim())
             : []
+        const globalFillColor = config.fillColor || config.color || undefined
+        const globalFillHeight = typeof config.fillHeight === 'number' ? config.fillHeight : undefined
 
-        return config.geojson.map((filePath: any, index: number) => {
-            const fileName = String(filePath).split('/').pop()?.replace('.geojson', '') || `building-${index}`
+        return config.geojson.map((fileEntry: any, index: number) => {
+            const path = typeof fileEntry === 'string'
+                ? fileEntry
+                : (fileEntry?.path || fileEntry?.geojson || fileEntry?.file || fileEntry?.url || '')
+
+            const fileName = String(path || `building-${index}`).split('/').pop()?.replace('.geojson', '') || `building-${index}`
             return {
-                id: `building-${index}`,
-                label: fileName.charAt(0).toUpperCase() + fileName.slice(1),
-                geojson: String(filePath),
-                defaultVisible: true,
-                defaultLevels: null,
-                defaultTags: [],
-                activeTags: globalActiveTags
+                id: fileEntry?.id || `building-${index}`,
+                label: fileEntry?.label || fileEntry?.name || fileName.charAt(0).toUpperCase() + fileName.slice(1),
+                geojson: String(path),
+                defaultVisible: fileEntry?.defaultVisible !== false,
+                defaultLevels: Array.isArray(fileEntry?.defaultLevels)
+                    ? fileEntry.defaultLevels.map((lvl: any) => String(lvl))
+                    : null,
+                defaultTags: Array.isArray(fileEntry?.defaultTags)
+                    ? fileEntry.defaultTags.map((tag: any) => String(tag))
+                    : [],
+                activeTags: Array.isArray(fileEntry?.activeTags)
+                    ? fileEntry.activeTags.map((tag: any) => String(tag).toLowerCase().trim())
+                    : globalActiveTags,
+                fillColor: fileEntry?.fillColor || fileEntry?.color || globalFillColor,
+                fillHeight: typeof fileEntry?.fillHeight === 'number' ? fileEntry.fillHeight : globalFillHeight
             }
         })
     }
@@ -240,7 +260,9 @@ function resolveBuildingEntries(config: any): Array<{
         defaultVisible: true,
         defaultLevels: null,
         defaultTags: [],
-        activeTags: globalActiveTags
+        activeTags: globalActiveTags,
+        fillColor: config.fillColor || config.color || undefined,
+        fillHeight: typeof config.fillHeight === 'number' ? config.fillHeight : undefined
     }]
 }
 
@@ -251,7 +273,7 @@ function ensureFeatureCollection(payload: any): GeoJSON.FeatureCollection {
     return { type: 'FeatureCollection', features: [] }
 }
 
-function annotateFeatures(collection: GeoJSON.FeatureCollection, buildingId: string, buildingLabel: string): GeoJSON.FeatureCollection {
+function annotateFeatures(collection: GeoJSON.FeatureCollection, buildingId: string, buildingLabel: string, fillColor?: string, fillHeight?: number): GeoJSON.FeatureCollection {
     // Essayer de détecter le nom du bâtiment depuis les features elles-mêmes
     let detectedBuildingName: string | null = null
     for (const feature of collection.features) {
@@ -293,6 +315,10 @@ function annotateFeatures(collection: GeoJSON.FeatureCollection, buildingId: str
         // Toujours ajouter les propriétés internes
         newProps.__buildingId = buildingId
         newProps.__buildingLabel = finalLabel
+
+        // Appliquer color et height par fichier si fournis (sans écraser propriétés existantes)
+        if (fillColor && !props.color) newProps.color = fillColor
+        if (typeof fillHeight === 'number' && !props.height) newProps.height = fillHeight
 
         // S'assurer que la feature a une géométrie valide
         if (!feature.geometry || !feature.geometry.type) {

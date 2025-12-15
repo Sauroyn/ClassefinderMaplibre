@@ -19,9 +19,9 @@ export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColo
             paint: {
                 'fill-extrusion-color': [
                     'case',
-                    ['boolean', ['feature-state', 'highlight'], false], '#ff6b35',
-                    ['boolean', ['feature-state', 'hover'], false], '#ffcc00',
-                    ['boolean', ['feature-state', 'selected'], false], '#ffcc00',
+                    ['boolean', ['feature-state', 'highlight'], false], ['coalesce', ['feature-state', 'highlightColor'], '#ff6b35'],
+                    ['boolean', ['feature-state', 'hover'], false], ['coalesce', ['feature-state', 'hoverColor'], '#ffcc00'],
+                    ['boolean', ['feature-state', 'selected'], false], ['coalesce', ['feature-state', 'selectedColor'], '#ffcc00'],
                     defaultColorExpr
                 ],
                 'fill-extrusion-height': heightExpr,
@@ -41,9 +41,9 @@ export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColo
             paint: {
                 'fill-color': [
                     'case',
-                    ['boolean', ['feature-state', 'highlight'], false], '#ff6b35',
-                    ['boolean', ['feature-state', 'hover'], false], '#ffcc00',
-                    ['boolean', ['feature-state', 'selected'], false], '#ffcc00',
+                    ['boolean', ['feature-state', 'highlight'], false], ['coalesce', ['feature-state', 'highlightColor'], '#ff6b35'],
+                    ['boolean', ['feature-state', 'hover'], false], ['coalesce', ['feature-state', 'hoverColor'], '#ffcc00'],
+                    ['boolean', ['feature-state', 'selected'], false], ['coalesce', ['feature-state', 'selectedColor'], '#ffcc00'],
                     defaultColorExpr
                 ],
                 'fill-opacity': ['interpolate', ['linear'], ['zoom'], tz - 0.5, 0, tz, 0.9]

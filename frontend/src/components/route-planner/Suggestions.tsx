@@ -16,7 +16,7 @@ export default function Suggestions(props: {
     focusedField: 'start' | 'end' | null,
     startQuery: string,
     endQuery: string,
-    nodeOptions: Array<{ id: string, name: string, level?: string, provisional?: boolean, featureIndex?: number }>,
+    nodeOptions: Array<{ id: string, name: string, level?: string, provisional?: boolean, featureIndex?: number, searchKey?: string }>,
     onSelectStart: (id: string, name: string) => void,
     onSelectEnd: (id: string, name: string) => void,
     onRequestGroup?: (field: 'start' | 'end', name: string, items: Array<{ id: string, name: string, level?: string }>) => void,
@@ -84,7 +84,8 @@ export default function Suggestions(props: {
     }
 
     if (focusedField === 'start') {
-        const list = nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((startQuery || '').toLowerCase()))
+        const q = (startQuery || '').toLowerCase()
+        const list = nodeOptions.filter(n => (n.searchKey || (n.name || n.id).toLowerCase()).includes(q))
 
         // Group ALL items by lowercased name (provisional or not)
         const groupedMap = new Map<string, typeof list>()
@@ -143,7 +144,8 @@ export default function Suggestions(props: {
     }
 
     if (focusedField === 'end') {
-        const list = nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((endQuery || '').toLowerCase()))
+        const q = (endQuery || '').toLowerCase()
+        const list = nodeOptions.filter(n => (n.searchKey || (n.name || n.id).toLowerCase()).includes(q))
 
         // Group ALL items by lowercased name (provisional or not)
         const groupedMap = new Map<string, typeof list>()

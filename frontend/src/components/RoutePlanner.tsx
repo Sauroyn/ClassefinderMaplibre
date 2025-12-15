@@ -91,10 +91,12 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                     const opts = g.nodes.map((n: any) => {
                         // Utiliser l'alias si disponible pour les nodes du graphe
                         const alias = getAlias(n.id)
+                        const name = alias ? alias.aliasName : (n.name || String(n.id))
                         return {
                             id: String(n.id),
-                            name: alias ? alias.aliasName : (n.name || String(n.id)),
-                            level: n.level != null ? String(n.level) : undefined
+                            name,
+                            level: n.level != null ? String(n.level) : undefined,
+                            searchKey: String(name || n.id).toLowerCase()
                         }
                     })
 
@@ -124,7 +126,8 @@ export default function RoutePlanner({ mapRef, data, initialDestination, initial
                                 name,
                                 level: level != null ? String(level) : undefined,
                                 provisional: true,
-                                featureIndex: i
+                                featureIndex: i,
+                                searchKey: String(name).toLowerCase()
                             } as any)
                             // Don't add to nodeNames - allow duplicates for grouped selection
                         }

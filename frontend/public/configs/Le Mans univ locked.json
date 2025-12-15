@@ -8,8 +8,16 @@
     "initialZoom": 16,
     "minZoom": 14,
     "geojson": [
-        "geojson/LeMansUniv/ESGT.geojson",
-        "geojson/LeMansUniv/IRA.geojson"
+        {
+            "path": "geojson/LeMansUniv/ESGT.geojson",
+            "fillColor": "#ffffff",
+            "fillHeight": 10
+        },
+        {
+            "path": "geojson/LeMansUniv/IRA.geojson",
+            "fillColor": "#ffffff",
+            "fillHeight": 10
+        }
     ],
     "graphGeojson": "geojson/LeMansUniv/GrapheESGT.geojson",
     "fillColor": "#ffffff",

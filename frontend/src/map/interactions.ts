@@ -1,16 +1,35 @@
 import maplibre from 'maplibre-gl'
 import { fitBoundsSmart } from './viewport'
 
-export function addInteractions(map: maplibre.Map, refs: any) {
+export function addInteractions(map: maplibre.Map, refs: any, opts?: {
+    resolveColor?: (id: number) => string | null | undefined,
+    deriveHoverColor?: (base: string) => string,
+    deriveHighlightColor?: (base: string) => string,
+    deriveSelectedColor?: (base: string) => string,
+}) {
+    const resolveBaseColor = (id: number | null): string | undefined => {
+        if (id == null || !opts?.resolveColor) return undefined
+        try { return opts.resolveColor(id) || undefined } catch { return undefined }
+    }
+
     function setHover(id: number | null) {
         if (refs.hovered === id) return
-        if (refs.hovered != null) try { map.setFeatureState({ source: 'buildings', id: refs.hovered }, { hover: false }) } catch (e) { }
-        if (id != null) try { map.setFeatureState({ source: 'buildings', id }, { hover: true }) } catch (e) { }
+        if (refs.hovered != null) try { map.setFeatureState({ source: 'buildings', id: refs.hovered }, { hover: false, hoverColor: null }) } catch (e) { }
+        if (id != null) {
+            const base = resolveBaseColor(id)
+            const hoverColor = base ? (opts?.deriveHoverColor ? opts.deriveHoverColor(base) : base) : undefined
+            try { map.setFeatureState({ source: 'buildings', id }, { hover: true, hoverColor }) } catch (e) { }
+        }
         refs.hovered = id
     }
     function setSelected(id: number | null) {
-        if (refs.selectedPrev != null) try { map.setFeatureState({ source: 'buildings', id: refs.selectedPrev }, { selected: false }) } catch (e) { }
-        if (id != null) try { map.setFeatureState({ source: 'buildings', id }, { selected: true }) } catch (e) { }
+        if (refs.selectedPrev != null) try { map.setFeatureState({ source: 'buildings', id: refs.selectedPrev }, { selected: false, selectedColor: null, highlight: false, highlightColor: null }) } catch (e) { }
+        if (id != null) {
+            const base = resolveBaseColor(id)
+            const selectedColor = base ? (opts?.deriveSelectedColor ? opts.deriveSelectedColor(base) : base) : undefined
+            const highlightColor = base ? (opts?.deriveHighlightColor ? opts.deriveHighlightColor(base) : selectedColor) : undefined
+            try { map.setFeatureState({ source: 'buildings', id }, { selected: true, selectedColor, highlight: true, highlightColor }) } catch (e) { }
+        }
         refs.selectedPrev = id
     }
 

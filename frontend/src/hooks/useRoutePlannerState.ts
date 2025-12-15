@@ -57,7 +57,7 @@ export type RoutePlannerState = {
 
     // Suggestions & Menus
     suggestions: {
-        nodeOptions: Array<{ id: string; name: string; level?: string }>
+        nodeOptions: Array<{ id: string; name: string; level?: string; searchKey?: string }>
         groupMenuField: 'start' | 'end' | null
         groupMenuTitle: string
         groupMenuItems: Array<{ id: string; name: string; level?: string }>

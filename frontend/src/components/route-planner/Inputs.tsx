@@ -1,6 +1,6 @@
 import { Xmark, LocationArrow, MapPin } from '@gravity-ui/icons'
 
-type NodeOption = { id: string, name: string }
+type NodeOption = { id: string, name: string, searchKey?: string }
 
 type Props = {
     startQuery: string
@@ -17,7 +17,8 @@ type Props = {
 
 export default function Inputs({ startQuery, endQuery, setStartQuery, setEndQuery, onPickStart, onPickEnd, onClearStart, onClearEnd, nodeOptions, setFocusedField }: Props) {
     const tryPickSingle = (query: string, pick: (id: string, name: string) => void) => {
-        const list = nodeOptions.filter(n => (n.name || n.id).toLowerCase().includes((query || '').toLowerCase()))
+        const q = (query || '').toLowerCase()
+        const list = nodeOptions.filter(n => (n.searchKey || (n.name || n.id).toLowerCase()).includes(q))
         if (list.length === 1) { const n = list[0]; pick(n.id, n.name || String(n.id)); setFocusedField(null) }
     }
     return (
