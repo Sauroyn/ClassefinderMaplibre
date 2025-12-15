@@ -14,6 +14,7 @@ import { useConfigData, type BuildingFiltersState, type BuildingFilterSettings, 
 import { useTheme } from './hooks/useTheme'
 import { useSettingsDraft } from './hooks/useSettingsDraft'
 import { useLocationLock } from './hooks/useLocationLock'
+import { useSharedUserPosition } from './hooks/useSharedUserPosition'
 import { ICAL_URL_KEY, TRAVEL_BUFFER_MIN_KEY, EVENTS_ENABLED_KEY } from './utils/storageKeys'
 import { STORAGE_KEYS } from './utils/storage'
 
@@ -84,10 +85,17 @@ function sanitizeFilterForMeta(filter: BuildingFilterSettings, meta?: BuildingMe
 
 export default function App() {
   const [buildingFilters, setBuildingFilters] = useState<BuildingFiltersState>(() => loadStoredBuildingFilters())
-  const { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig, rawConfig } = useConfigData(buildingFilters)
+  
+  // Track GeolocateControl for shared position
+  const [geolocateControl, setGeolocateControl] = useState<any>(null)
+  const sharedUserPosition = useSharedUserPosition(geolocateControl)
+  
+  // Pass userPosition to useConfigData so it can be sent to the API for location lock verification
+  const { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig, rawConfig } = useConfigData(buildingFilters, sharedUserPosition)
   
   // Location lock hook - check if user is in allowed perimeter
-  const lockState = useLocationLock(rawConfig)
+  // Pass sharedUserPosition so it uses the button's position instead of requesting again
+  const lockState = useLocationLock(rawConfig, sharedUserPosition)
   
   // Block data access if location lock is active and user is not inside
   const shouldBlockData = rawConfig?.locationLock && lockState.status !== 'inside' && lockState.status !== 'idle'
@@ -307,6 +315,7 @@ export default function App() {
         lockState={lockState}
         perimeterCenter={rawConfig?.perimeterCenter}
         perimeterRadius={rawConfig?.perimeterRadius}
+        onGeolocateControlReady={setGeolocateControl}
       />
       {showPlanner && <RoutePlanner
         mapRef={mapRef}

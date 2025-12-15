@@ -32,12 +32,14 @@ type Props = {
     onThemeChange?: (t: ThemeMode) => void,
     lockState?: LocationLockState,
     perimeterCenter?: [number, number],
-    perimeterRadius?: number
+    perimeterRadius?: number,
+    onGeolocateControlReady?: (control: any) => void
 }
 
-export default forwardRef(function MapView({ data, level, theme = 'light', themeMode, onThemeChange, lockState, perimeterCenter, perimeterRadius }: Props, ref) {
+export default forwardRef(function MapView({ data, level, theme = 'light', themeMode, onThemeChange, lockState, perimeterCenter, perimeterRadius, onGeolocateControlReady }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<maplibre.Map | null>(null)
+    const userGeolocateRef = useRef<any>(null)
     const latestDataRef = useRef<any | null>(null)
     const initialized = useRef(false)
     const initialCamera = useRef<any>(null)
@@ -54,6 +56,15 @@ export default forwardRef(function MapView({ data, level, theme = 'light', theme
     // Dynamic top for nav buttons (mobile): keep below level selector to avoid overlap
     const navBtnsTopRef = useRef<number | null>(null)
     const [navBtnsTopState, setNavBtnsTopState] = useState<number | null>(null)
+    // Notify parent when geolocate control is ready for location lock to use it
+    useEffect(() => {
+        if (userGeolocateRef.current && onGeolocateControlReady) {
+            const control = userGeolocateRef.current.getControl?.()
+            if (control) {
+                onGeolocateControlReady(control)
+            }
+        }
+    }, [onGeolocateControlReady])
     // Follow mode: stop following on user interactions with the map
     useEffect(() => {
         const map = mapRef.current
@@ -1072,7 +1083,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', theme
                 )}
             </>
         ) : (
-            <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={requestThemeToggle} />
+            <UserGeolocate ref={userGeolocateRef} map={mapRef.current} theme={theme} onToggleTheme={requestThemeToggle} />
         )}
         <FeatureHighlightController mapRef={mapRef} theme={theme} />
         

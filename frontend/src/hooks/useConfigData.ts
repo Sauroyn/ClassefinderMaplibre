@@ -23,7 +23,7 @@ export type BuildingMeta = {
 
 const DEFAULT_BUILDING_ID = 'default'
 
-export function useConfigData(buildingFilters?: BuildingFiltersState) {
+export function useConfigData(buildingFilters?: BuildingFiltersState, userPosition?: [number, number] | null) {
     const [levels, setLevels] = useState<number[]>([])
     const [level, setLevel] = useState<number>(0)
     const [loading, setLoading] = useState(true)
@@ -83,7 +83,7 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
                 setRawConfig(parsedConfig) // NEW: store raw config
             }
             try {
-                const { combinedData, meta } = await loadBuildingCollections(parsedConfig)
+                const { combinedData, meta } = await loadBuildingCollections(parsedConfig, userPosition)
                 if (cancelled) return
                 rawDataRef.current = combinedData
                 setBuildingsMeta(meta)
@@ -106,7 +106,7 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
         load()
         return () => { cancelled = true }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [userPosition])
 
     useEffect(() => {
         if (!rawDataRef.current) return
@@ -119,7 +119,7 @@ export function useConfigData(buildingFilters?: BuildingFiltersState) {
     return { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig, rawConfig }
 }
 
-async function loadBuildingCollections(config: any): Promise<{ combinedData: GeoJSON.FeatureCollection, meta: BuildingMeta[] }> {
+async function loadBuildingCollections(config: any, userPosition?: [number, number] | null): Promise<{ combinedData: GeoJSON.FeatureCollection, meta: BuildingMeta[] }> {
     const entries = resolveBuildingEntries(config)
     const annotatedCollections: Array<{ entry: typeof entries[number]; data: GeoJSON.FeatureCollection }> = []
 
@@ -132,7 +132,7 @@ async function loadBuildingCollections(config: any): Promise<{ combinedData: Geo
                     ? (entry as any).path
                     : 'buildings.geojson'
             
-            const geojsonData = await geojsonAPI.getByPath(geojsonPath)
+            const geojsonData = await geojsonAPI.getByPath(geojsonPath, userPosition)
             const fc = ensureFeatureCollection(geojsonData.data)
             annotatedCollections.push({ entry, data: annotateFeatures(fc, entry.id, entry.label, entry.fillColor, entry.fillHeight) })
         } catch (err) {

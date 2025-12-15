@@ -1,9 +1,13 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
+import { locationLockMiddleware } from '../middleware/locationLock';
 
 const router = Router();
 const prisma = new PrismaClient();
+
+// Apply location lock middleware to all geojson endpoints
+router.use(locationLockMiddleware);
 
 // Validation schema
 const geojsonSchema = z.object({

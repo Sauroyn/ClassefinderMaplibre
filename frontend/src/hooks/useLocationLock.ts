@@ -17,10 +17,12 @@ export type LocationLockState =
 
 /**
  * Hook to manage geographic location locking
- * Returns the current state and a function to check location
+ * - If userPosition is provided, uses it directly without re-requesting permission
+ * - Otherwise, requests user's geolocation when locationLock is enabled
  */
-export function useLocationLock(config: LocationLockConfig | null): LocationLockState {
+export function useLocationLock(config: LocationLockConfig | null, userPosition?: [number, number] | null): LocationLockState {
     const [state, setState] = useState<LocationLockState>({ status: 'idle' })
+    const [permissionDenied, setPermissionDenied] = useState(false)
 
     useEffect(() => {
         // If no config or locationLock is false, stay idle
@@ -37,6 +39,24 @@ export function useLocationLock(config: LocationLockConfig | null): LocationLock
 
         if (typeof config.perimeterRadius !== 'number' || config.perimeterRadius <= 0) {
             setState({ status: 'error', error: 'Invalid perimeterRadius configuration' })
+            return
+        }
+
+        // If userPosition is provided, use it directly
+        if (userPosition && Array.isArray(userPosition) && userPosition.length === 2) {
+            const distance = calculateDistance(userPosition, config.perimeterCenter)
+            if (distance <= config.perimeterRadius) {
+                setState({ status: 'inside', userPosition })
+            } else {
+                setState({ status: 'outside', userPosition })
+            }
+            return
+        }
+
+        // Otherwise, request position ourselves
+        // Check if permission was already denied to avoid re-requesting
+        if (permissionDenied) {
+            setState({ status: 'denied' })
             return
         }
 
@@ -62,12 +82,13 @@ export function useLocationLock(config: LocationLockConfig | null): LocationLock
             })
             .catch(error => {
                 if (error.code === error.PERMISSION_DENIED) {
+                    setPermissionDenied(true)
                     setState({ status: 'denied' })
                 } else {
                     setState({ status: 'error', error: error.message || 'Failed to get position' })
                 }
             })
-    }, [config])
+    }, [config, userPosition, permissionDenied])
 
     return state
 }

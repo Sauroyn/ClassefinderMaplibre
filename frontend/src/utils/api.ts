@@ -102,24 +102,36 @@ export const configsAPI = {
 
 // GeoJSON API
 export const geojsonAPI = {
-  async list(folder?: string): Promise<GeoJSONListItem[]> {
+  async list(folder?: string, userPosition?: [number, number] | null): Promise<GeoJSONListItem[]> {
     const url = folder 
       ? `${API_BASE_URL}/geojson?folder=${encodeURIComponent(folder)}`
       : `${API_BASE_URL}/geojson`;
-    const response = await fetch(url);
+    const headers: Record<string, string> = {};
+    if (userPosition) {
+      headers['x-user-position'] = `${userPosition[0]},${userPosition[1]}`;
+    }
+    const response = await fetch(url, { headers });
     if (!response.ok) throw new Error('Failed to fetch geojson list');
     return response.json();
   },
 
-  async get(id: string): Promise<GeoJSONData> {
-    const response = await fetch(`${API_BASE_URL}/geojson/${id}`);
+  async get(id: string, userPosition?: [number, number] | null): Promise<GeoJSONData> {
+    const headers: Record<string, string> = {};
+    if (userPosition) {
+      headers['x-user-position'] = `${userPosition[0]},${userPosition[1]}`;
+    }
+    const response = await fetch(`${API_BASE_URL}/geojson/${id}`, { headers });
     if (!response.ok) throw new Error(`Failed to fetch geojson: ${id}`);
     return response.json();
   },
 
-  async getByPath(path: string): Promise<GeoJSONData> {
+  async getByPath(path: string, userPosition?: [number, number] | null): Promise<GeoJSONData> {
+    const headers: Record<string, string> = {};
+    if (userPosition) {
+      headers['x-user-position'] = `${userPosition[0]},${userPosition[1]}`;
+    }
     const apiUrl = `${API_BASE_URL}/geojson/by-path/${path}`;
-    const response = await fetch(apiUrl);
+    const response = await fetch(apiUrl, { headers });
     if (response.ok) return response.json();
 
     // Fallback to static public asset when not in DB (dev/local or legacy files)

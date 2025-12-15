@@ -1,16 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react'
 import maplibre from 'maplibre-gl'
 import { LocationArrow, Sun, Moon } from '@gravity-ui/icons'
 
 type Props = { map?: maplibre.Map | null, theme?: 'light' | 'dark', onToggleTheme?: () => void }
 
+export type UserGeolocateRef = {
+    getControl: () => maplibre.GeolocateControl | null
+}
+
 /**
  * Desktop-only geolocate and theme toggle buttons.
  * Mobile version is handled by MobileControlsBar component.
  */
-const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme }) => {
+const UserGeolocate = forwardRef<UserGeolocateRef, Props>(function UserGeolocate({ map, theme = 'light', onToggleTheme }, ref) {
     const controlRef = useRef<maplibre.GeolocateControl | null>(null)
     const [top, setTop] = useState<number>(72)
+
+    // Expose control to parent via ref
+    useImperativeHandle(ref, () => ({
+        getControl: () => controlRef.current
+    }), [])
 
     // Install hidden geolocate control
     useEffect(() => {
@@ -115,6 +124,6 @@ const UserGeolocate: React.FC<Props> = ({ map, theme = 'light', onToggleTheme })
             </button>
         </>
     )
-}
+})
 
 export default UserGeolocate
