@@ -6,13 +6,14 @@ import CalendarSettings from './CalendarSettings'
 import RouteSettings from './RouteSettings'
 import BuildingSettings from './BuildingSettings'
 import type { BuildingFiltersState, BuildingFilterSettings, BuildingMeta } from '../../hooks/useConfigData'
+import type { ThemeMode } from '../../theme/colors'
 
 type Tab = 'general' | 'alias' | 'calendar' | 'route' | 'buildings'
 
 type Props = {
     // General settings
-    theme: 'light' | 'dark'
-    onChangeTheme: (t: 'light' | 'dark') => void
+    theme: ThemeMode
+    onChangeTheme: (t: ThemeMode) => void
     selectedConfig: string | null
     onChangeConfig: (config: string | null) => void
 

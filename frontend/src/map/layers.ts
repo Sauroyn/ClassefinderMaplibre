@@ -1,11 +1,16 @@
 import maplibre from 'maplibre-gl'
+import { createTagIconExpression } from './tagIcons'
 
 export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColor?: string, fillHeight?: number, transitionZoom?: number }, theme: 'light' | 'dark' = 'light') {
-    // determine default color expression: either a literal color from cfg or feature property 'color'
+    // determine default color expression: prioritize per-feature color, then config fallback
     const colorKey = theme === 'dark' ? 'darkColor' : 'color'
-    const defaultColorExpr: any = cfg && cfg.fillColor
-        ? (theme === 'dark' ? cfg.fillColor /* will be pre-derived in MapView */ : cfg.fillColor)
-        : ['case', ['has', colorKey], ['get', colorKey], ['has', 'color'], ['get', 'color'], '#3b82f6']
+    const configFallback = cfg?.fillColor || '#3b82f6'
+    const defaultColorExpr: any = [
+        'case',
+        ['has', colorKey], ['get', colorKey],
+        ['has', 'color'], ['get', 'color'],
+        configFallback
+    ]
     // determine base height: either cfg.fillHeight (uniform) or per-feature 'height'
     const baseHeightExpr: any = (cfg && typeof cfg.fillHeight === 'number') ? cfg.fillHeight : ['coalesce', ['get', 'height'], 3]
     // transition zoom at which extrusion collapses to 0 (defaults to 16)
@@ -58,8 +63,100 @@ export function addFillLayers(map: maplibre.Map, level: number, cfg?: { fillColo
     }
 }
 
-/**
- * @deprecated Utiliser FeatureLabels à la place (src/map/labels/FeatureLabels.ts)
+/** * Add point layers with intelligent icons based on tags
+ * Points with tags property will display appropriate icons
+ */
+export function addPointLayers(map: maplibre.Map, level: number, minZoom: number = 17) {
+    // Symbol layer for points with tags (icons)
+    if (!map.getLayer('points-icons')) {
+        map.addLayer({
+            id: 'points-icons',
+            type: 'symbol',
+            source: 'buildings',
+            layout: {
+                'icon-image': createTagIconExpression(),
+                'icon-size': 0.8,
+                'icon-allow-overlap': false,
+                'icon-ignore-placement': false,
+                'icon-anchor': 'center'
+            },
+            paint: {
+                'icon-opacity': ['interpolate', ['linear'], ['zoom'], minZoom - 0.5, 0, minZoom, 1]
+            },
+            filter: [
+                'all',
+                ['==', ['geometry-type'], 'Point'],
+                ['has', 'tags'],  // Only show points that have tags
+                [
+                    'any',
+                    ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                    ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
+                ]
+            ]
+        })
+    } else {
+        // Update filter for level change
+        map.setFilter('points-icons', [
+            'all',
+            ['==', ['geometry-type'], 'Point'],
+            ['has', 'tags'],
+            [
+                'any',
+                ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
+            ]
+        ] as any)
+    }
+
+    // Text labels for point tags (shown at higher zoom levels)
+    const labelMinZoom = minZoom + 1
+    if (!map.getLayer('points-labels')) {
+        map.addLayer({
+            id: 'points-labels',
+            type: 'symbol',
+            source: 'buildings',
+            layout: {
+                'text-field': ['get', 'tags'],
+                'text-size': 11,
+                'text-anchor': 'top',
+                'text-offset': [0, 1],
+                'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+                'text-allow-overlap': false,
+                'text-ignore-placement': false
+            },
+            paint: {
+                'text-color': '#1f2937',
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 2,
+                'text-opacity': ['interpolate', ['linear'], ['zoom'], labelMinZoom - 0.5, 0, labelMinZoom, 1]
+            },
+            filter: [
+                'all',
+                ['==', ['geometry-type'], 'Point'],
+                ['has', 'tags'],
+                [
+                    'any',
+                    ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                    ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
+                ]
+            ]
+        })
+    } else {
+        // Update filter for level change
+        map.setFilter('points-labels', [
+            'all',
+            ['==', ['geometry-type'], 'Point'],
+            ['has', 'tags'],
+            [
+                'any',
+                ['all', ['has', 'level'], ['==', ['get', 'level'], level]],
+                ['all', ['has', 'levels'], ['in', level, ['get', 'levels']]]
+            ]
+        ] as any)
+    }
+}
+
+/** * @deprecated Utiliser FeatureLabels à la place (src/map/labels/FeatureLabels.ts)
  * Cette fonction est maintenue pour compatibilité mais sera supprimée dans une future version
  */
 export function addNameLayer(map: maplibre.Map, level: number, theme: 'light' | 'dark' = 'light') {

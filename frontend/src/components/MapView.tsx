@@ -6,7 +6,8 @@ import LocationLockOverlay from './LocationLockOverlay'
 import { useNavigationActive } from '../hooks/useNavigationActive'
 import type { LocationLockState } from '../hooks/useLocationLock'
 import { addBuildingsSource, addCentroidsSource } from '../map/sources'
-import { addFillLayers } from '../map/layers'
+import { addFillLayers, addPointLayers } from '../map/layers'
+import { loadTagIcons } from '../map/tagIcons'
 import { createFeatureLabels, FeatureLabels } from '../map/labels/FeatureLabels'
 import { generateCentroids } from '../map/generateCentroids'
 import { addInteractions } from '../map/interactions'
@@ -21,18 +22,20 @@ import { getFeatureBounds } from '../utils/geometryBounds'
 import { getMapStyleUrl } from '../utils/mapStyles'
 import { configsAPI, configNameToSlug } from '../utils/api'
 import { FeatureHighlightController } from './map/FeatureHighlightController'
+import type { ThemeMode } from '../theme/colors'
 
 type Props = { 
     data: any | null, 
     level: number, 
     theme?: 'light' | 'dark', 
-    onThemeChange?: (t: 'light' | 'dark') => void,
+    themeMode?: ThemeMode,
+    onThemeChange?: (t: ThemeMode) => void,
     lockState?: LocationLockState,
     perimeterCenter?: [number, number],
     perimeterRadius?: number
 }
 
-export default forwardRef(function MapView({ data, level, theme = 'light', onThemeChange, lockState, perimeterCenter, perimeterRadius }: Props, ref) {
+export default forwardRef(function MapView({ data, level, theme = 'light', themeMode, onThemeChange, lockState, perimeterCenter, perimeterRadius }: Props, ref) {
     const container = useRef<HTMLDivElement | null>(null)
     const mapRef = useRef<maplibre.Map | null>(null)
     const latestDataRef = useRef<any | null>(null)
@@ -260,20 +263,33 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
 
             // Attach UI hover handlers after map exists so feature-state can be set reliably
             const attachSearchHoverHandlers = () => {
+                const resolveBaseColor = (id: number | null): string | undefined => {
+                    if (id == null) return undefined
+                    try {
+                        const resolver = (map as any).__resolveFeatureColor as undefined | ((id: number) => string | undefined)
+                        return resolver ? resolver(id) || undefined : undefined
+                    } catch { return undefined }
+                }
+                const clearHoverState = (id: number | null) => {
+                    if (id == null) return
+                    setFeatureState(map, 'buildings', id, { hover: false, hoverColor: null })
+                }
                 const setHover = (id: number | null) => {
                     try {
                         if (uiHoverIdRef.current != null) {
-                            setFeatureState(map, 'buildings', uiHoverIdRef.current, { hover: false })
+                            clearHoverState(uiHoverIdRef.current)
                         }
                         // clear any previous multi-hover
                         if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
                             for (const pid of uiHoverIdsRef.current) {
-                                setFeatureState(map, 'buildings', pid, { hover: false })
+                                clearHoverState(pid)
                             }
                             uiHoverIdsRef.current = null
                         }
                         if (id != null) {
-                            setFeatureState(map, 'buildings', id, { hover: true })
+                            const base = resolveBaseColor(id)
+                            const hoverColor = base ? shiftColor(base, 0.35) : undefined
+                            setFeatureState(map, 'buildings', id, { hover: true, hoverColor })
                         }
                         uiHoverIdRef.current = id
                     } catch { }
@@ -282,13 +298,13 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                     try {
                         // clear previous single
                         if (uiHoverIdRef.current != null) {
-                            setFeatureState(map, 'buildings', uiHoverIdRef.current, { hover: false })
+                            clearHoverState(uiHoverIdRef.current)
                             uiHoverIdRef.current = null
                         }
                         // clear previous many
                         if (uiHoverIdsRef.current && uiHoverIdsRef.current.length) {
                             for (const pid of uiHoverIdsRef.current) {
-                                setFeatureState(map, 'buildings', pid, { hover: false })
+                                clearHoverState(pid)
                             }
                         }
                         uiHoverIdsRef.current = null
@@ -298,7 +314,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                                 const n = parseInt(String(raw), 10)
                                 const id = Number.isFinite(n) ? n : (typeof raw === 'number' ? raw : null)
                                 if (id != null) {
-                                    setFeatureState(map, 'buildings', id, { hover: true })
+                                    const base = resolveBaseColor(id)
+                                    const hoverColor = base ? shiftColor(base, 0.35) : undefined
+                                    setFeatureState(map, 'buildings', id, { hover: true, hoverColor })
                                     out.push(id as number)
                                 }
                             }
@@ -338,7 +356,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         if (id != null) {
                             try {
                                 const base = (map as any).__resolveFeatureColor ? (map as any).__resolveFeatureColor(id) : undefined
-                                const highlightColor = base ? shiftColor(base, -0.06) : undefined
+                                const highlightColor = base ? shiftColor(base, -0.25) : undefined
                                 setFeatureState(map, 'buildings', id, { highlight: true, highlightColor })
                             } catch {
                                 setFeatureState(map, 'buildings', id, { highlight: true })
@@ -455,7 +473,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         const map = mapRef.current
         latestDataRef.current = data
         if (!map || !data || initialized.current) return
-        const init = () => {
+        const init = async () => {
             try {
                 // Normalize incoming data: ensure numeric level and stable ids; then derive dark color if needed
                 let themedData = data
@@ -508,6 +526,15 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 try { (map as any).__resolveFeatureColor = resolveFeatureColor } catch { }
 
                 addFillLayers(map, level, cfg, theme)
+                
+                // Load and add point layers with intelligent icons
+                try {
+                    await loadTagIcons(map)
+                    addPointLayers(map, level, parsedConfigRef.current?.pointIconMinZoom ?? 17)
+                } catch (e) {
+                    console.warn('[MapView] Failed to setup point layers:', e)
+                }
+                
                 // Apply dynamic minZoom/maxZoom from config
                 if (parsedConfigRef.current?.minZoom !== undefined) {
                     try { map.setMinZoom(parsedConfigRef.current.minZoom) } catch (e) { }
@@ -529,9 +556,10 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 })
                 addInteractions(map, { hovered: null, selected: null, selectedPrev: null }, {
                     resolveColor: resolveFeatureColor,
-                    deriveHoverColor: (base) => shiftColor(base, 0.25),
-                    deriveHighlightColor: (base) => shiftColor(base, -0.15),
-                    deriveSelectedColor: (base) => shiftColor(base, 0.15)
+                    // Stronger deltas so hover/selection pop over base color
+                    deriveHoverColor: (base) => shiftColor(base, 0.35),
+                    deriveHighlightColor: (base) => shiftColor(base, -0.25),
+                    deriveSelectedColor: (base) => shiftColor(base, 0.5)
                 })
                 initialized.current = true
             } catch (e) { console.warn('init map sources failed', e) }
@@ -551,6 +579,10 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         try {
             if (map.getLayer('buildings-extrusion')) map.setFilter('buildings-extrusion', filter as any)
             if (map.getLayer('buildings-fill')) map.setFilter('buildings-fill', filter as any)
+            // Update point layers filters
+            if (map.getLayer('points-icons')) {
+                addPointLayers(map, level, parsedConfigRef.current?.pointIconMinZoom ?? 17)
+            }
             // Mettre à jour les labels avec le nouveau niveau
             if (featureLabelsRef.current) {
                 featureLabelsRef.current.update({
@@ -892,9 +924,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                         resolveColor: (id) => {
                             try { return (map as any).__resolveFeatureColor ? (map as any).__resolveFeatureColor(id) : undefined } catch { return undefined }
                         },
-                        deriveHoverColor: (base) => shiftColor(base, 0.25),
-                        deriveHighlightColor: (base) => shiftColor(base, -0.15),
-                        deriveSelectedColor: (base) => shiftColor(base, 0.15)
+                        deriveHoverColor: (base) => shiftColor(base, 0.35),
+                        deriveHighlightColor: (base) => shiftColor(base, -0.25),
+                        deriveSelectedColor: (base) => shiftColor(base, 0.5)
                     })
                     // Restore previously drawn route layers/sources (lost during style swap)
                     try {
@@ -970,11 +1002,21 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
         return () => window.removeEventListener('ui:recenter-nav-marker', onRecenter as any)
     }, [])
 
+    const requestThemeToggle = () => {
+        if (!onThemeChange) return
+        const next = themeMode === 'dark'
+            ? 'light'
+            : themeMode === 'light'
+                ? 'dark'
+                : (theme === 'dark' ? 'light' : 'dark')
+        onThemeChange(next)
+    }
+
     const themeToggle = (
         <button
             title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
             aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-            onClick={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')}
+            onClick={requestThemeToggle}
             className="fixed right-2.5 z-selector w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-md flex items-center justify-center text-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
             style={{ top: navBtnsTopState ?? 110 }}
         >
@@ -1030,7 +1072,7 @@ export default forwardRef(function MapView({ data, level, theme = 'light', onThe
                 )}
             </>
         ) : (
-            <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={() => onThemeChange && onThemeChange(theme === 'dark' ? 'light' : 'dark')} />
+            <UserGeolocate map={mapRef.current} theme={theme} onToggleTheme={requestThemeToggle} />
         )}
         <FeatureHighlightController mapRef={mapRef} theme={theme} />
         

@@ -94,9 +94,26 @@ function BuildingCard({ meta, filter, onChangeFilter, onResetFilter }: {
         onChangeFilter(meta.id, { ...filter, levels: nextLevels })
     }
 
+    const handleSelectAllTags = () => {
+        onChangeFilter(meta.id, { ...filter, tags: meta.availableTags })
+    }
+
+    const handleClearTags = () => {
+        onChangeFilter(meta.id, { ...filter, tags: [] })
+    }
+
+    const handleToggleTag = (tag: string) => {
+        const set = new Set(filter.tags)
+        if (set.has(tag)) set.delete(tag)
+        else set.add(tag)
+        onChangeFilter(meta.id, { ...filter, tags: Array.from(set) })
+    }
+
     const selectedLevels = filter.levels === 'all'
         ? new Set(meta.availableLevels)
         : new Set(filter.levels)
+
+    const selectedTags = new Set(filter.tags)
 
     const disabledClass = filter.visible ? '' : 'opacity-50 pointer-events-none'
 
@@ -177,11 +194,17 @@ function BuildingCard({ meta, filter, onChangeFilter, onResetFilter }: {
                 )}
 
                 <section>
-                    <div className="mb-3">
-                        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Tags disponibles</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Propriétés détectées dans les données GeoJSON de ce bâtiment.
-                        </p>
+                    <div className="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Tags visibles</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Sélectionnez les tags à afficher. Les éléments sans tag sont toujours affichés par défaut.
+                            </p>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                            <button type="button" className="text-blue-600 hover:underline" onClick={handleSelectAllTags}>Tout</button>
+                            <button type="button" className="text-blue-600 hover:underline" onClick={handleClearTags}>Aucun</button>
+                        </div>
                     </div>
                     {meta.availableTags.length === 0 && (
                         <p className="text-sm text-gray-500 dark:text-gray-400">Aucun tag détecté pour ce bâtiment.</p>
@@ -189,12 +212,21 @@ function BuildingCard({ meta, filter, onChangeFilter, onResetFilter }: {
                     {meta.availableTags.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                             {meta.availableTags.map(tag => (
-                                <span
+                                <label
                                     key={tag}
-                                    className="px-3 py-1 rounded-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs"
+                                    className={`px-3 py-1 rounded-full border text-xs cursor-pointer transition ${selectedTags.has(tag)
+                                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 text-blue-700 dark:text-blue-200'
+                                        : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300'
+                                        }`}
                                 >
+                                    <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={selectedTags.has(tag)}
+                                        onChange={() => handleToggleTag(tag)}
+                                    />
                                     {formatTagLabel(tag)}
-                                </span>
+                                </label>
                             ))}
                         </div>
                     )}

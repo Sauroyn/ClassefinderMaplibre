@@ -118,7 +118,7 @@ export default function App() {
   // no selected event state needed; EventBar manages selection internally
   const [plannerStart, setPlannerStart] = useState<{ id: string, name: string } | null>(null)
   const [plannerEnd, setPlannerEnd] = useState<{ id: string, name: string } | null>(null)
-  const { theme, setTheme } = useTheme()
+  const { theme, themeMode, setThemeMode } = useTheme()
   const [navActive, setNavActive] = useState(false)
   const [editingAliasFeatureId, setEditingAliasFeatureId] = useState<string | number | null>(null)
   const [editingAliasOriginalName, setEditingAliasOriginalName] = useState<string>('')
@@ -130,13 +130,21 @@ export default function App() {
   const [showSecondary, setShowSecondary] = useState(true)
 
   // Settings modal draft states to avoid partial saves and allow cancel
-  const { draftTheme, setDraftTheme, draftIcalUrl, setDraftIcalUrl, draftBufferMin, setDraftBufferMin, draftEventsEnabled, setDraftEventsEnabled, resetDraft } = useSettingsDraft({ theme, icalUrl, bufferMin, eventsEnabled })
+  const { draftTheme, setDraftTheme, draftIcalUrl, setDraftIcalUrl, draftBufferMin, setDraftBufferMin, draftEventsEnabled, setDraftEventsEnabled, resetDraft } = useSettingsDraft({ theme: themeMode, icalUrl, bufferMin, eventsEnabled })
 
   function openSettings(initialTab: 'general' | 'route' | 'alias' | 'calendar' | 'buildings' = 'general') {
-    resetDraft({ theme, icalUrl, bufferMin, eventsEnabled })
+    resetDraft({ theme: themeMode, icalUrl, bufferMin, eventsEnabled })
     setSettingsInitialTab(initialTab)
     setShowSettings(true)
   }
+
+  const toggleTheme = useCallback(() => {
+    setThemeMode(prev => {
+      if (prev === 'light') return 'dark'
+      if (prev === 'dark') return 'auto'
+      return 'light'
+    })
+  }, [setThemeMode])
 
   const handleApplyBuildingFilter = useCallback((buildingId: string, nextFilter: BuildingFilterSettings) => {
     setBuildingFilters(prev => {
@@ -250,7 +258,8 @@ export default function App() {
       <MobileControlsBar
         map={mapRef.current}
         theme={theme}
-        onToggleTheme={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+        themeMode={themeMode}
+        onToggleTheme={toggleTheme}
         level={level}
         levels={levels}
         loading={loading}
@@ -292,8 +301,9 @@ export default function App() {
         ref={mapRef} 
         data={resolvedData} 
         level={level} 
-        theme={theme} 
-        onThemeChange={setTheme}
+        theme={theme}
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
         lockState={lockState}
         perimeterCenter={rawConfig?.perimeterCenter}
         perimeterRadius={rawConfig?.perimeterRadius}
@@ -354,7 +364,7 @@ export default function App() {
           onResetBuildingFilter={handleResetBuildingFilter}
           onResetAllBuildingFilters={handleResetAllBuildingFilters}
           onClose={() => {
-            setTheme(draftTheme)
+            setThemeMode(draftTheme)
             setIcalUrl(draftIcalUrl)
             try { localStorage.setItem(ICAL_URL_KEY, draftIcalUrl || '') } catch { }
             setBufferMin(draftBufferMin)

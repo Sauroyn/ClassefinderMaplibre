@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Sun, Moon } from '@gravity-ui/icons'
 import SearchableSelect from './SearchableSelect'
 import publicConfigs from 'virtual:public-configs'
+import { configNameToSlug } from '../../utils/api'
+import type { ThemeMode } from '../../theme/colors'
 
 type Props = {
-    theme: 'light' | 'dark'
-    onChangeTheme: (t: 'light' | 'dark') => void
+    theme: ThemeMode
+    onChangeTheme: (t: ThemeMode) => void
     selectedConfig: string | null
     onChangeConfig: (config: string | null) => void
 }
@@ -56,14 +58,16 @@ export default function GeneralSettings({ theme, onChangeTheme, selectedConfig, 
                         <span className={`text-sm ${theme === 'dark' ? 'font-semibold' : 'font-normal'}`}>Sombre</span>
                     </button>
 
-                    {/* Automatic mode - future enhancement */}
+                    {/* Automatic mode */}
                     <button
-                        disabled
-                        className="p-4 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 cursor-not-allowed opacity-50 flex flex-col items-center gap-2"
+                        onClick={() => onChangeTheme('auto')}
+                        className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${theme === 'auto'
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                            } hover:border-blue-400 dark:hover:border-blue-600`}
                     >
                         <span className="text-3xl">🌗</span>
-                        <span className="text-sm">Automatique</span>
-                        <span className="text-[10px] opacity-70">(Bientôt)</span>
+                        <span className={`text-sm ${theme === 'auto' ? 'font-semibold' : 'font-normal'}`}>Automatique</span>
                     </button>
                 </div>
             </div>
@@ -81,11 +85,11 @@ export default function GeneralSettings({ theme, onChangeTheme, selectedConfig, 
                     <>
                         <SearchableSelect
                             options={configFiles.map((file) => ({
-                                id: file,
+                                id: configNameToSlug(file),
                                 name: file,
                                 level: ''
                             }))}
-                            value={selectedConfig || ''}
+                            value={selectedConfig ? configNameToSlug(selectedConfig) : ''}
                             onChange={(value) => {
                                 const stringValue = String(value)
                                 onChangeConfig(stringValue || null)

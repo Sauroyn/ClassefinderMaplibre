@@ -6,6 +6,7 @@ import { useNavigationActive } from '../hooks/useNavigationActive'
 type Props = {
     map?: maplibre.Map | null
     theme?: 'light' | 'dark'
+    themeMode?: 'light' | 'dark' | 'auto'
     onToggleTheme?: () => void
     level: number
     levels: number[]
@@ -21,6 +22,7 @@ type Props = {
 export default function MobileControlsBar({
     map,
     theme = 'light',
+    themeMode = 'light',
     onToggleTheme,
     level,
     levels,
@@ -266,8 +268,8 @@ export default function MobileControlsBar({
                     </button>
                 )}
                 <button
-                    title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
-                    aria-label={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+                    title={`Changer de thème (actuel : ${themeMode || theme})`}
+                    aria-label={`Changer de thème (actuel : ${themeMode || theme})`}
                     onClick={() => onToggleTheme && onToggleTheme()}
                     className="w-11 h-11 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-lg hover:shadow-xl transition-shadow flex items-center justify-center flex-shrink-0"
                 >

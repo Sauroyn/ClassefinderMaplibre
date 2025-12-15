@@ -1,4 +1,5 @@
-export type ThemeMode = 'light' | 'dark'
+export type ThemeMode = 'light' | 'dark' | 'auto'
+export type ResolvedTheme = 'light' | 'dark'
 
 export const THEME_KEY = 'cf:theme'
 
@@ -34,27 +35,42 @@ export const themeVars = {
     },
 } as const
 
-export function applyTheme(mode: ThemeMode) {
+const resolveSystemTheme = (): ResolvedTheme => {
+    try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' }
+    catch { return 'light' }
+}
+
+export const resolveTheme = (mode: ThemeMode): ResolvedTheme => {
+    if (mode === 'auto') return resolveSystemTheme()
+    return mode
+}
+
+export function applyTheme(mode: ThemeMode): ResolvedTheme {
+    if (typeof document === 'undefined') return resolveTheme(mode)
+
+    const resolved = resolveTheme(mode)
     const root = document.documentElement
-    root.setAttribute('data-theme', mode)
+    root.setAttribute('data-theme-mode', mode)
+    root.setAttribute('data-theme', resolved)
 
     // Add/remove 'dark' class for Tailwind
-    if (mode === 'dark') {
+    if (resolved === 'dark') {
         root.classList.add('dark')
     } else {
         root.classList.remove('dark')
     }
 
-    const vars = themeVars[mode]
+    const vars = themeVars[resolved]
     for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v)
+    return resolved
 }
 
 export function loadInitialTheme(): ThemeMode {
     try {
         const v = localStorage.getItem(THEME_KEY) as ThemeMode | null
-        if (v === 'light' || v === 'dark') return v
+        if (v === 'light' || v === 'dark' || v === 'auto') return v
     } catch { }
-    try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' } catch { return 'light' }
+    return 'auto'
 }
 
 export function saveTheme(mode: ThemeMode) {

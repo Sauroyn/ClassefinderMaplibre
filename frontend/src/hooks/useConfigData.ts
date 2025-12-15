@@ -425,6 +425,20 @@ function filterFeatureCollection(
             if (!hasActiveTag) return false
         }
 
+        // Apply user-selected tag filters from settings
+        // If tags filter is not empty, only show features with those tags OR features without any tags
+        if (effectiveFilter.tags.length > 0) {
+            const featureTags = feature?.properties?.tags
+            // Show feature if it has no tags (undefined/null/empty) OR if it has a tag that's selected
+            if (featureTags) {
+                const tagValue = String(featureTags).toLowerCase().trim()
+                if (tagValue && !effectiveFilter.tags.includes(tagValue)) {
+                    return false
+                }
+            }
+            // If featureTags is falsy/empty, we show the feature by default (as per requirements)
+        }
+
         return true
     })
 

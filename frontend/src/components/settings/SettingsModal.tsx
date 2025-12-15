@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import SettingsLayout from './SettingsLayout'
 import { STORAGE_KEYS, safeGetItem, safeSetItem, safeRemoveItem } from '../../utils/storage'
 import type { BuildingFiltersState, BuildingFilterSettings, BuildingMeta } from '../../hooks/useConfigData'
+import type { ThemeMode } from '../../theme/colors'
 
 export default function SettingsModal({
     theme,
@@ -29,8 +30,8 @@ export default function SettingsModal({
     onResetBuildingFilter,
     onResetAllBuildingFilters,
 }: {
-    theme: 'light' | 'dark'
-    onChangeTheme: (t: 'light' | 'dark') => void
+    theme: ThemeMode
+    onChangeTheme: (t: ThemeMode) => void
     icalUrl: string
     onChangeIcalUrl: (v: string) => void
     bufferMin: number
@@ -55,13 +56,10 @@ export default function SettingsModal({
     onResetAllBuildingFilters: () => void
 }) {
     // Local draft state for config (only applied on save)
-    const [draftConfig, setDraftConfig] = useState<string | null>(null)
-
-    // Initialize draft config from storage
-    useEffect(() => {
-        const currentConfig = safeGetItem(STORAGE_KEYS.CONFIG_FILE)
-        setDraftConfig(currentConfig)
-    }, [])
+    // Initialize immediately from storage instead of in useEffect to avoid flash
+    const [draftConfig, setDraftConfig] = useState<string | null>(() => {
+        return safeGetItem(STORAGE_KEYS.CONFIG_FILE)
+    })
 
     // Handle save with config change
     const handleClose = () => {

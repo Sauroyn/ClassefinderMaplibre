@@ -146,6 +146,9 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
             // Only clear UI state, do NOT call onClear() to avoid unwanted zoom reset
             setSelected(null)
             setShowBack(false)
+            setQ('')
+            setGroupView(null)
+            setFocused(false)
         }
         window.addEventListener('map:highlight-clear', onHighlightCleared as any)
         return () => { window.removeEventListener('map:highlight-clear', onHighlightCleared as any) }
@@ -261,6 +264,13 @@ export default function SearchBar({ data, onSelect, onClear, onRouteRequest, onO
                     value={q}
                     onChange={e => { setQ(e.target.value); if (selected) setSelected(null); setFocused(true) }}
                     placeholder="Rechercher une salle..."
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && q.trim().length > 0 && flatItems.length === 1) {
+                            e.preventDefault()
+                            const it = flatItems[0]
+                            pick(it.id, it.name)
+                        }
+                    }}
                     onFocus={() => {
                         if (blurTimeout.current) { clearTimeout(blurTimeout.current); blurTimeout.current = null }
                         setFocused(true)
