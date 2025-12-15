@@ -16,6 +16,7 @@ export function useSharedUserPosition(geolocateControl: maplibre.GeolocateContro
             try {
                 const coords = e?.coords
                 if (coords && typeof coords.longitude === 'number' && typeof coords.latitude === 'number') {
+                    console.log('[useSharedUserPosition] 📍 Position reçue du GeolocateControl:', [coords.longitude, coords.latitude])
                     setPosition([coords.longitude, coords.latitude])
                 }
             } catch { }

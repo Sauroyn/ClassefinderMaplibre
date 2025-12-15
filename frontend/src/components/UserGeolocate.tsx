@@ -23,13 +23,16 @@ const UserGeolocate = forwardRef<UserGeolocateRef, Props>(function UserGeolocate
 
     // Install hidden geolocate control
     useEffect(() => {
+        console.log('[UserGeolocate] useEffect map:', !!map, 'controlRef:', !!controlRef.current)
         if (!map) return
         if (!controlRef.current) {
+            console.log('[UserGeolocate] 🎮 Création du GeolocateControl...')
             controlRef.current = new maplibre.GeolocateControl({
                 positionOptions: { enableHighAccuracy: true },
                 trackUserLocation: true
             })
             try { map.addControl(controlRef.current, 'top-right') } catch (e) { }
+            console.log('[UserGeolocate] ✅ GeolocateControl créé et ajouté')
             // Hide the default control UI
             try {
                 const container = (map as any).getContainer ? (map as any).getContainer() : null
@@ -87,11 +90,13 @@ const UserGeolocate = forwardRef<UserGeolocateRef, Props>(function UserGeolocate
     }, [])
 
     const trigger = () => {
+        console.log('[UserGeolocate] 🎯 Trigger appelé, controlRef:', !!controlRef.current)
         try { (controlRef.current as any)?.trigger?.() } catch { }
         // Fallback: click hidden control button
         try {
             const container = (map as any)?.getContainer?.()
             const btn = container ? container.querySelector('.maplibregl-ctrl-top-right .maplibregl-ctrl-geolocate button') as HTMLButtonElement | null : null
+            console.log('[UserGeolocate] Bouton natif trouvé:', !!btn)
             if (btn) btn.click()
         } catch { }
     }

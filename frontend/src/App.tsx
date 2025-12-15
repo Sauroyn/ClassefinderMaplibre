@@ -89,6 +89,7 @@ export default function App() {
   // Track GeolocateControl for shared position
   const [geolocateControl, setGeolocateControl] = useState<any>(null)
   const sharedUserPosition = useSharedUserPosition(geolocateControl)
+  const geolocateAutoTriggeredRef = useRef(false)
   
   // Pass userPosition to useConfigData so it can be sent to the API for location lock verification
   const { levels, level, setLevel, loading, data, dataRef, buildingsMeta, activeConfig, rawConfig } = useConfigData(buildingFilters, sharedUserPosition)
@@ -96,6 +97,54 @@ export default function App() {
   // Location lock hook - check if user is in allowed perimeter
   // Pass sharedUserPosition so it uses the button's position instead of requesting again
   const lockState = useLocationLock(rawConfig, sharedUserPosition)
+
+  // If we obtained a position via location lock (inside/outside) but the maplibre GeolocateControl
+  // has not been triggered yet, trigger it once so the built-in marker appears even outside the zone.
+  useEffect(() => {
+    const hasSharedPosition = !!sharedUserPosition
+    const hasLockPosition = lockState.status === 'inside' || lockState.status === 'outside'
+    console.log('[App] Auto-trigger check:', { hasSharedPosition, hasLockPosition, hasControl: !!geolocateControl, alreadyTriggered: geolocateAutoTriggeredRef.current, lockStatus: lockState.status })
+    
+    // Si déjà déclenché, skip
+    if (geolocateAutoTriggeredRef.current) {
+      return
+    }
+    
+    // Si on a déjà une position partagée du contrôle, pas besoin de trigger
+    if (hasSharedPosition) {
+      console.log('[App] ✅ Déjà une position partagée, skip auto-trigger')
+      geolocateAutoTriggeredRef.current = true
+      return
+    }
+    
+    // On attend que BOTH lockState ait une position ET que le contrôle existe
+    if (hasLockPosition && geolocateControl) {
+      console.log('[App] 🚀 Déclenchement AUTO du GeolocateControl !')
+      geolocateAutoTriggeredRef.current = true
+      // Petit délai pour laisser le contrôle s'initialiser complètement
+      setTimeout(() => {
+        try { 
+          console.log('[App] 🎯 Appel de trigger()...')
+          const ctrl = geolocateControl as any
+          if (ctrl.trigger) {
+            ctrl.trigger()
+          } else {
+            // Fallback: dispatch l'événement pour cliquer le bouton
+            console.log('[App] Pas de trigger(), fallback sur événement')
+            window.dispatchEvent(new CustomEvent('ui:trigger-geolocate'))
+          }
+        } catch (e) { 
+          console.error('[App] Erreur trigger:', e)
+          // Fallback ultime
+          try {
+            window.dispatchEvent(new CustomEvent('ui:trigger-geolocate'))
+          } catch {}
+        }
+      }, 100)
+    } else if (hasLockPosition && !geolocateControl) {
+      console.log('[App] ⏳ Position obtenue mais contrôle pas encore prêt, attente...')
+    }
+  }, [geolocateControl, lockState, sharedUserPosition])
   
   // Block data access if location lock is active and user is not inside
   const shouldBlockData = rawConfig?.locationLock && lockState.status !== 'inside' && lockState.status !== 'idle'

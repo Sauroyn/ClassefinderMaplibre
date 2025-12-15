@@ -73,12 +73,26 @@ export function useLocationLock(config: LocationLockConfig | null, userPosition?
             .then(position => {
                 const userPos: [number, number] = [position.coords.longitude, position.coords.latitude]
                 const distance = calculateDistance(userPos, config.perimeterCenter!)
+                console.log('[useLocationLock] Position obtenue:', userPos, 'distance:', distance, 'radius:', config.perimeterRadius)
 
                 if (distance <= config.perimeterRadius!) {
+                    console.log('[useLocationLock] ✅ INSIDE zone')
                     setState({ status: 'inside', userPosition: userPos })
                 } else {
+                    console.log('[useLocationLock] ⚠️ OUTSIDE zone')
                     setState({ status: 'outside', userPosition: userPos })
                 }
+                
+                // 🚀 NOUVEAU : Déclencher immédiatement le bouton de géolocalisation pour afficher le marqueur
+                console.log('[useLocationLock] 🎯 Déclenchement du bouton geolocate...')
+                setTimeout(() => {
+                    try {
+                        window.dispatchEvent(new CustomEvent('ui:trigger-geolocate'))
+                        console.log('[useLocationLock] ✅ Événement ui:trigger-geolocate envoyé')
+                    } catch (e) {
+                        console.error('[useLocationLock] Erreur dispatch:', e)
+                    }
+                }, 200)
             })
             .catch(error => {
                 if (error.code === error.PERMISSION_DENIED) {
