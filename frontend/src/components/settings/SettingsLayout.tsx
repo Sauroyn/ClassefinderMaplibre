@@ -1,0 +1,284 @@
+import { useState, useEffect } from 'react'
+import { Xmark, ArrowLeft } from '@gravity-ui/icons'
+import GeneralSettings from './GeneralSettings'
+import AliasSettings from './AliasSettings'
+import CalendarSettings from './CalendarSettings'
+import RouteSettings from './RouteSettings'
+import BuildingSettings from './BuildingSettings'
+import type { BuildingFiltersState, BuildingFilterSettings, BuildingMeta } from '../../hooks/useConfigData'
+import type { ThemeMode } from '../../theme/colors'
+
+type Tab = 'general' | 'alias' | 'calendar' | 'route' | 'buildings'
+
+type Props = {
+    // General settings
+    theme: ThemeMode
+    onChangeTheme: (t: ThemeMode) => void
+    selectedConfig: string | null
+    onChangeConfig: (config: string | null) => void
+
+    // Calendar settings
+    icalUrl: string
+    onChangeIcalUrl: (v: string) => void
+    bufferMin: number
+    onChangeBufferMin: (n: number) => void
+    eventsEnabled: boolean
+    onChangeEventsEnabled: (v: boolean) => void
+
+    // Route settings
+    excludeStairs: boolean
+    onChangeExcludeStairs: (v: boolean) => void
+    coveredOnly: boolean
+    onChangeCoveredOnly: (v: boolean) => void
+    showSecondary: boolean
+    onChangeShowSecondary: (v: boolean) => void
+
+    // Alias settings
+    data?: GeoJSON.FeatureCollection | null
+    editingAliasFeatureId?: string | number | null
+    editingAliasOriginalName?: string
+
+    // Actions
+    onClose: () => void
+
+    // Optional: initial tab to open
+    initialTab?: Tab
+
+    // Buildings management
+    buildingsMeta: BuildingMeta[]
+    buildingFilters: BuildingFiltersState
+    onChangeBuildingFilter: (buildingId: string, next: BuildingFilterSettings) => void
+    onResetBuildingFilter: (buildingId: string) => void
+    onResetAllBuildingFilters: () => void
+}
+
+const tabs: Array<{ id: Tab; label: string }> = [
+    { id: 'general', label: 'Général' },
+    { id: 'buildings', label: 'Bâtiments' },
+    { id: 'route', label: 'Itinéraire' },
+    { id: 'alias', label: 'Alias' },
+    { id: 'calendar', label: 'Calendrier' }
+]
+
+export default function SettingsLayout(props: Props) {
+    // Initialiser l'onglet actif depuis la prop `initialTab` si fournie, sinon 'general'
+    const [activeTab, setActiveTab] = useState<Tab>(() => {
+        const initial = props.initialTab ?? 'general'
+        console.log('[SettingsLayout] Initial activeTab:', initial)
+        return initial
+    })
+    const [isMobile, setIsMobile] = useState(false)
+    const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
+
+    // Detect mobile viewport
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth <= 768)
+        }
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
+
+    // Reset activeTab when initialTab prop changes (e.g., when modal reopens)
+    useEffect(() => {
+        if (props.initialTab !== undefined) {
+            console.log('[SettingsLayout] Setting activeTab to:', props.initialTab)
+            setActiveTab(props.initialTab)
+        }
+    }, [props.initialTab])
+
+    // Auto-open alias tab if editing
+    useEffect(() => {
+        if (props.editingAliasFeatureId != null) {
+            setActiveTab('alias')
+            if (isMobile) {
+                setMobileDetailOpen(true)
+            }
+        }
+    }, [props.editingAliasFeatureId, isMobile])
+
+    const renderTabContent = () => {
+        console.log('[SettingsLayout] renderTabContent called with activeTab:', activeTab)
+        switch (activeTab) {
+            case 'general':
+                return (
+                    <GeneralSettings
+                        theme={props.theme}
+                        onChangeTheme={props.onChangeTheme}
+                        selectedConfig={props.selectedConfig}
+                        onChangeConfig={props.onChangeConfig}
+                    />
+                )
+            case 'route':
+                return (
+                    <RouteSettings
+                        excludeStairs={props.excludeStairs}
+                        onChangeExcludeStairs={props.onChangeExcludeStairs}
+                        coveredOnly={props.coveredOnly}
+                        onChangeCoveredOnly={props.onChangeCoveredOnly}
+                        showSecondary={props.showSecondary}
+                        onChangeShowSecondary={props.onChangeShowSecondary}
+                    />
+                )
+            case 'alias':
+                return (
+                    <AliasSettings
+                        data={props.data || null}
+                        editingFeatureId={props.editingAliasFeatureId}
+                        editingOriginalName={props.editingAliasOriginalName}
+                    />
+                )
+            case 'calendar':
+                return (
+                    <CalendarSettings
+                        icalUrl={props.icalUrl}
+                        onChangeIcalUrl={props.onChangeIcalUrl}
+                        bufferMin={props.bufferMin}
+                        onChangeBufferMin={props.onChangeBufferMin}
+                        eventsEnabled={props.eventsEnabled}
+                        onChangeEventsEnabled={props.onChangeEventsEnabled}
+                    />
+                )
+            case 'buildings':
+                return (
+                    <BuildingSettings
+                        buildingsMeta={props.buildingsMeta}
+                        filters={props.buildingFilters}
+                        onChangeFilter={props.onChangeBuildingFilter}
+                        onResetFilter={props.onResetBuildingFilter}
+                        onResetAll={props.onResetAllBuildingFilters}
+                    />
+                )
+            default:
+                // Fallback: si activeTab n'est pas reconnu, afficher Général
+                return (
+                    <GeneralSettings
+                        theme={props.theme}
+                        onChangeTheme={props.onChangeTheme}
+                        selectedConfig={props.selectedConfig}
+                        onChangeConfig={props.onChangeConfig}
+                    />
+                )
+        }
+    }
+
+    // Mobile view: full screen with tabs list or detail
+    if (isMobile) {
+        return (
+            <div
+                role="dialog"
+                aria-modal="true"
+                className="fixed inset-0 z-[10001] flex flex-col bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            >
+                {/* Header */}
+                <div className="flex items-center justify-between p-4 border-b border-gray-300 dark:border-gray-600 sticky top-0 bg-white dark:bg-gray-800 z-10">
+                    {mobileDetailOpen && (
+                        <button
+                            onClick={() => setMobileDetailOpen(false)}
+                            className="bg-transparent border-none text-xl text-gray-900 dark:text-gray-100 cursor-pointer p-1 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                            aria-label="Retour"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                    )}
+                    <div className="font-bold text-lg flex-1">
+                        {mobileDetailOpen ? tabs.find(t => t.id === activeTab)?.label : 'Paramètres'}
+                    </div>
+                    <button
+                        onClick={props.onClose}
+                        aria-label="Fermer"
+                        title="Fermer"
+                        className="bg-transparent border-none text-2xl text-gray-900 dark:text-gray-100 cursor-pointer p-1 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                    >
+                        <Xmark className="w-6 h-6" />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto">
+                    {!mobileDetailOpen ? (
+                        // Tabs list
+                        <div className="p-4">
+                            {tabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => {
+                                        setActiveTab(tab.id)
+                                        setMobileDetailOpen(true)
+                                    }}
+                                    className="w-full p-3 mb-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center gap-2 cursor-pointer text-sm text-left transition-colors duration-150 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >
+                                    <span className="flex-1 font-medium">{tab.label}</span>
+                                    <span className="text-sm opacity-50">›</span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        // Tab content
+                        <div className="p-4">{renderTabContent()}</div>
+                    )}
+                </div>
+
+                {/* Footer actions - only show when not in detail view */}
+                {/* Mobile view: closing handled via header button */}
+            </div>
+        )
+    }
+
+    // Desktop view: modal with sidebar
+    return (
+        <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={props.onClose}
+        >
+            <div
+                onClick={(e) => e.stopPropagation()}
+                className="relative bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl w-[min(90vw,900px)] h-[min(85vh,650px)] shadow-2xl flex overflow-hidden"
+            >
+                {/* Sidebar */}
+                <div className="w-60 border-r border-gray-300 dark:border-gray-600 flex flex-col bg-gray-100 dark:bg-gray-700/50">
+                    <div className="p-5 border-b border-gray-300 dark:border-gray-600">
+                        <div className="font-bold text-xl">Paramètres</div>
+                    </div>
+                    <div className="flex-1 p-3 overflow-y-auto">
+                        {tabs.map(tab => {
+                            const isActive = activeTab === tab.id
+                            console.log('[SettingsLayout] Tab', tab.id, 'isActive:', isActive, 'activeTab:', activeTab)
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`w-full p-2.5 mb-1 rounded-lg border-none flex items-center cursor-pointer text-sm text-left transition-colors duration-150 ${isActive
+                                        ? 'bg-white dark:bg-gray-800 font-semibold shadow-sm'
+                                        : 'bg-transparent font-normal hover:bg-white/50 dark:hover:bg-gray-800/50'
+                                        }`}
+                                >
+                                    <span>{tab.label}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                {/* Content area */}
+                <div className="flex-1 flex flex-col">
+                    {/* Close button */}
+                    <button
+                        onClick={props.onClose}
+                        aria-label="Fermer"
+                        title="Fermer"
+                        className="absolute right-4 top-4 bg-gray-100 dark:bg-gray-700 border-none w-8 h-8 rounded-lg text-lg text-gray-900 dark:text-gray-100 cursor-pointer flex items-center justify-center transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
+                    >
+                        <Xmark className="w-5 h-5" />
+                    </button>
+
+                    {/* Tab content */}
+                    <div className="flex-1 overflow-y-auto p-8">{renderTabContent()}</div>
+                </div>
+            </div>
+        </div>
+    )
+}
