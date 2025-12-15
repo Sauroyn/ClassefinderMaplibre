@@ -125,13 +125,16 @@ export const geojsonAPI = {
     return response.json();
   },
 
-  async getByPath(path: string, userPosition?: [number, number] | null): Promise<GeoJSONData> {
+  async getByPath(path: string, userPosition?: [number, number] | null, config?: string): Promise<GeoJSONData> {
     const headers: Record<string, string> = {};
     if (userPosition) {
       headers['x-user-position'] = `${userPosition[0]},${userPosition[1]}`;
     }
-    const apiUrl = `${API_BASE_URL}/geojson/by-path/${path}`;
-    const response = await fetch(apiUrl, { headers });
+    const url = new URL(`${API_BASE_URL}/geojson/by-path/${path}`);
+    if (config) {
+      url.searchParams.set('config', config);
+    }
+    const response = await fetch(url.toString(), { headers });
     if (response.ok) return response.json();
 
     // Fallback to static public asset when not in DB (dev/local or legacy files)

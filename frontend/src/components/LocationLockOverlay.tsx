@@ -12,8 +12,7 @@ type Props = {
 const PERIMETER_SOURCE_ID = 'location-lock-perimeter'
 const PERIMETER_LAYER_ID = 'location-lock-perimeter-layer'
 const PERIMETER_BORDER_LAYER_ID = 'location-lock-perimeter-border'
-const USER_MARKER_SOURCE_ID = 'location-lock-user-marker'
-const USER_MARKER_LAYER_ID = 'location-lock-user-marker-layer'
+// We rely on Maplibre's built-in GeolocateControl marker; no custom marker.
 
 /**
  * Component to display location lock perimeter and user position on the map
@@ -68,47 +67,8 @@ export default function LocationLockOverlay({ map, lockState, perimeterCenter, p
         }
     }, [map, lockState, perimeterCenter, perimeterRadius])
 
-    // Draw user marker
-    useEffect(() => {
-        if (!map) return
-
-        const drawUser = () => {
-            const userPosition = lockState.status === 'outside' || lockState.status === 'inside' ? lockState.userPosition : null
-            if (!userPosition) {
-                if (map.getLayer(USER_MARKER_LAYER_ID)) map.removeLayer(USER_MARKER_LAYER_ID)
-                if (map.getSource(USER_MARKER_SOURCE_ID)) map.removeSource(USER_MARKER_SOURCE_ID)
-                return
-            }
-            const point: GeoJSON.Feature = { type: 'Feature', geometry: { type: 'Point', coordinates: userPosition }, properties: {} }
-            try {
-                const source = map.getSource(USER_MARKER_SOURCE_ID) as maplibre.GeoJSONSource
-                if (source) { source.setData(point) } else { map.addSource(USER_MARKER_SOURCE_ID, { type: 'geojson', data: point }) }
-                const shouldShowMarker = lockState.status === 'outside' || lockState.status === 'inside'
-                const markerColor = lockState.status === 'outside' ? '#ef4444' : '#10b981'
-                if (!map.getLayer(USER_MARKER_LAYER_ID)) {
-                    map.addLayer({ id: USER_MARKER_LAYER_ID, type: 'circle', source: USER_MARKER_SOURCE_ID, paint: { 'circle-radius': 10, 'circle-color': markerColor, 'circle-stroke-width': 3, 'circle-stroke-color': '#ffffff', 'circle-opacity': shouldShowMarker ? 1 : 0 } })
-                } else {
-                    map.setPaintProperty(USER_MARKER_LAYER_ID, 'circle-color', markerColor)
-                    map.setPaintProperty(USER_MARKER_LAYER_ID, 'circle-opacity', shouldShowMarker ? 1 : 0)
-                }
-            } catch (err) {
-                console.warn('[LocationLockOverlay] Error adding user marker:', err)
-            }
-        }
-
-        if (!map.isStyleLoaded?.()) {
-            const onLoad = () => { try { drawUser() } catch {} }
-            map.once('load', onLoad)
-            return () => { try { map.off('load', onLoad) } catch {} }
-        }
-
-        drawUser()
-
-        return () => {
-            if (map.getLayer(USER_MARKER_LAYER_ID)) map.removeLayer(USER_MARKER_LAYER_ID)
-            if (map.getSource(USER_MARKER_SOURCE_ID)) map.removeSource(USER_MARKER_SOURCE_ID)
-        }
-    }, [map, lockState])
+    // No custom user marker: the GeolocateControl renders its own dot and accuracy circle.
+    // This overlay only manages the perimeter visualization.
 
     return null
 }

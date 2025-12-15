@@ -74,14 +74,18 @@ export async function locationLockMiddleware(req: Request, res: Response, next: 
         // Check perimeter
         const center = configData.perimeterCenter as [number, number] | undefined;
         const radiusVal = configData.perimeterRadius as number | undefined;
-        const radius: number = typeof radiusVal === 'number' ? radiusVal : NaN;
-
-        if (!center || !Array.isArray(center) || center.length !== 2 || !Number.isFinite(radius) || radius <= 0) {
+        // Ensure radius is valid before any usage
+        if (typeof radiusVal !== 'number' || !Number.isFinite(radiusVal) || radiusVal <= 0) {
             // Invalid perimeter config, proceed anyway
             return next();
         }
+        const radius: number = radiusVal; // radius is now a definite number
+        // Validate center separately (no radius usage here)
+        if (!center || !Array.isArray(center) || center.length !== 2) {
+            return next();
+        }
 
-        // Calculate distance using Haversine formula
+        // Calculate distance using Haversine formula (center and radius validated above)
         const distance = calculateDistance([userLng, userLat], center);
 
         if (distance > radius) {
