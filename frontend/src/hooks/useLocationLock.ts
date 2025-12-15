@@ -73,24 +73,24 @@ export function useLocationLock(config: LocationLockConfig | null, userPosition?
             .then(position => {
                 const userPos: [number, number] = [position.coords.longitude, position.coords.latitude]
                 const distance = calculateDistance(userPos, config.perimeterCenter!)
-                console.log('[useLocationLock] Position obtenue:', userPos, 'distance:', distance, 'radius:', config.perimeterRadius)
+                if (import.meta.env.DEV) {
+                    console.log('[useLocationLock] Position obtenue:', userPos, 'distance:', distance, 'radius:', config.perimeterRadius)
+                }
 
                 if (distance <= config.perimeterRadius!) {
-                    console.log('[useLocationLock] ✅ INSIDE zone')
+                    if (import.meta.env.DEV) console.log('[useLocationLock] ✅ INSIDE zone')
                     setState({ status: 'inside', userPosition: userPos })
                 } else {
-                    console.log('[useLocationLock] ⚠️ OUTSIDE zone')
+                    if (import.meta.env.DEV) console.log('[useLocationLock] ⚠️ OUTSIDE zone')
                     setState({ status: 'outside', userPosition: userPos })
                 }
                 
-                // 🚀 NOUVEAU : Déclencher immédiatement le bouton de géolocalisation pour afficher le marqueur
-                console.log('[useLocationLock] 🎯 Déclenchement du bouton geolocate...')
+                // Trigger geolocate button to show user position marker on map
                 setTimeout(() => {
                     try {
                         window.dispatchEvent(new CustomEvent('ui:trigger-geolocate'))
-                        console.log('[useLocationLock] ✅ Événement ui:trigger-geolocate envoyé')
                     } catch (e) {
-                        console.error('[useLocationLock] Erreur dispatch:', e)
+                        if (import.meta.env.DEV) console.error('[useLocationLock] Failed to trigger geolocate:', e)
                     }
                 }, 200)
             })

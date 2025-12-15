@@ -58,12 +58,9 @@ export default forwardRef(function MapView({ data, level, theme = 'light', theme
     const [navBtnsTopState, setNavBtnsTopState] = useState<number | null>(null)
     // Notify parent when geolocate control is ready for location lock to use it
     useEffect(() => {
-        console.log('[MapView] Check geolocate ref:', !!userGeolocateRef.current, !!onGeolocateControlReady)
         if (userGeolocateRef.current && onGeolocateControlReady) {
             const control = userGeolocateRef.current.getControl?.()
-            console.log('[MapView] 🎮 Contrôle obtenu:', !!control)
             if (control) {
-                console.log('[MapView] ✅ Envoi du contrôle à App via onGeolocateControlReady')
                 onGeolocateControlReady(control)
             }
         }
