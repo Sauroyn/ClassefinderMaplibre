@@ -27,7 +27,9 @@ const UserGeolocate = forwardRef<UserGeolocateRef, Props>(function UserGeolocate
         if (!controlRef.current) {
             controlRef.current = new maplibre.GeolocateControl({
                 positionOptions: { enableHighAccuracy: true },
-                trackUserLocation: true
+                trackUserLocation: false, // Désactivé pour éviter le recentrage automatique
+                showUserLocation: true,   // Affiche quand même le marqueur
+                showAccuracyCircle: true  // Affiche le cercle de précision
             })
             try { map.addControl(controlRef.current, 'top-right') } catch (e) { }
             // Hide the default control UI
