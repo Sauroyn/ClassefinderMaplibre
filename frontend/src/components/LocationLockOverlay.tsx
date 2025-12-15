@@ -24,63 +24,42 @@ export default function LocationLockOverlay({ map, lockState, perimeterCenter, p
     useEffect(() => {
         if (!map || !perimeterCenter || !perimeterRadius) return
 
-        // Check if map style is loaded before adding sources/layers
-        if (!map.isStyleLoaded?.()) return
+        const drawPerimeter = () => {
+            const shouldShowPerimeter = lockState.status === 'denied' || lockState.status === 'outside'
+            if (!shouldShowPerimeter) {
+                if (map.getLayer(PERIMETER_BORDER_LAYER_ID)) map.removeLayer(PERIMETER_BORDER_LAYER_ID)
+                if (map.getLayer(PERIMETER_LAYER_ID)) map.removeLayer(PERIMETER_LAYER_ID)
+                if (map.getSource(PERIMETER_SOURCE_ID)) map.removeSource(PERIMETER_SOURCE_ID)
+                return
+            }
 
-        const shouldShowPerimeter = lockState.status === 'denied' || lockState.status === 'outside'
-        
-        if (!shouldShowPerimeter) {
-            // Remove perimeter if not needed
-            if (map.getLayer(PERIMETER_BORDER_LAYER_ID)) map.removeLayer(PERIMETER_BORDER_LAYER_ID)
-            if (map.getLayer(PERIMETER_LAYER_ID)) map.removeLayer(PERIMETER_LAYER_ID)
-            if (map.getSource(PERIMETER_SOURCE_ID)) map.removeSource(PERIMETER_SOURCE_ID)
-            return
+            const circle = createCircle(perimeterCenter, perimeterRadius, 64)
+            try {
+                const source = map.getSource(PERIMETER_SOURCE_ID) as maplibre.GeoJSONSource
+                if (source) {
+                    source.setData(circle)
+                } else {
+                    map.addSource(PERIMETER_SOURCE_ID, { type: 'geojson', data: circle })
+                }
+                if (!map.getLayer(PERIMETER_LAYER_ID)) {
+                    map.addLayer({ id: PERIMETER_LAYER_ID, type: 'fill', source: PERIMETER_SOURCE_ID, paint: { 'fill-color': '#3b82f6', 'fill-opacity': 0.1 } })
+                }
+                if (!map.getLayer(PERIMETER_BORDER_LAYER_ID)) {
+                    map.addLayer({ id: PERIMETER_BORDER_LAYER_ID, type: 'line', source: PERIMETER_SOURCE_ID, paint: { 'line-color': '#3b82f6', 'line-width': 2, 'line-dasharray': [2, 2] } })
+                }
+            } catch (err) {
+                console.warn('[LocationLockOverlay] Error adding perimeter:', err)
+            }
         }
 
-        // Create circle GeoJSON
-        const circle = createCircle(perimeterCenter, perimeterRadius, 64)
-
-        try {
-            // Add or update source
-            const source = map.getSource(PERIMETER_SOURCE_ID) as maplibre.GeoJSONSource
-            if (source) {
-                source.setData(circle)
-            } else {
-                map.addSource(PERIMETER_SOURCE_ID, {
-                    type: 'geojson',
-                    data: circle
-                })
-            }
-
-            // Add fill layer
-            if (!map.getLayer(PERIMETER_LAYER_ID)) {
-                map.addLayer({
-                    id: PERIMETER_LAYER_ID,
-                    type: 'fill',
-                    source: PERIMETER_SOURCE_ID,
-                    paint: {
-                        'fill-color': '#3b82f6',
-                        'fill-opacity': 0.1
-                    }
-                })
-            }
-
-            // Add border layer
-            if (!map.getLayer(PERIMETER_BORDER_LAYER_ID)) {
-                map.addLayer({
-                    id: PERIMETER_BORDER_LAYER_ID,
-                    type: 'line',
-                    source: PERIMETER_SOURCE_ID,
-                    paint: {
-                        'line-color': '#3b82f6',
-                        'line-width': 2,
-                        'line-dasharray': [2, 2]
-                    }
-                })
-            }
-        } catch (err) {
-            console.warn('[LocationLockOverlay] Error adding perimeter:', err)
+        // If style not yet loaded, draw once on map load
+        if (!map.isStyleLoaded?.()) {
+            const onLoad = () => { try { drawPerimeter() } catch {} }
+            map.once('load', onLoad)
+            return () => { try { map.off('load', onLoad) } catch {} }
         }
+
+        drawPerimeter()
 
         return () => {
             if (map.getLayer(PERIMETER_BORDER_LAYER_ID)) map.removeLayer(PERIMETER_BORDER_LAYER_ID)
@@ -93,66 +72,37 @@ export default function LocationLockOverlay({ map, lockState, perimeterCenter, p
     useEffect(() => {
         if (!map) return
 
-        // Check if map style is loaded before adding sources/layers
-        if (!map.isStyleLoaded?.()) return
-
-        const userPosition = lockState.status === 'outside' || lockState.status === 'inside' 
-            ? lockState.userPosition 
-            : null
-
-        if (!userPosition) {
-            // Remove user marker
-            if (map.getLayer(USER_MARKER_LAYER_ID)) map.removeLayer(USER_MARKER_LAYER_ID)
-            if (map.getSource(USER_MARKER_SOURCE_ID)) map.removeSource(USER_MARKER_SOURCE_ID)
-            return
-        }
-
-        // Create point GeoJSON
-        const point: GeoJSON.Feature = {
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: userPosition
-            },
-            properties: {}
-        }
-
-        try {
-            // Add or update source
-            const source = map.getSource(USER_MARKER_SOURCE_ID) as maplibre.GeoJSONSource
-            if (source) {
-                source.setData(point)
-            } else {
-                map.addSource(USER_MARKER_SOURCE_ID, {
-                    type: 'geojson',
-                    data: point
-                })
+        const drawUser = () => {
+            const userPosition = lockState.status === 'outside' || lockState.status === 'inside' ? lockState.userPosition : null
+            if (!userPosition) {
+                if (map.getLayer(USER_MARKER_LAYER_ID)) map.removeLayer(USER_MARKER_LAYER_ID)
+                if (map.getSource(USER_MARKER_SOURCE_ID)) map.removeSource(USER_MARKER_SOURCE_ID)
+                return
             }
-
-            // Add marker layer (show position regardless of inside/outside)
-            const shouldShowMarker = lockState.status === 'outside' || lockState.status === 'inside'
-            const markerColor = lockState.status === 'outside' ? '#ef4444' : '#10b981' // Red outside, green inside
-            
-            if (!map.getLayer(USER_MARKER_LAYER_ID)) {
-                map.addLayer({
-                    id: USER_MARKER_LAYER_ID,
-                    type: 'circle',
-                    source: USER_MARKER_SOURCE_ID,
-                    paint: {
-                        'circle-radius': 10,
-                        'circle-color': markerColor,
-                        'circle-stroke-width': 3,
-                        'circle-stroke-color': '#ffffff',
-                        'circle-opacity': shouldShowMarker ? 1 : 0
-                    }
-                })
-            } else {
-                map.setPaintProperty(USER_MARKER_LAYER_ID, 'circle-color', markerColor)
-                map.setPaintProperty(USER_MARKER_LAYER_ID, 'circle-opacity', shouldShowMarker ? 1 : 0)
+            const point: GeoJSON.Feature = { type: 'Feature', geometry: { type: 'Point', coordinates: userPosition }, properties: {} }
+            try {
+                const source = map.getSource(USER_MARKER_SOURCE_ID) as maplibre.GeoJSONSource
+                if (source) { source.setData(point) } else { map.addSource(USER_MARKER_SOURCE_ID, { type: 'geojson', data: point }) }
+                const shouldShowMarker = lockState.status === 'outside' || lockState.status === 'inside'
+                const markerColor = lockState.status === 'outside' ? '#ef4444' : '#10b981'
+                if (!map.getLayer(USER_MARKER_LAYER_ID)) {
+                    map.addLayer({ id: USER_MARKER_LAYER_ID, type: 'circle', source: USER_MARKER_SOURCE_ID, paint: { 'circle-radius': 10, 'circle-color': markerColor, 'circle-stroke-width': 3, 'circle-stroke-color': '#ffffff', 'circle-opacity': shouldShowMarker ? 1 : 0 } })
+                } else {
+                    map.setPaintProperty(USER_MARKER_LAYER_ID, 'circle-color', markerColor)
+                    map.setPaintProperty(USER_MARKER_LAYER_ID, 'circle-opacity', shouldShowMarker ? 1 : 0)
+                }
+            } catch (err) {
+                console.warn('[LocationLockOverlay] Error adding user marker:', err)
             }
-        } catch (err) {
-            console.warn('[LocationLockOverlay] Error adding user marker:', err)
         }
+
+        if (!map.isStyleLoaded?.()) {
+            const onLoad = () => { try { drawUser() } catch {} }
+            map.once('load', onLoad)
+            return () => { try { map.off('load', onLoad) } catch {} }
+        }
+
+        drawUser()
 
         return () => {
             if (map.getLayer(USER_MARKER_LAYER_ID)) map.removeLayer(USER_MARKER_LAYER_ID)

@@ -73,7 +73,8 @@ export async function locationLockMiddleware(req: Request, res: Response, next: 
 
         // Check perimeter
         const center = configData.perimeterCenter as [number, number] | undefined;
-        const radius = configData.perimeterRadius as number | undefined;
+        const radiusVal = configData.perimeterRadius as number | undefined;
+        const radius: number = typeof radiusVal === 'number' ? radiusVal : NaN;
 
         if (!center || !Array.isArray(center) || center.length !== 2 || !Number.isFinite(radius) || radius <= 0) {
             // Invalid perimeter config, proceed anyway
